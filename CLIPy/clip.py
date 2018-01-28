@@ -1,0 +1,20 @@
+from datetime import datetime
+
+from CLIPy.utils.utils import abbreviation_to_course, get_month_periods
+from . import Database
+
+
+class Clip:
+    def __init__(self):
+        self.database = Database()
+        self.session = None
+
+    def find_student(self, name, course_filter=None):
+        return self.database.find_student(name, course=course_filter)
+
+    def find_course(self, abbreviation):
+        return abbreviation_to_course(self.database, abbreviation, year=datetime.now().year)
+
+    def get_current_periods(self):
+        periods = get_month_periods(self.database, datetime.now().month)
+        return periods
