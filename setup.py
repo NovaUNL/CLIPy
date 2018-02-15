@@ -2,17 +2,13 @@ import os
 from setuptools import setup
 
 
-# Utility function to read the README.md file.
-# Used for the long_description.  It's nice, because now 1) we have a top level
-# README.md file and 2) it's easier to type in the README.md file than to put a raw
-# string in below ...
 def read(fname):
     return open(os.path.join(os.path.dirname(__file__), fname)).read()
 
 
 setup(
     name="CLIP-Crawler",
-    version="0.0.1",
+    version="0.0.5",
     author="Cláudio Pereira",
     author_email="development@claudiop.com",
     description=(
@@ -21,7 +17,7 @@ setup(
     keywords="CLIP Clip FCT UNL wrapper crawler",
     url="https://gitlab.com/claudiop/CLIPy",
     packages=['CLIPy', ],
-    long_description=read('README.md'),
+    long_description=read('README.rst'),
     classifiers=[
         "Development Status :: 2 - Pre-Alpha",
         "Topic :: Utilities",
@@ -30,5 +26,5 @@ setup(
         "Topic :: Internet :: WWW/HTTP",
         "Topic :: Internet :: WWW/HTTP :: Dynamic Content",
         "Topic :: Text Processing :: Markup :: HTML",
-    ],
+    ], install_requires=['sqlalchemy']
 )

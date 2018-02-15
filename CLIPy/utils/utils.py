@@ -1,6 +1,6 @@
 from bs4 import BeautifulSoup
 
-from .. import Database
+from CLIPy.database import Database
 
 
 def parse_clean_request(request):
@@ -17,42 +17,19 @@ def parse_clean_request(request):
     return soup
 
 
-def abbreviation_to_course(database: Database, abbreviation: str, year=None):
-    short_abbr = abbreviation.split('/')[0]
-
-    if abbreviation in database.course_abbreviations:
-        matches = database.course_abbreviations[abbreviation]
-    elif short_abbr in database.course_abbreviations:
-        matches = database.course_abbreviations[short_abbr]
-    else:
-        return None
-
-    if len(matches) == 0:
-        return None
-    elif len(matches) == 1:
-        return matches[0]
-    else:
-        if year is None:
-            raise Exception("Multiple matches. Year unspecified")
-
-        for match in matches:
-            if match.initial_year <= year <= match.last_year:
-                return match
-
-
 def weekday_to_id(database: Database, weekday: str):
-    if weekday in database.weekdays:
-        return database.weekdays[weekday]
+    if weekday in database.__weekdays__:
+        return database.__weekdays__[weekday]
 
     # Portuguese weekdays have the format "[word]" or "[word]-feira"
-    for known_weekday in database.weekdays:
+    for known_weekday in database.__weekdays__:
         if weekday.split('-')[0].lower() in known_weekday.lower():
-            return database.weekdays[weekday]
+            return database.__weekdays__[weekday]
 
 
 def get_month_periods(database: Database, month: int):
     result = []
-    for period in database.periods:
+    for period in database.get_period_set():
         if period.start_month is None or period.end_month is None:
             continue
 

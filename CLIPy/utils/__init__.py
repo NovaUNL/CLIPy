@@ -9,4 +9,4 @@ Utils auxiliary to the clip module
 
 """
 
-from CLIPy.utils.utils import parse_clean_request, abbreviation_to_course, weekday_to_id, get_month_periods
+from CLIPy.utils.utils import parse_clean_request, weekday_to_id, get_month_periods

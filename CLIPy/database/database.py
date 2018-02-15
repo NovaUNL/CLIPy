@@ -1,43 +1,55 @@
 import logging
-import sqlite3
-import threading
 import os
-import re
+import threading
+import traceback
 from queue import Queue
 
-from CLIPy.entities import Institution, Department, Course, Period, ClassInstance, Class, Student, Turn, Degree, \
-    Classroom, Building, TurnType
+from sqlalchemy import create_engine, desc, asc
+from sqlalchemy.orm import sessionmaker, Session
+
+from CLIPy.database.models import Base, Degree, Period, TurnType, Institution, Department, Course, Teacher, Building, \
+    Classroom, Class, ClassInstance, Student, Turn, TurnInstance, Admission, Enrollment
+from CLIPy.database.candidates import ClassroomCandidate, BuildingCandidate, TurnCandidate, StudentCandidate, \
+    ClassCandidate, InstitutionCandidate, ClassInstanceCandidate, DepartmentCandidate, AdmissionCandidate, \
+    EnrollmentCandidate, CourseCandidate
 
 log = logging.getLogger(__name__)
 
 
-def escape(string):
-    return str(re.sub(re.compile("[^\w\d\s.-]", re.UNICODE), "", string))
-
-
 class Database:
-    def __init__(self, file=os.path.dirname(__file__) + '/CLIP.db'):
-        log.debug("Establishing a database connection to file:'{}'".format(file))
-        self.link = sqlite3.connect(file, detect_types=sqlite3.PARSE_DECLTYPES, check_same_thread=False)
-        self.cursor = self.link.cursor()
-        self.lock = threading.Lock()
+    def __init__(self, backend: str, username=None, password=None, schema='CLIPy',
+                 file=os.path.dirname(__file__) + '/CLIPy.db'):
+        if backend == 'sqlite':
+            log.debug("Establishing a database connection to file:'{}'".format(file))
+            self.engine = create_engine("sqlite:///%s" % file, echo=True)
+        elif backend == 'postgre' and username is not None and password is not None and schema is not None:
+            log.debug("Establishing a database connection to file:'{}'".format(file))
+            self.engine = create_engine("postgresql://{}:{}@localhost/{}".format(username, password, schema))
+        else:
+            raise ValueError('Unsupported database backend or not enough arguments supplied')
 
-        # full caches
-        self.institutions = {}  # [clip_id] -> Institution
-        self.departments = {}  # [clip_id] -> Department
-        self.degrees = {}  # [clip_id] -> Degree
-        self.periods = {}  # [letter][stage] -> Period
-        self.courses = {}  # [clip_id] -> Course
-        self.course_abbreviations = {}  # [abbr] -> Course
-        self.weekdays = {}  # [portuguese_name] -> internal_id
-        self.turn_types = {}  # [abbr] -> TurnType
-        self.teachers = {}  # [name] -> db_id
-        self.buildings = {}  # [name] -> Building
-        self.classrooms = {}  # [building][classroom name] -> Classroom
+        self.__session__: Session = sessionmaker(bind=self.engine)()  # default session
+        self.__session_lock__ = threading.Lock()
 
-        # partial caches (built as requests are made)
-        self.class_cache = {}
+        Base.metadata.create_all(self.engine)
+        if self.__session__.query(Degree).count() == 0:
+            self.__insert_default_degrees__()
 
+        if self.__session__.query(Period).count() == 0:
+            self.__insert_default_periods__()
+
+        if self.__session__.query(TurnType).count() == 0:
+            self.__insert_default_turn_types__()
+
+        self.__weekdays__ = {'segunda': 0,
+                             'terça': 1,
+                             'terca': 1,
+                             'quarta': 2,
+                             'quinta': 3,
+                             'sexta': 4,
+                             'sábado': 5,
+                             'sabado': 5,
+                             'domingo': 6}
         self.__load_cached_collections__()
 
     def __load_cached_collections__(self):
@@ -47,7 +59,6 @@ class Database:
         self.__load_periods__()
         self.__load_departments__()
         self.__load_courses__()
-        self.__load_weekdays__()
         self.__load_turn_types__()
         self.__load_teachers__()
         self.__load_buildings__()
@@ -57,887 +68,583 @@ class Database:
     def __load_institutions__(self):
         log.debug("Building institution cache")
         institutions = {}
-        self.lock.acquire()
-        try:
-            self.cursor.execute('SELECT internal_id, id, abbreviation, name, initial_year, last_year '
-                                'FROM Institutions')
-            for institution in self.cursor:
-                institutions[institution[0]] = Institution(
-                    institution[0], institution[2], name=institution[3],
-                    initial_year=institution[4], last_year=institution[5], db_id=institution[1])
-        finally:
-            self.lock.release()
-        self.institutions = institutions
+        for institution in self.__session__.query(Institution).all():
+            institutions[institution.internal_id] = institution
+        self.__institutions__ = institutions
 
     def __load_degrees__(self):
         log.debug("Building degree cache")
         degrees = {}
-        self.lock.acquire()
-        try:
-            self.cursor.execute('SELECT internal_id, id, name_en '
-                                'FROM Degrees '
-                                'WHERE internal_id NOT NULL')
-            for degree in self.cursor:
-                degrees[degree[0]] = Degree(degree[0], degree[2], db_id=degree[1])
-        finally:
-            self.lock.release()
-        self.degrees = degrees
+        for degree in self.__session__.query(Degree).all():
+            if degree.id == 4:  # FIXME, skipping the Integrated Master to avoid having it replace the Master
+                continue
+            degrees[degree.internal_id] = degree
+        self.__degrees__ = degrees
 
     def __load_periods__(self):
         log.debug("Building period cache")
         periods = {}
-        self.lock.acquire()
-        try:
-            self.cursor.execute('SELECT type_letter, stage, stages, start_month, end_month ,id '
-                                'FROM Periods')
-            for period in self.cursor:
-                if period[0] not in periods:  # unseen letter
-                    periods[period[0]] = {}
 
-                periods[period[0]][period[1]] = Period(
-                    period[1], period[2], period[0], start_month=period[3], end_month=period[4], db_id=period[5])
-        finally:
-            self.lock.release()
-        self.periods = periods
+        for period in self.__session__.query(Period).all():
+            if period.parts not in periods:  # unseen letter
+                periods[period.parts] = {}
+            periods[period.parts][period.part] = period
+        self.__periods__ = periods
 
     def __load_departments__(self):
         log.debug("Building department cache")
         departments = {}
-        self.lock.acquire()
-        try:
-            self.cursor.execute('SELECT Departments.internal_id, Departments.id, Departments.name, '
-                                'Departments.initial_year, Departments.last_year, Institutions.internal_id '
-                                'FROM Departments '
-                                'JOIN Institutions ON Departments.institution = Institutions.id')
-            for department in self.cursor:
-                departments[department[0]] = Department(
-                    department[0], department[2], self.institutions[department[5]],
-                    initial_year=department[3], last_year=department[4], db_id=department[1])
-        finally:
-            self.lock.release()
-        self.departments = departments
+        for department in self.__session__.query(Department).all():
+            departments[department.internal_id] = department
+        self.__departments__ = departments
 
     def __load_courses__(self):
         log.debug("Building course cache")
         courses = {}
         course_abbreviations = {}
+        for course in self.__session__.query(Course).all():
+            courses[course.internal_id] = course
 
-        self.lock.acquire()
-        try:
-            self.cursor.execute(
-                'SELECT Courses.internal_id, Courses.name, Courses.abbreviation, Courses.id, Courses.initial_year,'
-                ' Courses.last_year, Degrees.internal_id, Institutions.internal_id '
-                'FROM Courses '
-                'JOIN Degrees ON Courses.degree = Degrees.id '
-                # FIXME, wrong info being inserted into Courses.institution. It should be = Institution.id, not i_id
-                'JOIN Institutions ON Courses.institution = Institutions.internal_id '
-                'WHERE Courses.abbreviation IS NOT NULL')
-            for course in self.cursor:
-                course_obj = Course(course[0], course[1], course[2],
-                                    self.degrees[course[6]], self.institutions[course[7]],
-                                    initial_year=course[4], last_year=course[5], db_id=course[3])
-                courses[course[0]] = course_obj
-
-                if course[2] not in course_abbreviations:
-                    course_abbreviations[course[2]] = []
-                course_abbreviations[course[2]].append(course_obj)
-        finally:
-            self.lock.release()
-        self.courses = courses
-        self.course_abbreviations = course_abbreviations
-
-    def __load_weekdays__(self):
-        log.debug("Building weekdays cache")
-        weekdays = {}
-        self.lock.acquire()
-        try:
-            self.cursor.execute('SELECT id, name_pt '
-                                'FROM Weekdays')
-            for weekday in self.cursor:
-                weekdays[weekday[1]] = weekday[0]
-        finally:
-            self.lock.release()
-        self.weekdays = weekdays
+            if course.abbreviation not in course_abbreviations:
+                course_abbreviations[course.abbreviation] = []
+            course_abbreviations[course.abbreviation].append(course)
+        self.__courses__ = courses
+        self.__course_abbrs__ = course_abbreviations
 
     def __load_turn_types__(self):
         log.debug("Building turn types cache")
         turn_types = {}
-        self.lock.acquire()
-        try:
-            self.cursor.execute('SELECT abbr, id, type '
-                                'FROM TurnTypes')
-            for turn_type in self.cursor:
-                turn_types[turn_type[0]] = TurnType(turn_type[2], turn_type[0], db_id=turn_type[1])
-                turn_types[turn_type[0]] = TurnType(turn_type[2], turn_type[0], db_id=turn_type[1])
-        finally:
-            self.lock.release()
-        self.turn_types = turn_types
+        for turn_type in self.__session__.query(TurnType).all():
+            turn_types[turn_type.abbreviation] = turn_type
+        self.__turn_types__ = turn_types
 
     def __load_teachers__(self):
         log.debug("Building teacher cache")
         teachers = {}
-        self.lock.acquire()
-        try:
-            self.cursor.execute('SELECT id, name '
-                                'FROM Teachers')
-            for teacher in self.cursor:
-                teachers[teacher[1]] = teacher[0]
-        finally:
-            self.lock.release()
-        self.teachers = teachers
+        for teacher in self.__session__.query(Teacher).all():
+            teachers[teacher.name] = teacher
+        self.__teachers__ = teachers
 
     def __load_buildings__(self):
         log.debug("Building building cache")
         buildings = {}
-        self.lock.acquire()
-        try:
-            self.cursor.execute('SELECT Buildings.id, Buildings.name, Institutions.internal_id '
-                                'FROM Buildings '
-                                'JOIN Institutions ON Buildings.institution = Institutions.id')
-            for building in self.cursor:
-                buildings[building[1]] = Building(building[1], self.institutions[building[2]], db_id=building[0])
-        finally:
-            self.lock.release()
-        self.buildings = buildings
+        for building in self.__session__.query(Building).all():
+            buildings[building.name] = building
+        self.__buildings__ = buildings
 
     def __load_classrooms__(self):
         log.debug("Building classroom cache")
         classrooms = {}
-        self.lock.acquire()
-        try:
-            self.cursor.execute('SELECT Classrooms.name, Buildings.name, Classrooms.id '
-                                'FROM Classrooms '
-                                'JOIN Buildings ON Buildings.id = Classrooms.building')
-            for classroom in self.cursor:
-                building = self.buildings[classroom[1]]
-                if building.name not in classrooms:
-                    classrooms[building] = {}
-                classroom_obj = Classroom(classroom[1], building, db_id=classroom[0])
-                classrooms[building][classroom[0]] = classroom_obj
-        finally:
-            self.lock.release()
-        self.classrooms = classrooms
+        for classroom, building in self.__session__.query(Classroom, Building).all():
+            classrooms[building.name][classroom.name] = building
+        self.__classrooms__ = classrooms
 
-    def add_institutions(self, institutions):  # bulk addition to avoid pointless cache reloads
-        self.lock.acquire()
+    def __insert_default_periods__(self):
+        # TODO don't just leave this here hardcoded...
+        self.__session__.add_all(
+            [Period(id=1, part=1, parts=1, letter='a'),
+             Period(id=2, part=1, parts=2, letter='s'),
+             Period(id=3, part=2, parts=2, letter='s'),
+             Period(id=4, part=1, parts=4, letter='t'),
+             Period(id=5, part=2, parts=4, letter='t'),
+             Period(id=6, part=3, parts=4, letter='t'),
+             Period(id=7, part=4, parts=4, letter='t')])
+
+    def __insert_default_degrees__(self):
+        self.__session__.add_all(
+            [Degree(id=1, internal_id='L', name="Licenciatura"),
+             Degree(id=2, internal_id='M', name="Mestrado"),
+             Degree(id=3, internal_id='D', name="Doutoramento"),
+             Degree(id=4, internal_id='M', name="Mestrado Integrado"),  # FIXME, distinguish M from Mi
+             Degree(id=5, internal_id='Pg', name="Pos-Graduação"),
+             Degree(id=6, internal_id='EA', name="Estudos Avançados"),
+             Degree(id=7, internal_id='pG', name="Pré-Graduação")])
+
+    def __insert_default_turn_types__(self):
+        self.__session__.add_all(
+            [TurnType(id=1, name="Theoretical", abbreviation="t"),
+             TurnType(id=2, name="Practical", abbreviation="p"),
+             TurnType(id=3, name="Practical-Theoretical", abbreviation="tp"),
+             TurnType(id=4, name="Seminar", abbreviation="s"),
+             TurnType(id=5, name="Tutorial Orientation", abbreviation="ot")])
+
+    def get_institution(self, internal_id: int):
+        if internal_id not in self.__institutions__:
+            return None
+        return self.__institutions__[internal_id]
+
+    def get_department(self, internal_id: int):
+        if internal_id not in self.__departments__:
+            return None
+        return self.__departments__[internal_id]
+
+    def get_degree(self, abbreviation: str):
+        if abbreviation not in self.__degrees__:
+            return None
+        return self.__degrees__[abbreviation]
+
+    def get_period(self, part: int, parts: int):
+        if parts not in self.__periods__ or part > parts:
+            return None
+
+        try:
+            return self.__periods__[parts][part]
+        except KeyError:
+            return None
+
+    def get_institution_set(self):
+        return set(self.__institutions__.values())
+
+    def get_department_set(self):
+        return set(self.__departments__.values())
+
+    def get_degree_set(self):
+        return set(self.__degrees__.values())
+
+    def get_period_set(self):
+        periods = set()
+        for period_length in self.__periods__.values():
+            for period in period_length.values():
+                periods.add(period)
+        return periods
+
+    def get_course(self, abbreviation: str, year=None):
+        if abbreviation not in self.__courses__:
+            return None
+        matches = self.__courses__[abbreviation]
+        if len(matches) == 0:
+            return None
+        elif len(matches) == 1:
+            return matches[0]
+        else:
+            if year is None:
+                raise Exception("Multiple matches. Year unspecified")
+
+            for match in matches:
+                if match.initial_year <= year <= match.last_year:
+                    return match
+
+    def get_turn_type(self, abbreviation: str):
+        if abbreviation not in self.__turn_types__:
+            return None
+        return self.__turn_types__[abbreviation]
+
+    def get_teacher(self, name: str):
+        if name not in self.__teachers__:
+            return None
+        return self.__teachers__[name]
+
+    def get_class(self, internal_id: int):
+        db_class: Class = self.__session__.query(Class).filter_by(internal_id=internal_id).first()
+        return db_class
+
+    def add_institutions(self, institutions: [InstitutionCandidate]):
+        self.__session_lock__.acquire()
         try:
             for institution in institutions:
-                if institution.identifier not in self.institutions:
-                    self.cursor.execute(
-                        'INSERT INTO Institutions(internal_id, abbreviation, name, initial_year, last_year) '
-                        'VALUES (?, ?, ?, ?, ?)',
-                        (institution.identifier, institution.abbreviation,
-                         institution.name if institution.name != institution.abbreviation else None,
-                         institution.initial_year, institution.last_year))
+                if institution.id in self.__institutions__:
+                    stored_institution = self.__institutions__[institution.id]
+                    if institution.name is not None:
+                        stored_institution.name = institution.name
+                    if institution.abbreviation is not None:
+                        stored_institution.abbreviation = institution.abbreviation
 
+                    if stored_institution.first_year is None:
+                        stored_institution.first_year = institution.first_year
+                    elif institution.first_year is not None and institution.first_year < stored_institution.first_year:
+                        stored_institution.first_year = institution.first_year
+
+                    if stored_institution.last_year is None:
+                        stored_institution.last_year = institution.last_year
+                    elif institution.last_year is not None and institution.last_year < stored_institution.last_year:
+                        stored_institution.last_year = institution.last_year
                 else:
-                    self.cursor.execute(
-                        'SELECT name, last_year '
-                        'FROM Institutions '
-                        'WHERE internal_id =? AND abbreviation=?',
-                        (institution.identifier, institution.abbreviation))
-                    stored = self.cursor.fetchone()
-
-                    # new name (could be previously unknown)
-                    if institution.name is not None and institution.name != institution.abbreviation \
-                            and institution.name != stored[0]:
-                        self.cursor.execute(
-                            'UPDATE Institutions '
-                            'SET name=? '
-                            'WHERE internal_id =? AND abbreviation=?',
-                            (institution.name, institution.identifier, institution.abbreviation))
-
-                    # new last year (new academic year)
-                    if institution.last_year is not None and institution.last_year != stored[1]:
-                        self.cursor.execute(
-                            'UPDATE Institutions '
-                            'SET last_year=? '
-                            'WHERE internal_id =? AND abbreviation=?',
-                            (institution.last_year, institution.identifier, institution.abbreviation))
-            self.link.commit()
-        finally:
-            self.lock.release()
-
-        if len(institutions) > 0:
+                    self.__session__.add(Institution(
+                        internal_id=institution.id,
+                        name=institution.name,
+                        abbreviation=institution.abbreviation,
+                        first_year=institution.first_year,
+                        last_year=institution.last_year))
             log.info("{} institutions added successfully!".format(len(institutions)))
-
-        self.__load_institutions__()
-
-    def add_departments(self, departments):  # bulk addition to avoid pointless cache reloads
-        for department in departments:
-            exists = False
-
-            if department.identifier in self.departments:
-                stored_department = self.departments[department.identifier]
-                exists = True
-                if stored_department.name != department.name:
-                    raise Exception("Different departments had an id collision:\n\tStored: {}\n\tNew: {}".format(
-                        stored_department, department))
-
-                # creation date different or  last year different
-                if department.initial_year != stored_department.initial_year \
-                        or department.last_year != stored_department.last_year:
-                    log.info("Updating department from:'{}' to:'{}'".format(stored_department, department))
-                    self.lock.acquire()
-                    try:
-                        self.cursor.execute(
-                            'UPDATE Departments '
-                            'SET initial_year=?, last_year=? '
-                            'WHERE internal_id=? AND institution=?',
-                            (department.initial_year, department.last_year, department.identifier,
-                             department.institution.db_id))
-                    finally:
-                        self.lock.release()
-
-            if not exists:  # unknown department, add it to the DB
-                log.info("Adding department {}".format(department))
-                self.lock.acquire()
-                try:
-                    self.cursor.execute(
-                        'INSERT INTO Departments(internal_id, name, initial_year, last_year, institution) '
-                        'VALUES (?, ?, ?, ?, ?)',
-                        (department.identifier, department.name, department.initial_year, department.last_year,
-                         department.institution.db_id))
-                finally:
-                    self.lock.release()
-
-        self.lock.acquire()
-        try:
-            self.link.commit()
+            self.__session__.commit()
+        except Exception:
+            log.error("Failed to add the institutions\n" + traceback.format_exc())
+            self.__session__.rollback()
         finally:
-            self.lock.release()
+            self.__session_lock__.release()
+            self.__load_institutions__()
 
-        if len(departments) > 0:
+    def add_departments(self, departments: [DepartmentCandidate]):
+        self.__session_lock__.acquire()
+        try:
+            for department in departments:
+                if department.id in self.__departments__:
+                    stored_department = self.__departments__[department.id]
+                    if department.name is not None:
+                        stored_department.name = department.name
+
+                    if stored_department.first_year is None:
+                        stored_department.first_year = department.first_year
+                    elif department.first_year is not None and department.first_year < stored_department.first_year:
+                        stored_department.first_year = department.first_year
+
+                    if stored_department.last_year is None:
+                        stored_department.last_year = department.last_year
+                    elif department.last_year is not None and department.last_year < stored_department.last_year:
+                        stored_department.last_year = department.last_year
+                else:
+                    self.__session__.add(Department(
+                        internal_id=department.id,
+                        name=department.name,
+                        first_year=department.first_year,
+                        last_year=department.last_year,
+                        institution=department.institution))
             log.info("{} departments added successfully!".format(len(departments)))
-        self.__load_departments__()
-
-    def add_class(self, class_: Class, commit=False) -> Class:
-        if class_.department not in self.departments:
-            raise Exception("Unknown department")
-
-        department = self.departments[class_.department]
-
-        self.lock.acquire()
-        try:
-            self.cursor.execute('SELECT id, name '
-                                'FROM Classes '
-                                'WHERE internal_id=? AND department=?',
-                                (class_.identifier, department.db_id))
-            stored_classes = self.cursor.fetchall()
+            self.__session__.commit()
+        except Exception:
+            log.error("Failed to add the departments\n" + traceback.format_exc())
+            self.__session__.rollback()
         finally:
-            self.lock.release()
+            self.__session_lock__.release()
+            self.__load_departments__()
 
-        for stored_class in stored_classes:
-            stored_class_name = stored_class[1]
-            if stored_class_name != class_.name:
-                raise Exception("Id collision or class name change attempt. {} to {} (id was {})".format(
-                    stored_class_name, class_.name, class_.identifier
-                ))
-            else:
-                log.debug("Already known: {}".format(class_))
-                class_.db_id = stored_class[0]
-                if commit:
-                    self.lock.acquire()
-                    try:
-                        self.link.commit()
-                    finally:
-                        self.lock.release()
-
-                return class_
-
-        # class isn't stored yet
-        self.lock.acquire()
+    def add_class(self, class_candidate: ClassCandidate):
+        self.__session_lock__.acquire()
         try:
-            log.info("Adding class {}".format(class_))
-            self.cursor.execute('INSERT INTO Classes(internal_id, name, department) '
-                                'VALUES (?, ?, ?)',
-                                (class_.identifier, class_.name, department.db_id))
+            db_class = self.__session__.query(Class). \
+                filter_by(internal_id=class_candidate.id, department=class_candidate.department).first()
 
-            # fetch the new id
-            self.cursor.execute('SELECT id '
-                                'FROM Classes '
-                                'WHERE internal_id=? AND department=?',
-                                (class_.identifier, department.db_id))
+            if db_class is not None:  # Already stored
+                if db_class.name != class_candidate.name:
+                    raise Exception("Class name change attempt. {} to {} (iid {})".format(
+                        db_class.name, class_candidate.name, class_candidate.id))
+                else:
+                    log.debug("Already known: {}".format(class_candidate))
+                    return db_class
 
-            class_.db_id = self.cursor.fetchone()[0]
-
-            if commit:
-                self.link.commit()
-
-            return class_
+            log.info("Adding class {}".format(class_candidate))
+            db_class = Class(
+                internal_id=class_candidate.id, name=class_candidate.name, department=class_candidate.department)
+            self.__session__.add(db_class)
+            self.__session__.commit()  # TODO optimize this, no need to commit for every class
+            return db_class
+        except Exception:
+            log.error("Failed to add class.\n%s" % traceback.format_exc())
+            self.__session__.rollback()
         finally:
-            self.lock.release()
+            self.__session_lock__.release()
 
-    def add_class_instances(self, instances):
-        for instance in instances:
-            self.lock.acquire()
-            try:
-                self.cursor.execute('SELECT period, year '
-                                    'FROM ClassInstances '
-                                    'WHERE class=?',
-                                    (instance.parent_class.db_id,))
-
-                exists = False
-
-                for stored_instance in self.cursor.fetchall():  # for every instance matching this instance parent class
-                    if stored_instance[0] == instance.period and stored_instance[1] == instance.year:
-                        exists = True
-                        break
-
-                if not exists:  # unknown class instance, add it to the DB
-                    log.info("Adding instance of {}".format(instance))
-                    self.cursor.execute('INSERT INTO ClassInstances(class, period, year) '
-                                        'VALUES (?, ?, ?)',
-                                        (instance.parent_class.db_id, instance.period.db_id, instance.year))
-            finally:
-                self.lock.release()
-
-        self.lock.acquire()
+    def add_class_instances(self, instances: [ClassInstanceCandidate]):
+        ignored = 0
+        self.__session_lock__.acquire()
         try:
-            self.link.commit()
+            for instance in instances:
+                db_class_instance = self.__session__.query(ClassInstance).filter_by(
+                    parent=instance.parent, year=instance.year, period=instance.period).first()
+                if db_class_instance is not None:
+                    ignored += 1
+                else:
+                    self.__session__.add(ClassInstance(
+                        parent=instance.parent,
+                        year=instance.year,
+                        period=instance.period
+                    ))
+
+            self.__session__.commit()
+            if len(instances) > 0:
+                log.info("{} class instances added successfully! ({} ignored)".format(len(instances), ignored))
+        except Exception:
+            log.error("Failed to add the class instance\n" + traceback.format_exc())
+            self.__session__.rollback()
         finally:
-            self.lock.release()
+            self.__session_lock__.release()
 
-        if len(instances) > 0:
-            log.info("{} class instances added successfully!".format(len(instances)))
-
-    def add_courses(self, courses):
-        for course in courses:
-            exists = False
-            different_time = False
-            different_abbreviation = False
-            different_degree = False
-
-            self.lock.acquire()
-            try:
-                self.cursor.execute('SELECT name, initial_year, last_year, abbreviation, degree '
-                                    'FROM Courses '
-                                    'WHERE institution=? AND internal_id=?',
-                                    (self.institutions[course.institution].db_id, course.identifier))
-                stored_courses = self.cursor.fetchall()
-            finally:
-                self.lock.release()
-
-            for stored_course in stored_courses:
-                stored_course_name = course[0]
-                stored_course_initial_year = course[1]
-                stored_course_last_year = course[2]
-                stored_course_abbreviation = course[3]
-                stored_course_degree = course[4]
-
-                if course.name != stored_course_name:
-                    raise Exception("Different courses had an id collision {} with {}".format(courses, stored_course))
-
-                exists = True
-
-                # course information changed (or previously unknown information appeared)
-                if stored_course_initial_year != course.initial_year or stored_course_last_year != course.last_year:
-                    different_time = True
-
-                if stored_course_abbreviation != course.abbreviation:
-                    different_abbreviation = True
-
-                if stored_course_degree != course.degree.db_id:
-                    different_degree = True
-
-            if not exists:  # unknown department, add it to the DB
-                log.info("Adding course: {}".format(course))
-                self.lock.acquire()
-                try:
-                    self.cursor.execute(
-                        'INSERT INTO Courses'
-                        '(internal_id, name, initial_year, last_year, abbreviation, degree, institution) '
-                        'VALUES (?, ?, ?, ?, ?, ?, ?)',
-                        (course.identifier, course.name, course.initial_year, course.last_year,
-                         course.abbreviation, course.degree.db_id, self.institutions[course.institution].identifier))
-                finally:
-                    self.lock.release()
-
-            if different_time:  # update running date
-                if course.initial_year is not None and course.last_year is not None:
-                    log.info("Updating course {}({}) (now goes from {} to {})".format(
-                        course.name, course.identifier, course.initial_year, course.last_year))
-                    self.lock.acquire()
-                    try:
-                        self.cursor.execute(
-                            'UPDATE Courses '
-                            'SET initial_year = ?, last_year=? '
-                            'WHERE internal_id=? AND institution=?',
-                            (course.initial_year,
-                             course.last_year,
-                             course.identifier,
-                             self.institutions[course.institution].identifier))
-                    finally:
-                        self.lock.release()
-
-            if different_abbreviation:  # update abbreviation
-                if course.abbreviation is not None:
-                    log.info("Updating course {}({}) abbreviation to {}".format(
-                        course.name, course.identifier, course.abbreviation))
-                    self.lock.acquire()
-                    try:
-                        self.cursor.execute(
-                            'UPDATE Courses '
-                            'SET abbreviation=? '
-                            'WHERE internal_id=? AND institution=?',
-                            (course.abbreviation, course.identifier, self.institutions[course.institution].identifier))
-                    finally:
-                        self.lock.release()
-
-            if different_degree:  # update degree
-                if course.degree is not None:
-                    log.info("Updating course {}({}) degree to {}".format(
-                        course.name, course.identifier, course.degree))
-                    self.lock.acquire()
-                    try:
-                        self.cursor.execute(
-                            'UPDATE Courses '
-                            'SET degree=? '
-                            'WHERE internal_id=? AND institution=?',
-                            (course.degree.db_id, course.identifier, self.institutions[course.institution].identifier))
-                    finally:
-                        self.lock.release()
-
-        self.lock.acquire()
+    def add_courses(self, courses: [CourseCandidate]):
+        # TODO convert '' to None, but somewhere else
+        updated = 0
+        self.__session_lock__.acquire()
         try:
-            self.link.commit()
+            for course in courses:
+                db_course = self.__session__.query(Course).filter_by(
+                    internal_id=course.id, institution=course.institution).first()
+
+                if db_course is None:
+                    self.__session__.add(Course(
+                        internal_id=course.id,
+                        name=course.name,
+                        abbreviation=course.abbreviation,
+                        first_year=course.first_year,
+                        last_year=course.last_year,
+                        degree=course.degree,
+                        institution=course.institution))
+                else:
+                    updated += 1
+                    if course.name is not None and course.name != db_course.name:
+                        raise Exception("Attempted to change a course name")
+
+                    if course.abbreviation is not None:
+                        db_course.abbreviation = course.abbreviation
+
+                    if course.degree is not None:
+                        db_course.degree = course.degree
+
+                    if db_course.first_year is None:
+                        db_course.first_year = course.first_year
+                    elif course.first_year is not None and course.first_year < db_course.first_year:
+                        db_course.first_year = course.first_year
+
+                    if db_course.last_year is None:
+                        db_course.last_year = course.last_year
+                    elif course.last_year is not None and course.last_year < db_course.last_year:
+                        db_course.last_year = course.last_year
+
+            self.__session__.commit()
+            if len(courses) > 0:
+                log.info("{} courses added successfully! ({} updated)".format(len(courses), updated))
+        except Exception:
+            log.error("Failed to add courses.\n%s" % traceback.format_exc())
+            self.__session__.rollback()
         finally:
-            self.lock.release()
-        if len(courses) > 0:
-            log.info("{} courses added successfully!".format(len(courses)))
-        self.__load_courses__()
+            self.__session_lock__.release()
+            self.__load_courses__()
 
-    # adds/updates the student information. Returns student id. DOES NOT COMMIT BY DEFAULT
-    def add_student(self, student: Student, commit=False) -> Student:
-        course_db_id = None if student.course is None else student.course.db_id
-        institution_id = None if student.institution is None else student.institution.db_id
-        abbreviation = None if student.abbreviation is None else student.abbreviation.strip()
-        abbreviation = None if abbreviation == '' else abbreviation
-
-        if student.name is None or student.name == '':
+    def add_student(self, student: StudentCandidate):
+        if student.name is None or student.name == '':  # TODO Move this out of here
             raise Exception("Invalid name")
 
-        self.lock.acquire()  # lock the database for the whole insertion to prevent data races
+        if student.institution is None:
+            raise Exception("Institution not provided")
+
+        self.__session_lock__.acquire()
         try:
-            if institution_id is None:
-                self.cursor.execute('SELECT id, abbreviation, course, institution '
-                                    'FROM Students '
-                                    'WHERE internal_id=? AND name=?',
-                                    (student.identifier, student.name))
-            else:
-                self.cursor.execute('SELECT id, abbreviation, course, institution '
-                                    'FROM Students '
-                                    'WHERE internal_id=? AND name=? AND institution=?',
-                                    (student.identifier, student.name, institution_id))
-            matching_students = self.cursor.fetchall()
+            db_students = self.__session__.query(Student).filter_by(
+                name=student.name, internal_id=student.id, institution=student.institution).all()
 
-            registered = False
-            if len(matching_students) == 0:  # new student, add him
-                self.cursor.execute('INSERT INTO STUDENTS(name, internal_id, abbreviation, course, institution) '
-                                    'VALUES (?, ?, ?, ?, ?)',
-                                    (student.name, student.identifier, student.abbreviation,
-                                     course_db_id, institution_id))
-                log.info("New student saved: {})".format(student))
-            elif len(matching_students) == 1:
-                registered = True
-            else:  # bug or several institutions (don't know if it is even possible)
-                raise Exception("Duplicated student found: {}".format(student))
+            if len(db_students) == 0:  # new student, add him
+                db_student = Student(
+                    internal_id=student.id,
+                    name=student.name,
+                    abbreviation=student.abbreviation,
+                    institution=student.institution,
+                    course=student.course)
+                self.__session__.add(db_student)
+            elif len(db_students) == 1:
+                db_student = db_students[0]
+                if db_student.abbreviation is None:
+                    if student.abbreviation is not None:
+                        db_student.abbreviation = student.abbreviation
+                elif student.abbreviation != db_student.abbreviation:
+                    raise Exception("Attempted to change the student abbreviation to another one")
 
-            if registered:
-                stored_id = matching_students[0][0]
-                stored_abbr = matching_students[0][1]
-                stored_course = matching_students[0][2]
-                stored_institution = matching_students[0][3]
+                if student.course is not None:
+                    db_student.course = student.course
+            else:  # bug or several institutions (don't even know if it's possible)
+                raise Exception("Duplicated students found:\n{}".format(db_students))
 
-                if abbreviation is not None and stored_abbr is not None and stored_abbr != abbreviation:
-                    raise Exception("Abbreviation mismatch. {} != {}".format(abbreviation, stored_abbr))
-
-                if stored_abbr != abbreviation or stored_course != course_db_id or stored_institution != institution_id:
-
-                    new_abbr = stored_abbr if abbreviation is None else abbreviation
-                    new_institution = stored_institution if institution_id is None else institution_id
-                    new_course = stored_course if student.course is None else course_db_id
-
-                    self.cursor.execute("UPDATE STUDENTS "
-                                        "SET abbreviation=?, institution=?, course=? "
-                                        "WHERE id=?",
-                                        (new_abbr, new_institution, new_course, stored_id))
-                    log.debug("Updated student info: {}".format(student))
-                    if commit:
-                        self.link.commit()
-                    student.db_id = stored_id
-                    return student
-
-            # new student, fetch the new id
-            self.cursor.execute('SELECT id '
-                                'FROM Students '
-                                'WHERE internal_id=? AND name=?',
-                                (student.identifier, student.name))
-            if commit:
-                self.link.commit()
-            student.db_id = self.cursor.fetchone()[0]
-            return student
+            self.__session__.commit()
+            return db_student
+        except Exception:
+            log.error("Failed to add the student {}.\n{}".format(student, traceback.format_exc()))
+            self.__session__.rollback()
         finally:
-            self.lock.release()
+            self.__session_lock__.release()
 
-    def add_turn(self, turn: Turn, commit=False) -> Turn:
-        self.lock.acquire()
+    def add_turn(self, turn: TurnCandidate):
+        new_teachers = False
+        self.__session_lock__.acquire()
         try:
-            new = False
-            # check if it exists
-            self.cursor.execute(
-                'SELECT 1 '
-                'FROM Turns '
-                'WHERE class_instance=? AND number=? AND type=?',
-                (turn.class_instance.db_id, turn.number, turn.type.db_id))
+            db_turn: Turn = self.__session__.query(Turn).filter_by(
+                number=turn.number, class_instance=turn.class_instance, type=turn.type).first()
 
-            turns = self.cursor.fetchall()
-
-            if len(turns) > 1:
-                raise Exception("We've got a consistency problem... Turn {}\nMatches:{}".format(turn, str(turns)))
-
-            if len(turns) == 0:  # create it if it doesn't
-                self.cursor.execute(
-                    'INSERT INTO Turns'
-                    '(class_instance, number, type, restrictions, minutes, enrolled, routes, capacity, state) '
-                    'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-                    (turn.class_instance.db_id, turn.number, turn.type.db_id, turn.restrictions,
-                     turn.minutes, turn.enrolled, turn.routes, turn.capacity, turn.state))
-                new = True
-
-            self.cursor.execute(
-                'SELECT id, restrictions, minutes, enrolled, capacity, routes, state '
-                'FROM Turns '
-                'WHERE class_instance=? AND number=? AND type=?',
-                (turn.class_instance.db_id, turn.number, turn.type.db_id))
-
-            turns = self.cursor.fetchall()
-
-            if new:
-                updated_turn = turn
-                # find turn db_id
-                self.cursor.execute(
-                    'SELECT id '
-                    'FROM Turns '
-                    'WHERE class_instance=? AND number=? AND type=?',
-                    (turn.class_instance.db_id, turn.number, turn.type.db_id))
-                updated_turn.db_id = self.cursor.fetchone()[0]
+            if db_turn is None:
+                db_turn = Turn(
+                    class_instance=turn.class_instance, number=turn.number, type=turn.type,
+                    enrolled=turn.enrolled, capacity=turn.capacity, minutes=turn.minutes, routes=turn.routes,
+                    restrictions=turn.restrictions, state=turn.restrictions)
+                self.__session__.add(db_turn)
             else:
-                old_turn_info = turns[0]
-                updated_turn = Turn(turn.class_instance, turn.number, turn.type, old_turn_info[3], old_turn_info[4],
-                                    minutes=old_turn_info[2], routes=old_turn_info[5], state=old_turn_info[6],
-                                    db_id=old_turn_info[0])
-
-                different = False  # check if it is different from what is stored
-
-                if turn.restrictions is not None and turn.restrictions is not '':
-                    updated_turn.restrictions = turn.restrictions
-                    different = True
-
-                if turn.minutes is not None:
-                    updated_turn.minutes = turn.minutes
-                    different = True
-
+                if turn.minutes is not None and turn.minutes != 0:
+                    db_turn.minutes = turn.minutes
                 if turn.enrolled is not None:
-                    updated_turn.enrolled = turn.enrolled
-                    different = True
-
+                    db_turn.enrolled = turn.enrolled
                 if turn.capacity is not None:
-                    updated_turn.capacity = turn.capacity
-                    different = True
-
+                    db_turn.capacity = turn.capacity
+                if turn.minutes is not None and turn.minutes != 0:
+                    db_turn.minutes = turn.minutes
                 if turn.routes is not None:
-                    updated_turn.routes = turn.routes
-                    different = True
-
+                    db_turn.routes = turn.routes
+                if turn.restrictions is not None:
+                    db_turn.restrictions = turn.restrictions
                 if turn.state is not None:
-                    updated_turn.state = turn.state
-                    different = True
+                    db_turn.state = turn.state
 
-                if different:
-                    self.cursor.execute(
-                        'UPDATE Turns '
-                        'SET restrictions=?, minutes=?, enrolled=?, capacity=?, routes=?, state=? '
-                        'WHERE id=?',
-                        (updated_turn.restrictions, updated_turn.minutes, updated_turn.enrolled,
-                         updated_turn.capacity,
-                         updated_turn.routes, updated_turn.state, updated_turn.db_id))
+            for teacher in turn.teachers:  # TODO move this to a separate method
+                if teacher in self.__teachers__:
+                    teacher = self.__teachers__[teacher.name]
+                else:
+                    new_teachers = True
+                    teacher = Teacher(name=teacher.name)
+                    self.__session__.add(teacher)
+                db_turn.teachers.append(teacher)
 
-            for teacher in turn.teachers:
-                # add every unknown teacher
-                if teacher not in self.teachers:
-                    self.cursor.execute(
-                        'INSERT INTO Teachers(name) '
-                        'VALUES (?)', (teacher,))
+            self.__session__.commit()
+            return db_turn
+        except Exception:
+            log.error("Failed to add turn.\n%s" % traceback.format_exc())
+            self.__session__.rollback()
         finally:
-            self.lock.release()
-        self.__load_teachers__()  # lock needs to release, otherwise this would wait forever
-
-        self.lock.acquire()
-        try:
-            for teacher in turn.teachers:
-                # check if teacher-turn relationship is established
-                self.cursor.execute(
-                    'SELECT 1 FROM TurnTeachers '
-                    'WHERE turn=? AND teacher=?',
-                    (updated_turn.db_id, self.teachers[teacher]))
-                if self.cursor.fetchone() is None:
-                    # it isn't, establish it!
-                    self.cursor.execute(
-                        'INSERT INTO TurnTeachers(turn, teacher) '
-                        'VALUES (?, ?)',
-                        (updated_turn.db_id, self.teachers[teacher]))
-
-            if commit:
-                self.link.commit()
-
-        finally:
-            self.lock.release()
-
-        return updated_turn
+            self.__session_lock__.release()
+            if new_teachers:
+                self.__load_teachers__()
 
     # Reconstructs the instances of a turn , IT'S DESTRUCTIVE!
-    def add_turn_instances(self, instances):
-        if len(instances) == 0:  # yes, yes, very smart!
+    def add_turn_instances(self, instances: [TurnInstance]):
+        turn = None
+        for instance in instances:
+            if turn is None:
+                turn = instance.turn
+            elif turn != instance.turn:
+                raise Exception('Instances belong to multiple turns')
+        if turn is None:
             return
-        turn_db_id = instances[0].turn.db_id
 
-        self.lock.acquire()
+        self.__session_lock__.acquire()
         try:
-            self.cursor.execute(
-                'DELETE FROM TurnInstances '
-                'WHERE turn=?', (turn_db_id,))
-
+            self.__session__.delete(TurnInstance).filter_by(turn=turn)
             for instance in instances:
-                classroom_db_id = None if instance.classroom is None else instance.classroom.db_id
-                self.cursor.execute(
-                    'INSERT INTO TurnInstances(turn, start, end, weekday, classroom) '
-                    'VALUES (?, ?, ?, ?, ?)',
-                    (turn_db_id, instance.start, instance.end, instance.weekday, classroom_db_id))
-
-            self.link.commit()
+                turn.instances.append(TurnInstance(turn=turn, start=instance.start, end=instance.end,
+                                                   classroom=instance.classroom, weekday=instance.weekday))
+            self.__session__.commit()
+        except Exception:
+            log.error("Failed to add turn instances.\n%s" % traceback.format_exc())
+            self.__session__.rollback()
         finally:
-            self.lock.release()
+            self.__session_lock__.release()
 
     def add_turn_students(self, turn: Turn, students):
-        self.lock.acquire()
+        self.__session_lock__.acquire()
         try:
-            for student in students:
-                self.cursor.execute(
-                    'SELECT 1 '
-                    'FROM TurnStudents '
-                    'WHERE turn=? AND student=?',
-                    (turn.db_id, student.db_id))
-                if self.cursor.fetchone() is None:
-                    self.cursor.execute(
-                        'INSERT INTO TurnStudents(turn, student) '
-                        'VALUES (?, ?)',
-                        (turn.db_id, student.db_id))
-            self.link.commit()
+            [turn.students.append(student) for student in students]
+            self.__session__.commit()
         finally:
-            self.lock.release()
+            self.__session_lock__.release()
 
-    def add_admissions(self, admissions):
-        for admission in admissions:
-            self.lock.acquire()
-            try:
-                self.cursor.execute(
-                    'INSERT INTO Admissions '
-                    '(student, name, course, phase, year, option, state, check_date) '
-                    'VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-                    ((None if admission.student is None else admission.student.db_id), admission.name,
-                     admission.course.db_id, admission.phase, admission.year,
-                     admission.option, admission.state, admission.check_date))
-            finally:
-                self.lock.release()
-        self.lock.acquire()
+    def add_admissions(self, admissions: [AdmissionCandidate]):
+        self.__session_lock__.acquire()
         try:
-            self.link.commit()
+            admissions = list(map(lambda admission: Admission(
+                student=admission.student, name=admission.name, course=admission.course, phase=admission.phase,
+                year=admission.year, option=admission.option, state=admission.state), admissions))
+            self.__session__.add_all(admissions)
+            self.__session__.commit()
+            if len(admissions) > 0:
+                log.info("{} admissions added successfully!".format(len(admissions)))
+        except Exception:
+            log.error("Failed to add the National Contest admissions\n%s" % traceback.format_exc())
+            self.__session__.rollback()
         finally:
-            self.lock.release()
+            self.__session_lock__.release()
 
-        if len(admissions) > 0:
-            log.info("{} admissions added successfully!".format(len(admissions)))
-
-    def add_enrollments(self, enrollments):
-        self.lock.acquire()
+    def add_enrollments(self, enrollments: [EnrollmentCandidate]):
+        self.__session_lock__.acquire()
         try:
-            for enrollment in enrollments:
-                try:
-                    self.cursor.execute(
-                        'INSERT INTO  Enrollments'
-                        '(student_id, class_instance, attempt, student_year, statutes, observation) '
-                        'VALUES (?, ?, ?, ?, ?, ?)',
-                        (enrollment.student.db_id, enrollment.class_instance.db_id, enrollment.attempt,
-                         enrollment.student_year, enrollment.statutes, enrollment.observation))
-                except sqlite3.Error:
-                    log.warning("Enrollment skipped {}".format(enrollment))
+            enrollments = list(map(lambda enrollment: Enrollment(
+                student=enrollment.student, class_instance=enrollment.class_instance, attempt=enrollment.attempt,
+                student_year=enrollment.student_year, statutes=enrollment.statutes, observation=enrollment.observation
+            ), enrollments))
+            self.__session__.add_all(enrollments)
+            self.__session__.commit()
+            if len(enrollments) > 0:
+                log.info("{} enrollments added successfully!".format(len(enrollments)))
+        except Exception:
+            log.error("Failed to add the enrollments\n%s" % traceback.format_exc())
+            self.__session__.rollback()
         finally:
-            self.lock.release()
-        self.lock.acquire()
+            self.__session_lock__.release()
+
+    def add_classroom(self, classroom: ClassroomCandidate):
+        self.__session_lock__.acquire()
         try:
-            self.link.commit()
+            if classroom.building in self.__classrooms__ and classroom.name in self.__classrooms__[classroom.building]:
+                db_classroom = self.__classrooms__[classroom.building][classroom.name]
+            else:
+                db_classroom = Classroom(name=classroom.name, building=classroom.building)
+                self.__session__.add(db_classroom)
+            self.__session__.commit()
+            return db_classroom
+        except Exception:
+            log.error("Failed to add the classroom\n%s" % traceback.format_exc())
+            self.__session__.rollback()
         finally:
-            self.lock.release()
+            self.__session_lock__.release()
+            self.__load_classrooms__()
 
-    def add_classroom(self, classroom: Classroom, commit=False) -> Classroom:
-        if classroom.building.name not in self.buildings:
-            raise Exception("Unknown building")
+    def add_building(self, building: BuildingCandidate):
+        if building.name in self.__buildings__:
+            building = self.__buildings__[building.name]
+            return building
 
-        building = self.buildings[classroom.building.name]
-
-        self.lock.acquire()
+        self.__session_lock__.acquire()
         try:
-            self.cursor.execute('SELECT id '
-                                'FROM Classrooms '
-                                'WHERE name=? AND building=?',
-                                (classroom.identifier, building.db_id))
-            stored_classrooms = self.cursor.fetchall()
-
-            for stored_classroom in stored_classrooms:
-                classroom.db_id = stored_classroom[0]
-                log.debug("Already known: {}".format(classroom))
-                if commit:
-                    self.link.commit()
-
-                return classroom
-
-            log.info("Adding classroom {}".format(classroom))
-            self.cursor.execute('INSERT INTO Classrooms(name, building) '
-                                'VALUES (?, ?)',
-                                (classroom.identifier, building.db_id))
-
-            # fetch the new id
-            self.cursor.execute('SELECT id '
-                                'FROM Classrooms '
-                                'WHERE name=? AND building=?',
-                                (classroom.identifier, building.db_id))
-
-            classroom.db_id = self.cursor.fetchone()[0]
-
-            if commit:
-                self.link.commit()
+            building = Building(name=building.name, institution=building.institution)
+            self.__session__.add(building)
+            self.__session__.commit()
+            return building
+        except Exception:
+            log.error("Failed to add the building\n%s" % traceback.format_exc())
+            self.__session__.rollback()
         finally:
-            self.lock.release()
+            self.__session_lock__.release()
+            self.__load_buildings__()
 
-        self.__load_classrooms__()
-        return classroom
-
-    def add_building(self, building: Building, commit=False) -> Building:
-        self.lock.acquire()
-        try:
-            self.cursor.execute('SELECT id '
-                                'FROM Buildings '
-                                'WHERE name=? AND institution=?',
-                                (building.name, building.institution.db_id))
-            stored_buildings = self.cursor.fetchall()
-
-            for stored_building in stored_buildings:
-                db_id = stored_building[0]
-                log.debug("Already known: {}".format(building))
-                building.db_id = db_id
-                if commit:
-                    self.link.commit()
-
-                return building
-
-            log.info("Adding building {}".format(building))
-            self.cursor.execute('INSERT INTO Buildings(name, institution) '
-                                'VALUES (?, ?)',
-                                (building.name, building.institution.db_id))
-
-            self.cursor.execute('SELECT id '
-                                'FROM Buildings '
-                                'WHERE name=? AND institution=?',
-                                (building.name, building.institution.db_id))
-
-            result = self.cursor.fetchone()
-            building.db_id = result[0]
-
-            if commit:
-                self.link.commit()
-        finally:
-            self.lock.release()
-
-        self.__load_buildings__()
-        return building
-
-    def fetch_class_instances(self, year_asc=True, queue=False):
-        class_instances = []
-        periods = {}
-        for period_types in self.periods.values():
-            for period in period_types.values():
-                periods[period.db_id] = period
-
+    def fetch_class_instances(self, year_asc=True, queue=False, year=None, period=None):
         if queue:
             class_instances = Queue()
-
-        self.lock.acquire()
+        else:
+            class_instances = []
+        order = asc(ClassInstance.year) if year_asc else desc(ClassInstance.year)
+        self.__session_lock__.acquire()
         try:
-            if year_asc:
-                self.cursor.execute('SELECT class_instance_id, period_id, year, class_id, class_iid, class_name, '
-                                    'department_iid, institution_iid '
-                                    'FROM ClassInstancesComplete '
-                                    'ORDER BY year ASC')
-            else:
-                self.cursor.execute('SELECT class_instance_id, period_id, year, class_id, class_iid, class_name, '
-                                    'department_iid, institution_iid '
-                                    'FROM ClassInstancesComplete '
-                                    'ORDER BY year DESC')
-
-            for instance in self.cursor.fetchall():
-                if instance[4] not in self.class_cache:
-                    if len(self.class_cache) > 10000:
-                        self.class_cache.clear()
-                    self.class_cache[instance[4]] = Class(
-                        instance[4], instance[5], self.departments[instance[6]], db_id=instance[3])
-
-                class_ = self.class_cache[instance[4]]
-                if queue:
-                    class_instances.put(
-                        ClassInstance(class_, periods[instance[1]], instance[2], db_id=instance[0]))
+            if year is None:
+                if period is not None:
+                    log.warning("Period specified without an year")
+                if year_asc:
+                    instances = self.__session__.query(ClassInstance).order_by(order).all()
                 else:
-                    class_instances.append(
-                        ClassInstance(class_, periods[instance[1]], instance[2], db_id=instance[0]))
-
+                    instances = self.__session__.query(ClassInstance).order_by(order).all()
+            else:
+                if period is None:
+                    instances = self.__session__.query(ClassInstance).filter_by(year=year).order_by(order).all()
+                else:
+                    instances = self.__session__.query(ClassInstance). \
+                        filter(year=year, period=period).order_by(order).all()
         finally:
-            self.lock.release()
+            self.__session_lock__.release()
+
+        if queue:
+            [class_instances.put(instance) for instance in instances]
+        else:
+            [class_instances.append(instance) for instance in instances]
         return class_instances
 
-    def commit(self):
-        self.lock.acquire()
+    def find_student(self, name: str, course=None):
+        self.__session_lock__.acquire()
         try:
-            self.link.commit()
-        finally:
-            self.lock.release()
+            query_string = '%'
+            for word in name.split():
+                query_string += (word + '%')
 
-    def find_student(self, name, course=None):
-        nice_try = escape(name)
-        query_string = '%'
-        for word in nice_try.split():
-            query_string += (word + '%')
-
-        self.lock.acquire()
-        try:
             if course is None:
-                self.cursor.execute("SELECT Students.id, Students.internal_id, Students.name,"
-                                    "Students.abbreviation, Courses.internal_id "
-                                    "FROM Students "
-                                    "JOIN  Courses ON Courses.id = Students.course "
-                                    "WHERE Students.name LIKE '{}'".format(query_string))
-                matches = list(self.cursor.fetchall())
+                return self.__session__.query(Student).filter(Student.name.ilike(query_string)).all()
             else:
-                self.cursor.execute("SELECT Students.id, Students.internal_id, Students.name,"
-                                    "Students.abbreviation, Courses.internal_id "
-                                    "FROM Students "
-                                    "JOIN  Courses ON Courses.id = Students.course "
-                                    "WHERE Students.name LIKE '{}' AND course=?".format(query_string), (course.db_id,))
-                matches = list(self.cursor.fetchall())
+                return self.__session__.query(Student).filter(Student.name.ilike(query_string), course=course).all()
         finally:
-            self.lock.release()
+            self.__session_lock__.release()
 
-        output = list()
-        for match in matches:
-            output.append(Student(match[1], match[2], match[3], self.courses[match[4]], db_id=match[0]))
+    # Hack to use the DBAPI since the session is an attribute of this class shared among threads
+    # TODO Make a proper threaded implementation
+    def lock(self):
+        self.__session_lock__.acquire()
 
-        return output
+    def unlock(self):
+        self.__session_lock__.release()
