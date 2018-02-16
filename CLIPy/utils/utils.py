@@ -1,6 +1,6 @@
 from bs4 import BeautifulSoup
 
-from CLIPy.database import Database
+from CLIPy.database import Controller
 
 
 def parse_clean_request(request):
@@ -17,7 +17,7 @@ def parse_clean_request(request):
     return soup
 
 
-def weekday_to_id(database: Database, weekday: str):
+def weekday_to_id(database: Controller, weekday: str):
     if weekday in database.__weekdays__:
         return database.__weekdays__[weekday]
 
@@ -27,7 +27,7 @@ def weekday_to_id(database: Database, weekday: str):
             return database.__weekdays__[weekday]
 
 
-def get_month_periods(database: Database, month: int):
+def get_month_periods(database: Controller, month: int):
     result = []
     for period in database.get_period_set():
         if period.start_month is None or period.end_month is None:

@@ -9,9 +9,10 @@ import re
 
 from CLIPy.database.candidates import StudentCandidate, TurnCandidate, TurnInstanceCandidate, ClassroomCandidate, \
     BuildingCandidate, EnrollmentCandidate, AdmissionCandidate, ClassCandidate, ClassInstanceCandidate
+from CLIPy.database.database import SessionRegistry
 from CLIPy.database.models import Department, Institution, ClassInstance
-from .database import Database
-from .session import Session
+import CLIPy.database as db
+from .session import Session as WebSession
 from CLIPy import urls
 from CLIPy.utils.utils import parse_clean_request, weekday_to_id
 
@@ -19,12 +20,13 @@ log = logging.getLogger(__name__)
 
 
 class PageCrawler(Thread):
-    def __init__(self, name, clip_session: Session, database: Database, work_queue: Queue, queue_lock: Lock,
-                 crawl_function):
+    def __init__(self, name, clip_session: WebSession, db_registry: SessionRegistry, work_queue: Queue,
+                 queue_lock: Lock, crawl_function):
         Thread.__init__(self)
         self.name = name
-        self.session = clip_session
-        self.database_link = database
+        self.web_session: WebSession = clip_session
+        self.db_session = db_registry.get_session()
+        self.db_controller = db.Controller(db_registry)
         self.work_queue = work_queue
         self.queue_lock = queue_lock
         self.crawl_function = crawl_function
@@ -39,11 +41,10 @@ class PageCrawler(Thread):
                 exception_count = 0
                 while not done:
                     try:
-                        self.crawl_function(self.session, self.database_link, work_unit)
+                        self.crawl_function(self.web_session, self.db_controller, self.db_session.merge(work_unit))
                         done = True
                     except Exception as e:
                         exception_count += 1
-                        # requests.exceptions.ConnectionError
                         log.error("Failed to complete the job. Error: \n{}\nRetrying in 5 seconds...".format(
                             traceback.format_exc()))
                         if exception_count > 3:
@@ -54,7 +55,8 @@ class PageCrawler(Thread):
                 break
 
 
-def crawl_classes(session: Session, database: Database, department: Department):
+def crawl_classes(session: WebSession, database: db.Controller, department: Department):
+    department = database.__session__.merge(department)
     classes = {}
     class_instances = []
 
@@ -63,12 +65,8 @@ def crawl_classes(session: Session, database: Database, department: Department):
 
     # for each year this department operated
     for year in range(department.first_year, department.last_year + 1):
-        database.lock()  # FIXME
-        try:
-            url = urls.CLASSES.format(department.institution.internal_id, year, department.internal_id)
-        finally:
-            database.unlock()
-        hierarchy = parse_clean_request(session.get(url))
+        hierarchy = parse_clean_request(
+            session.get(urls.CLASSES.format(department.institution.internal_id, year, department.internal_id)))
 
         period_links = hierarchy.find_all(href=period_exp)
 
@@ -92,13 +90,8 @@ def crawl_classes(session: Session, database: Database, department: Department):
                 raise Exception("Unknown period")
 
             period = database.get_period(part, parts)
-            try:
-                database.lock()  # FIXME
-                url = urls.CLASSES_PERIOD.format(
-                    period_type, department.internal_id, year, part, department.institution.internal_id)
-            finally:
-                database.unlock()
-            hierarchy = parse_clean_request(session.get(url))
+            hierarchy = parse_clean_request(session.get(urls.CLASSES_PERIOD.format(
+                period_type, department.internal_id, year, part, department.institution.internal_id)))
 
             class_links = hierarchy.find_all(href=class_exp)
 
@@ -115,18 +108,13 @@ def crawl_classes(session: Session, database: Database, department: Department):
     database.add_class_instances(class_instances)
 
 
-def crawl_admissions(session: Session, database: Database, institution: Institution):
+def crawl_admissions(session: WebSession, database: db.Controller, institution: Institution):
     admissions = []
     course_exp = re.compile("\\bcurso=(\d+)$")
     years = range(institution.first_year, institution.last_year + 1)
     for year in years:
         courses = set()
-        database.lock() # FIXME
-        try:
-            url = urls.ADMISSIONS.format(year, institution.internal_id)
-            hierarchy = parse_clean_request(session.get(url))
-        finally:
-            database.unlock()
+        hierarchy = parse_clean_request(session.get(urls.ADMISSIONS.format(year, institution.internal_id)))
         course_links = hierarchy.find_all(href=course_exp)
         for course_link in course_links:  # find every course that had students that year
             courses.add(int(course_exp.findall(course_link.attrs['href'])[0]))
@@ -134,12 +122,8 @@ def crawl_admissions(session: Session, database: Database, institution: Institut
         for course_id in courses:
             course = database.get_course(course_id)  # TODO ensure that doesn't end up as None
             for phase in range(1, 4):  # for every of the three phases
-                database.lock()  # FIXME
-                try:
-                    url = urls.ADMITTED.format(year, institution.internal_id, phase, course_id)
-                    hierarchy = parse_clean_request(session.get(url))
-                finally:
-                    database.unlock()
+                hierarchy = parse_clean_request(session.get(
+                    urls.ADMITTED.format(year, institution.internal_id, phase, course_id)))
                 # find the table structure containing the data (only one with those attributes)
                 table_root = hierarchy.find('th', colspan="8", bgcolor="#95AEA8").parent.parent
 
@@ -174,18 +158,13 @@ def crawl_admissions(session: Session, database: Database, institution: Institut
     database.add_admissions(admissions)
 
 
-def crawl_class_instance(session: Session, database: Database, class_instance: ClassInstance):
-    database.lock()
-    try:
-        institution = class_instance.parent.department.institution
-        url = urls.CLASS_ENROLLED.format(
-            class_instance.period.letter, class_instance.parent.department.internal_id,
-            class_instance.year, class_instance.period.part, institution.internal_id,
-            class_instance.parent.internal_id)
-        year = class_instance.year
-    finally:
-        database.unlock()
-    hierarchy = parse_clean_request(session.get(url))
+def crawl_class_instance(session: WebSession, database: db.Controller, class_instance: ClassInstance):
+    institution = class_instance.parent.department.institution
+
+    hierarchy = parse_clean_request(session.get(urls.CLASS_ENROLLED.format(
+        class_instance.period.letter, class_instance.parent.department.internal_id,
+        class_instance.year, class_instance.period.part, institution.internal_id,
+        class_instance.parent.internal_id)))
 
     # Strip file header and split it into lines
     content = hierarchy.text.splitlines()[4:]
@@ -223,14 +202,14 @@ def crawl_class_instance(session: Session, database: Database, class_instance: C
             raise Exception("Student with no name")
         # TODO continue
 
-        course = database.get_course(course_abbr, year=year)
+        course = database.get_course(course_abbr, year=class_instance.year)
 
         # TODO consider sub-courses EG: MIEA/[Something]
         observation = course_abbr if course is not None else (course_abbr + "(Unknown)")
         # update student info and take id
         student = database.add_student(
-            StudentCandidate(student_id, student_name, abbreviation=student_abbr, course=course,
-                             institution=institution))
+            StudentCandidate(
+                student_id, student_name, abbreviation=student_abbr, course=course, institution=institution))
 
         enrollment = EnrollmentCandidate(student, class_instance, attempt, student_year, student_statutes, observation)
         enrollments.append(enrollment)
@@ -238,7 +217,7 @@ def crawl_class_instance(session: Session, database: Database, class_instance: C
     database.add_enrollments(enrollments)
 
 
-def crawl_class_turns(session: Session, database: Database, class_instance: ClassInstance):
+def crawl_class_turns(session: WebSession, database: db.Controller, class_instance: ClassInstance):
     institution = class_instance.parent.department.institution
     hierarchy = parse_clean_request(
         session.get(urls.TURNS_INFO.format(
@@ -392,6 +371,7 @@ def crawl_class_turns(session: Session, database: Database, class_instance: Clas
             # make sure he/she is in the db and have his/her db id
             student = database.add_student(
                 StudentCandidate(student_id, student_name, student_abbreviation, course=course))
+            database.commit()
             students.append(student)
 
         routes_str = None
@@ -410,3 +390,4 @@ def crawl_class_turns(session: Session, database: Database, class_instance: Clas
 
         database.add_turn_instances(instances)
         database.add_turn_students(turn, students)
+        database.commit()

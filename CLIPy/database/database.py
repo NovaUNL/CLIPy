@@ -1,11 +1,10 @@
 import logging
 import os
-import threading
 import traceback
 from queue import Queue
 
 from sqlalchemy import create_engine, desc, asc
-from sqlalchemy.orm import sessionmaker, Session
+from sqlalchemy.orm import sessionmaker, scoped_session
 
 from CLIPy.database.models import Base, Degree, Period, TurnType, Institution, Department, Course, Teacher, Building, \
     Classroom, Class, ClassInstance, Student, Turn, TurnInstance, Admission, Enrollment
@@ -16,22 +15,38 @@ from CLIPy.database.candidates import ClassroomCandidate, BuildingCandidate, Tur
 log = logging.getLogger(__name__)
 
 
-class Database:
-    def __init__(self, backend: str, username=None, password=None, schema='CLIPy',
-                 file=os.path.dirname(__file__) + '/CLIPy.db'):
-        if backend == 'sqlite':
-            log.debug("Establishing a database connection to file:'{}'".format(file))
-            self.engine = create_engine("sqlite:///%s" % file, echo=True)
-        elif backend == 'postgre' and username is not None and password is not None and schema is not None:
-            log.debug("Establishing a database connection to file:'{}'".format(file))
-            self.engine = create_engine("postgresql://{}:{}@localhost/{}".format(username, password, schema))
-        else:
-            raise ValueError('Unsupported database backend or not enough arguments supplied')
+def create_db_engine(backend: str, username=None, password=None, schema='CLIPy',
+                     file=os.path.dirname(__file__) + '/CLIPy.db'):
+    if backend == 'sqlite':
+        log.debug("Establishing a database connection to file:'{}'".format(file))
+        return create_engine("sqlite:///%s" % file, echo=True)
+    elif backend == 'postgre' and username is not None and password is not None and schema is not None:
+        log.debug("Establishing a database connection to file:'{}'".format(file))
+        return create_engine("postgresql://{}:{}@localhost/{}".format(username, password, schema))
+    else:
+        raise ValueError('Unsupported database backend or not enough arguments supplied')
 
-        self.__session__: Session = sessionmaker(bind=self.engine)()  # default session
-        self.__session_lock__ = threading.Lock()
 
-        Base.metadata.create_all(self.engine)
+class SessionRegistry:
+    def __init__(self, engine):
+        self.engine = engine
+        self.factory = sessionmaker(bind=engine)
+        self.registry = scoped_session(self.factory)
+        Base.metadata.create_all(engine)
+
+    def get_session(self):
+        return self.registry()
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.registry.remove()
+
+
+# NOT thread-safe. Each thread must instantiate its own controller from the registry.
+class Controller:
+    def __init__(self, database_registry: SessionRegistry):
+        self.registry = database_registry
+        self.__session__ = database_registry.get_session()
+
         if self.__session__.query(Degree).count() == 0:
             self.__insert_default_degrees__()
 
@@ -40,6 +55,7 @@ class Database:
 
         if self.__session__.query(TurnType).count() == 0:
             self.__insert_default_turn_types__()
+        self.__session__.commit()
 
         self.__weekdays__ = {'segunda': 0,
                              'terça': 1,
@@ -239,7 +255,6 @@ class Database:
         return db_class
 
     def add_institutions(self, institutions: [InstitutionCandidate]):
-        self.__session_lock__.acquire()
         try:
             for institution in institutions:
                 if institution.id in self.__institutions__:
@@ -265,17 +280,14 @@ class Database:
                         abbreviation=institution.abbreviation,
                         first_year=institution.first_year,
                         last_year=institution.last_year))
-            log.info("{} institutions added successfully!".format(len(institutions)))
             self.__session__.commit()
+            log.info("{} institutions added successfully!".format(len(institutions)))
+            self.__load_institutions__()
         except Exception:
             log.error("Failed to add the institutions\n" + traceback.format_exc())
             self.__session__.rollback()
-        finally:
-            self.__session_lock__.release()
-            self.__load_institutions__()
 
     def add_departments(self, departments: [DepartmentCandidate]):
-        self.__session_lock__.acquire()
         try:
             for department in departments:
                 if department.id in self.__departments__:
@@ -301,68 +313,50 @@ class Database:
                         institution=department.institution))
             log.info("{} departments added successfully!".format(len(departments)))
             self.__session__.commit()
+            self.__load_departments__()
         except Exception:
             log.error("Failed to add the departments\n" + traceback.format_exc())
             self.__session__.rollback()
-        finally:
-            self.__session_lock__.release()
-            self.__load_departments__()
 
     def add_class(self, class_candidate: ClassCandidate):
-        self.__session_lock__.acquire()
-        try:
-            db_class = self.__session__.query(Class). \
-                filter_by(internal_id=class_candidate.id, department=class_candidate.department).first()
+        db_class = self.__session__.query(Class). \
+            filter_by(internal_id=class_candidate.id, department=class_candidate.department).first()
 
-            if db_class is not None:  # Already stored
-                if db_class.name != class_candidate.name:
-                    raise Exception("Class name change attempt. {} to {} (iid {})".format(
-                        db_class.name, class_candidate.name, class_candidate.id))
-                else:
-                    log.debug("Already known: {}".format(class_candidate))
-                    return db_class
+        if db_class is not None:  # Already stored
+            if db_class.name != class_candidate.name:
+                raise Exception("Class name change attempt. {} to {} (iid {})".format(
+                    db_class.name, class_candidate.name, class_candidate.id))
+            else:
+                log.debug("Already known: {}".format(class_candidate))
+                return db_class
 
-            log.info("Adding class {}".format(class_candidate))
-            db_class = Class(
-                internal_id=class_candidate.id, name=class_candidate.name, department=class_candidate.department)
-            self.__session__.add(db_class)
-            self.__session__.commit()  # TODO optimize this, no need to commit for every class
-            return db_class
-        except Exception:
-            log.error("Failed to add class.\n%s" % traceback.format_exc())
-            self.__session__.rollback()
-        finally:
-            self.__session_lock__.release()
+        log.info("Adding class {}".format(class_candidate))
+        db_class = Class(
+            internal_id=class_candidate.id, name=class_candidate.name, department=class_candidate.department)
+        self.__session__.add(db_class)
+        self.__session__.commit()
+        return db_class
 
     def add_class_instances(self, instances: [ClassInstanceCandidate]):
         ignored = 0
-        self.__session_lock__.acquire()
-        try:
-            for instance in instances:
-                db_class_instance = self.__session__.query(ClassInstance).filter_by(
-                    parent=instance.parent, year=instance.year, period=instance.period).first()
-                if db_class_instance is not None:
-                    ignored += 1
-                else:
-                    self.__session__.add(ClassInstance(
-                        parent=instance.parent,
-                        year=instance.year,
-                        period=instance.period
-                    ))
-
-            self.__session__.commit()
-            if len(instances) > 0:
-                log.info("{} class instances added successfully! ({} ignored)".format(len(instances), ignored))
-        except Exception:
-            log.error("Failed to add the class instance\n" + traceback.format_exc())
-            self.__session__.rollback()
-        finally:
-            self.__session_lock__.release()
+        for instance in instances:
+            db_class_instance = self.__session__.query(ClassInstance).filter_by(
+                parent=instance.parent, year=instance.year, period=instance.period).first()
+            if db_class_instance is not None:
+                ignored += 1
+            else:
+                self.__session__.add(ClassInstance(
+                    parent=instance.parent,
+                    year=instance.year,
+                    period=instance.period
+                ))
+                self.__session__.commit()
+        if len(instances) > 0:
+            log.info("{} class instances added successfully! ({} ignored)".format(len(instances), ignored))
 
     def add_courses(self, courses: [CourseCandidate]):
         # TODO convert '' to None, but somewhere else
         updated = 0
-        self.__session_lock__.acquire()
         try:
             for course in courses:
                 db_course = self.__session__.query(Course).filter_by(
@@ -402,10 +396,9 @@ class Database:
             if len(courses) > 0:
                 log.info("{} courses added successfully! ({} updated)".format(len(courses), updated))
         except Exception:
-            log.error("Failed to add courses.\n%s" % traceback.format_exc())
             self.__session__.rollback()
+            raise Exception("Failed to add courses.\n%s" % traceback.format_exc())
         finally:
-            self.__session_lock__.release()
             self.__load_courses__()
 
     def add_student(self, student: StudentCandidate):
@@ -415,43 +408,35 @@ class Database:
         if student.institution is None:
             raise Exception("Institution not provided")
 
-        self.__session_lock__.acquire()
-        try:
-            db_students = self.__session__.query(Student).filter_by(
-                name=student.name, internal_id=student.id, institution=student.institution).all()
+        db_students = self.__session__.query(Student).filter_by(
+            name=student.name, internal_id=student.id, institution=student.institution).all()
 
-            if len(db_students) == 0:  # new student, add him
-                db_student = Student(
-                    internal_id=student.id,
-                    name=student.name,
-                    abbreviation=student.abbreviation,
-                    institution=student.institution,
-                    course=student.course)
-                self.__session__.add(db_student)
-            elif len(db_students) == 1:
-                db_student = db_students[0]
-                if db_student.abbreviation is None:
-                    if student.abbreviation is not None:
-                        db_student.abbreviation = student.abbreviation
-                elif student.abbreviation != db_student.abbreviation:
-                    raise Exception("Attempted to change the student abbreviation to another one")
+        if len(db_students) == 0:  # new student, add him
+            db_student = Student(
+                internal_id=student.id,
+                name=student.name,
+                abbreviation=student.abbreviation,
+                institution=student.institution,
+                course=student.course)
+            self.__session__.add(db_student)
+        elif len(db_students) == 1:
+            db_student = db_students[0]
+            if db_student.abbreviation is None:
+                if student.abbreviation is not None:
+                    db_student.abbreviation = student.abbreviation
+            elif student.abbreviation != db_student.abbreviation:
+                raise Exception("Attempted to change the student abbreviation to another one")
 
-                if student.course is not None:
-                    db_student.course = student.course
-            else:  # bug or several institutions (don't even know if it's possible)
-                raise Exception("Duplicated students found:\n{}".format(db_students))
+            if student.course is not None:
+                db_student.course = student.course
+        else:  # bug or several institutions (don't even know if it's possible)
+            raise Exception("Duplicated students found:\n{}".format(db_students))
 
-            self.__session__.commit()
-            return db_student
-        except Exception:
-            log.error("Failed to add the student {}.\n{}".format(student, traceback.format_exc()))
-            self.__session__.rollback()
-        finally:
-            self.__session_lock__.release()
+        self.__session__.commit()
+        return db_student
 
     def add_turn(self, turn: TurnCandidate):
         new_teachers = False
-        self.__session_lock__.acquire()
         try:
             db_turn: Turn = self.__session__.query(Turn).filter_by(
                 number=turn.number, class_instance=turn.class_instance, type=turn.type).first()
@@ -493,7 +478,6 @@ class Database:
             log.error("Failed to add turn.\n%s" % traceback.format_exc())
             self.__session__.rollback()
         finally:
-            self.__session_lock__.release()
             if new_teachers:
                 self.__load_teachers__()
 
@@ -508,7 +492,6 @@ class Database:
         if turn is None:
             return
 
-        self.__session_lock__.acquire()
         try:
             self.__session__.delete(TurnInstance).filter_by(turn=turn)
             for instance in instances:
@@ -518,65 +501,42 @@ class Database:
         except Exception:
             log.error("Failed to add turn instances.\n%s" % traceback.format_exc())
             self.__session__.rollback()
-        finally:
-            self.__session_lock__.release()
 
     def add_turn_students(self, turn: Turn, students):
-        self.__session_lock__.acquire()
-        try:
-            [turn.students.append(student) for student in students]
-            self.__session__.commit()
-        finally:
-            self.__session_lock__.release()
+        [turn.students.append(student) for student in students]
 
     def add_admissions(self, admissions: [AdmissionCandidate]):
-        self.__session_lock__.acquire()
-        try:
-            admissions = list(map(lambda admission: Admission(
-                student=admission.student, name=admission.name, course=admission.course, phase=admission.phase,
-                year=admission.year, option=admission.option, state=admission.state), admissions))
-            self.__session__.add_all(admissions)
-            self.__session__.commit()
-            if len(admissions) > 0:
-                log.info("{} admissions added successfully!".format(len(admissions)))
-        except Exception:
-            log.error("Failed to add the National Contest admissions\n%s" % traceback.format_exc())
-            self.__session__.rollback()
-        finally:
-            self.__session_lock__.release()
+        admissions = list(map(lambda admission: Admission(
+            student=admission.student, name=admission.name, course=admission.course, phase=admission.phase,
+            year=admission.year, option=admission.option, state=admission.state), admissions))
+        self.__session__.add_all(admissions)
+        self.__session__.commit()
+        if len(admissions) > 0:
+            log.info("{} admissions added successfully!".format(len(admissions)))
 
     def add_enrollments(self, enrollments: [EnrollmentCandidate]):
-        self.__session_lock__.acquire()
-        try:
-            enrollments = list(map(lambda enrollment: Enrollment(
-                student=enrollment.student, class_instance=enrollment.class_instance, attempt=enrollment.attempt,
-                student_year=enrollment.student_year, statutes=enrollment.statutes, observation=enrollment.observation
-            ), enrollments))
-            self.__session__.add_all(enrollments)
-            self.__session__.commit()
-            if len(enrollments) > 0:
-                log.info("{} enrollments added successfully!".format(len(enrollments)))
-        except Exception:
-            log.error("Failed to add the enrollments\n%s" % traceback.format_exc())
-            self.__session__.rollback()
-        finally:
-            self.__session_lock__.release()
+        enrollments = list(map(lambda enrollment: Enrollment(
+            student=enrollment.student, class_instance=enrollment.class_instance, attempt=enrollment.attempt,
+            student_year=enrollment.student_year, statutes=enrollment.statutes, observation=enrollment.observation
+        ), enrollments))
+        self.__session__.add_all(enrollments)
+        self.__session__.commit()
+        if len(enrollments) > 0:
+            log.info("{} enrollments added successfully!".format(len(enrollments)))
 
     def add_classroom(self, classroom: ClassroomCandidate):
-        self.__session_lock__.acquire()
         try:
             if classroom.building in self.__classrooms__ and classroom.name in self.__classrooms__[classroom.building]:
                 db_classroom = self.__classrooms__[classroom.building][classroom.name]
             else:
                 db_classroom = Classroom(name=classroom.name, building=classroom.building)
                 self.__session__.add(db_classroom)
-            self.__session__.commit()
+                self.__session__.commit()
             return db_classroom
         except Exception:
             log.error("Failed to add the classroom\n%s" % traceback.format_exc())
             self.__session__.rollback()
         finally:
-            self.__session_lock__.release()
             self.__load_classrooms__()
 
     def add_building(self, building: BuildingCandidate):
@@ -584,7 +544,6 @@ class Database:
             building = self.__buildings__[building.name]
             return building
 
-        self.__session_lock__.acquire()
         try:
             building = Building(name=building.name, institution=building.institution)
             self.__session__.add(building)
@@ -594,57 +553,31 @@ class Database:
             log.error("Failed to add the building\n%s" % traceback.format_exc())
             self.__session__.rollback()
         finally:
-            self.__session_lock__.release()
             self.__load_buildings__()
 
-    def fetch_class_instances(self, year_asc=True, queue=False, year=None, period=None):
-        if queue:
-            class_instances = Queue()
-        else:
-            class_instances = []
+    def fetch_class_instances(self, year_asc=True, year=None, period=None) -> [ClassInstance]:
         order = asc(ClassInstance.year) if year_asc else desc(ClassInstance.year)
-        self.__session_lock__.acquire()
-        try:
-            if year is None:
-                if period is not None:
-                    log.warning("Period specified without an year")
-                if year_asc:
-                    instances = self.__session__.query(ClassInstance).order_by(order).all()
-                else:
-                    instances = self.__session__.query(ClassInstance).order_by(order).all()
+        if year is None:
+            if period is not None:
+                log.warning("Period specified without an year")
+            if year_asc:
+                instances = self.__session__.query(ClassInstance).order_by(order).all()
             else:
-                if period is None:
-                    instances = self.__session__.query(ClassInstance).filter_by(year=year).order_by(order).all()
-                else:
-                    instances = self.__session__.query(ClassInstance). \
-                        filter(year=year, period=period).order_by(order).all()
-        finally:
-            self.__session_lock__.release()
-
-        if queue:
-            [class_instances.put(instance) for instance in instances]
+                instances = self.__session__.query(ClassInstance).order_by(order).all()
         else:
-            [class_instances.append(instance) for instance in instances]
-        return class_instances
+            if period is None:
+                instances = self.__session__.query(ClassInstance).filter_by(year=year).order_by(order).all()
+            else:
+                instances = self.__session__.query(ClassInstance). \
+                    filter(year=year, period=period).order_by(order).all()
+        return list(instances)
 
     def find_student(self, name: str, course=None):
-        self.__session_lock__.acquire()
-        try:
-            query_string = '%'
-            for word in name.split():
-                query_string += (word + '%')
+        query_string = '%'
+        for word in name.split():
+            query_string += (word + '%')
 
-            if course is None:
-                return self.__session__.query(Student).filter(Student.name.ilike(query_string)).all()
-            else:
-                return self.__session__.query(Student).filter(Student.name.ilike(query_string), course=course).all()
-        finally:
-            self.__session_lock__.release()
-
-    # Hack to use the DBAPI since the session is an attribute of this class shared among threads
-    # TODO Make a proper threaded implementation
-    def lock(self):
-        self.__session_lock__.acquire()
-
-    def unlock(self):
-        self.__session_lock__.release()
+        if course is None:
+            return self.__session__.query(Student).filter(Student.name.ilike(query_string)).all()
+        else:
+            return self.__session__.query(Student).filter(Student.name.ilike(query_string), course=course).all()

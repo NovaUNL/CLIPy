@@ -79,8 +79,8 @@ class ClassInstanceCandidate:
 
 
 class CourseCandidate(TemporalEntity):
-    def __init__(self, identifier: int, name: str, degree: Degree, institution: Institution,
-                 abbreviation=None, first_year=None, last_year=None):
+    def __init__(self, identifier: int, name: str, institution: Institution,
+                 degree=None, abbreviation=None, first_year=None, last_year=None):
         super().__init__(identifier, first_year, last_year)
         self.name = name
         self.abbreviation = abbreviation

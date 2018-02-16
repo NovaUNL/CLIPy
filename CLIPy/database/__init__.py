@@ -8,4 +8,4 @@ Storage management layer
 :license: GPL, see LICENSE for more details.
 
 """
-from CLIPy.database.database import Database
+from CLIPy.database.database import Controller, SessionRegistry, create_db_engine as create_engine
