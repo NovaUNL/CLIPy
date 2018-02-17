@@ -13,7 +13,7 @@ from CLIPy import urls
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
-THREADS = 4  # high number means "Murder CLIP!", take care
+THREADS = 8  # high number means "Murder CLIP!", take care
 
 
 def institutions(session: Session, db_registry: db.SessionRegistry):
@@ -168,7 +168,7 @@ def nac_admissions(session: Session, db_registry: db.SessionRegistry):
     institution_queue_lock = Lock()
 
     threads = []
-    for thread in range(0, THREADS):
+    for thread in range(0, THREADS):  # , THREADS): FIXME
         threads.append(PageCrawler("Thread-" + str(thread),
                                    session, db_registry, institution_queue, institution_queue_lock, crawl_admissions))
         threads[thread].start()
@@ -241,7 +241,7 @@ def database_from_scratch(session: Session, db_registry: db.SessionRegistry):
     institutions(session, db_registry)  # 10 seconds
     departments(session, db_registry)  # 1-2 minutes
     classes(session, db_registry)  # ~15 minutes
-    courses(session, db_registry)  # ~5 minutes before ORM
-    nac_admissions(session, db_registry)  # ~20 minutes before ORM
+    courses(session, db_registry)  # ~5 minutes
+    nac_admissions(session, db_registry)  # ~30 minutes
     class_instances(session, db_registry)  # ~4 hours before ORM
     class_instances_turns(session, db_registry)  # ~16 Hours  before ORM

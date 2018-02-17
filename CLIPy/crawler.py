@@ -25,38 +25,41 @@ class PageCrawler(Thread):
         Thread.__init__(self)
         self.name = name
         self.web_session: WebSession = clip_session
-        self.db_session = db_registry.get_session()
-        self.db_controller = db.Controller(db_registry)
+        self.db_registry = db_registry
         self.work_queue = work_queue
         self.queue_lock = queue_lock
         self.crawl_function = crawl_function
 
     def run(self):
+        db_session = self.db_registry.get_session()
+        db_controller = db.Controller(self.db_registry)
         while True:
             self.queue_lock.acquire()
             if not self.work_queue.empty():
                 work_unit = self.work_queue.get()
                 self.queue_lock.release()
-                done = False
                 exception_count = 0
-                while not done:
+                while True:
                     try:
-                        self.crawl_function(self.web_session, self.db_controller, self.db_session.merge(work_unit))
-                        done = True
-                    except Exception as e:
+                        self.crawl_function(self.web_session, db_controller, work_unit)
+                        break
+                    except Exception:
                         exception_count += 1
                         log.error("Failed to complete the job. Error: \n{}\nRetrying in 5 seconds...".format(
                             traceback.format_exc()))
                         if exception_count > 3:
-                            print("Hello debugger!")
+                            raise Exception("Thread {} failed for more than three times.")
                         sleep(5 + exception_count)
             else:
                 self.queue_lock.release()
                 break
 
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.db_registry.remove()
+
 
 def crawl_classes(session: WebSession, database: db.Controller, department: Department):
-    department = database.__session__.merge(department)
+    department = database.session.merge(department)
     classes = {}
     class_instances = []
 
@@ -109,22 +112,24 @@ def crawl_classes(session: WebSession, database: db.Controller, department: Depa
 
 
 def crawl_admissions(session: WebSession, database: db.Controller, institution: Institution):
+    institution = database.session.merge(institution)
     admissions = []
     course_exp = re.compile("\\bcurso=(\d+)$")
     years = range(institution.first_year, institution.last_year + 1)
     for year in years:
-        courses = set()
-        hierarchy = parse_clean_request(session.get(urls.ADMISSIONS.format(year, institution.internal_id)))
-        course_links = hierarchy.find_all(href=course_exp)
-        for course_link in course_links:  # find every course that had students that year
-            courses.add(int(course_exp.findall(course_link.attrs['href'])[0]))
+        course_ids = set()  # Courses found in this year's page
+        hierarchy = parse_clean_request(session.get(urls.ADMISSIONS.format(year, institution.internal_id)))  # Fetch the page
+        course_links = hierarchy.find_all(href=course_exp)  # Find the course links
+        for course_link in course_links:  # For every found course
+            course_id = int(course_exp.findall(course_link.attrs['href'])[0])
+            course_ids.add(course_id)
 
-        for course_id in courses:
-            course = database.get_course(course_id)  # TODO ensure that doesn't end up as None
-            for phase in range(1, 4):  # for every of the three phases
+        for course_id in course_ids:
+            course = database.get_course(id=course_id)  # TODO ensure that doesn't end up as None
+            for phase in range(1, 4):  # For every of the three phases
                 hierarchy = parse_clean_request(session.get(
                     urls.ADMITTED.format(year, institution.internal_id, phase, course_id)))
-                # find the table structure containing the data (only one with those attributes)
+                # Find the table structure containing the data (only one with those attributes)
                 table_root = hierarchy.find('th', colspan="8", bgcolor="#95AEA8").parent.parent
 
                 for tag in table_root.find_all('th'):  # for every table header
@@ -148,12 +153,10 @@ def crawl_admissions(session: WebSession, database: db.Controller, institution: 
                     student = None
 
                     if student_iid is not None:  # if the student has an id add him/her to the database
-                        student = database.add_student(
-                            StudentCandidate(student_iid, name, None, course=course, institution=institution))
+                        student = database.add_student(StudentCandidate(student_iid, name, course, institution))
 
                     name = name if student is None else None
                     admission = AdmissionCandidate(student, name, course, phase, year, option, state)
-                    # log.debug("Found admission: {}".format(admission))
                     admissions.append(admission)
     database.add_admissions(admissions)
 
@@ -202,7 +205,7 @@ def crawl_class_instance(session: WebSession, database: db.Controller, class_ins
             raise Exception("Student with no name")
         # TODO continue
 
-        course = database.get_course(course_abbr, year=class_instance.year)
+        course = database.get_course(abbreviation=course_abbr, year=class_instance.year)
 
         # TODO consider sub-courses EG: MIEA/[Something]
         observation = course_abbr if course is not None else (course_abbr + "(Unknown)")
@@ -366,12 +369,11 @@ def crawl_class_turns(session: WebSession, database: db.Controller, class_instan
             student_id = student_row.contents[3].text.strip()
             student_abbreviation = student_row.contents[5].text.strip()
             course_abbreviation = student_row.contents[7].text.strip()
-            course = database.get_course(course_abbreviation, year=class_instance.year)
+            course = database.get_course(abbreviation=course_abbreviation, year=class_instance.year)
 
             # make sure he/she is in the db and have his/her db id
             student = database.add_student(
-                StudentCandidate(student_id, student_name, student_abbreviation, course=course))
-            database.commit()
+                StudentCandidate(student_id, student_name, course=course, abbreviation=student_abbreviation))
             students.append(student)
 
         routes_str = None
@@ -390,4 +392,3 @@ def crawl_class_turns(session: WebSession, database: db.Controller, class_instan
 
         database.add_turn_instances(instances)
         database.add_turn_students(turn, students)
-        database.commit()

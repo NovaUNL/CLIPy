@@ -92,12 +92,12 @@ class CourseCandidate(TemporalEntity):
 
 
 class StudentCandidate:
-    def __init__(self, identifier, name: str, abbreviation, course: Course, institution: Institution):
+    def __init__(self, identifier, name: str, course: Course, institution: Institution, abbreviation=None):
         self.id = identifier
         self.name = name
-        self.abbreviation = abbreviation
         self.course = course
         self.institution = institution
+        self.abbreviation = abbreviation
 
     def __str__(self):
         return "{} ({}, {})".format(self.name, self.id, self.abbreviation)
