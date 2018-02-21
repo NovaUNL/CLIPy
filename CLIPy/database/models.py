@@ -68,7 +68,7 @@ class Institution(Base, TemporalEntity):
     id = Column(Integer, Sequence(TABLE_PREFIX + 'institution_id_seq'), primary_key=True)
     internal_id = Column(Integer)
     abbreviation = Column(String(10))
-    name = Column(String(50))
+    name = Column(String(100))
 
     def __str__(self):
         return self.abbreviation
@@ -80,7 +80,7 @@ class Building(Base):
     name = Column(String(30))
     institution_id = Column(Integer, ForeignKey(Institution.id))
     institution = relationship(Institution, back_populates="buildings")
-    __table_args__ = (UniqueConstraint('institution_id', 'name', name='un_' + TABLE_PREFIX + '_building'),)
+    __table_args__ = (UniqueConstraint('institution_id', 'name', name='un_' + TABLE_PREFIX + 'building'),)
 
     def __str__(self):
         return self.name
@@ -96,7 +96,7 @@ class Department(Base, TemporalEntity):
     name = Column(String(50))
     institution_id = Column(Integer, ForeignKey(Institution.id))
     institution = relationship("Institution", back_populates="departments")
-    __table_args__ = (UniqueConstraint('internal_id', 'institution_id', name='un_' + TABLE_PREFIX + '_department'),)
+    __table_args__ = (UniqueConstraint('internal_id', 'institution_id', name='un_' + TABLE_PREFIX + 'department'),)
 
     def __str__(self):
         return "{}({}, {})".format(self.name, self.internal_id, self.institution.abbreviation) + super().__str__()
@@ -112,7 +112,7 @@ class Class(Base):
     name = Column(String(100))
     department_id = Column(Integer, ForeignKey(Department.id))
     department = relationship(Department, back_populates="classes")
-    __table_args__ = (UniqueConstraint('internal_id', 'department_id', name='un_' + TABLE_PREFIX + '_class_dept'),)
+    __table_args__ = (UniqueConstraint('internal_id', 'department_id', name='un_' + TABLE_PREFIX + 'class_dept'),)
 
     def __str__(self):
         return "{}(id:{}, dept:{})".format(self.name, self.internal_id, self.department)
@@ -144,7 +144,7 @@ class ClassInstance(Base):
     year = Column(Integer)
     parent = relationship(Class, back_populates="instances")
     period = relationship(Period, back_populates="class_instances")
-    __table_args__ = (UniqueConstraint('class_id', 'year', 'period_id', name='un_' + TABLE_PREFIX + '_class_instance'),)
+    __table_args__ = (UniqueConstraint('class_id', 'year', 'period_id', name='un_' + TABLE_PREFIX + 'class_instance'),)
 
     def __str__(self):
         return "{} on period {} of {}".format(self.parent, self.period, self.year)
@@ -164,8 +164,8 @@ class Course(Base, TemporalEntity):
     institution_id = Column(Integer, ForeignKey(Institution.id))
     degree = relationship(Degree, back_populates="courses")
     institution = relationship("Institution", back_populates="courses")
-    __table_args__ = (UniqueConstraint('institution_id', 'abbreviation', name='un_' + TABLE_PREFIX + '_course_abbr'),
-                      UniqueConstraint('institution_id', 'internal_id', name='un_' + TABLE_PREFIX + '_course_iid'))
+    __table_args__ = (
+        UniqueConstraint('institution_id', 'internal_id', 'abbreviation', name='un_' + TABLE_PREFIX + 'course'),)
 
     def __str__(self):
         return ("{}(ID:{} Abbreviation:{}, Degree:{} Institution:{})".format(
@@ -209,7 +209,7 @@ class Student(Base):
     institution = relationship("Institution", back_populates="students")
     turns = relationship('Turn', secondary=turn_students, back_populates='students')
     __table_args__ = (
-        UniqueConstraint('institution_id', 'internal_id', 'abbreviation', name='un_' + TABLE_PREFIX + '_student'),)
+        UniqueConstraint('institution_id', 'internal_id', 'abbreviation', name='un_' + TABLE_PREFIX + 'student'),)
 
     def __str__(self):
         return "{} ({}, {})".format(self.name, self.internal_id, self.abbreviation)
@@ -233,7 +233,7 @@ class Admission(Base):
     student = relationship("Student", back_populates="admission_records")
     course = relationship("Course", back_populates="admissions")
     __table_args__ = (
-        UniqueConstraint('student_id', 'name', 'year', 'phase', name='un_' + TABLE_PREFIX + '_admission'),)
+        UniqueConstraint('student_id', 'name', 'year', 'phase', name='un_' + TABLE_PREFIX + 'admission'),)
 
     def __str__(self):
         return ("{}, admitted to {}({}) (option {}) at the phase {} of the {} contest. {} as of {}".format(
@@ -257,7 +257,7 @@ class Enrollment(Base):
     observation = Column(String(30))
     student = relationship("Student", back_populates="enrollments")
     class_instance = relationship("ClassInstance", back_populates="enrollments")
-    __table_args__ = (UniqueConstraint('student_id', 'class_instance_id', name='un_' + TABLE_PREFIX + '_enrollment'),)
+    __table_args__ = (UniqueConstraint('student_id', 'class_instance_id', name='un_' + TABLE_PREFIX + 'enrollment'),)
 
     def __str__(self):
         return "{} enrolled to {}, attempt:{}, student year:{}, statutes:{}, obs:{}".format(
@@ -284,7 +284,7 @@ class Turn(Base):
     students = relationship(Student, secondary=turn_students, back_populates='turns')
     class_instance = relationship("ClassInstance", back_populates="turns")
     type = relationship("TurnType", back_populates="instances")
-    __table_args__ = (UniqueConstraint('class_instance_id', 'number', 'type_id', name='un_' + TABLE_PREFIX + '_turn'),)
+    __table_args__ = (UniqueConstraint('class_instance_id', 'number', 'type_id', name='un_' + TABLE_PREFIX + 'turn'),)
 
     def __str__(self):
         return "{} {}.{}".format(self.class_instance, self.type, self.number)
@@ -305,7 +305,7 @@ class TurnInstance(Base):
     turn = relationship("Turn", back_populates="instances")
     weekday = Column(SMALLINT)
     classroom = relationship("Classroom", back_populates="turn_instances")
-    __table_args__ = (UniqueConstraint('turn_id', 'start', 'weekday', name='un_' + TABLE_PREFIX + '_turn_instance'),)
+    __table_args__ = (UniqueConstraint('turn_id', 'start', 'weekday', name='un_' + TABLE_PREFIX + 'turn_instance'),)
 
     @staticmethod
     def minutes_to_str(minutes: int):

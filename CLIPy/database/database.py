@@ -1,7 +1,6 @@
 import logging
 import os
 import traceback
-from queue import Queue
 
 from sqlalchemy import create_engine, desc, asc
 from sqlalchemy.engine import Engine
@@ -36,7 +35,6 @@ class SessionRegistry:
         Base.metadata.create_all(engine)
 
     def get_session(self):
-
         return self.scoped_session()
 
     def remove(self):
@@ -272,9 +270,9 @@ class Controller:
                             return match
             else:
                 matches = self.session.query(Course).filter_by(internal_id=id).all()
-                if len(matches == 0):
+                if len(matches) == 0:
                     return None
-                elif len(matches == 1):
+                elif len(matches) == 1:
                     return matches[0]
 
                 if year is None:
@@ -331,7 +329,8 @@ class Controller:
                         last_year=institution.last_year))
             self.session.commit()
             log.info("{} institutions added successfully!".format(len(institutions)))
-            self.__load_institutions__()
+            if self.__caching__:
+                self.__load_institutions__()
         except Exception:
             log.error("Failed to add the institutions\n" + traceback.format_exc())
             self.session.rollback()
@@ -362,7 +361,8 @@ class Controller:
                         institution=department.institution))
             log.info("{} departments added successfully!".format(len(departments)))
             self.session.commit()
-            self.__load_departments__()
+            if self.__caching__:
+                self.__load_departments__()
         except Exception:
             log.error("Failed to add the departments\n" + traceback.format_exc())
             self.session.rollback()
@@ -404,7 +404,6 @@ class Controller:
             log.info("{} class instances added successfully! ({} ignored)".format(len(instances), ignored))
 
     def add_courses(self, courses: [CourseCandidate]):
-        # TODO convert '' to None, but somewhere else
         updated = 0
         try:
             for course in courses:
@@ -420,35 +419,38 @@ class Controller:
                         last_year=course.last_year,
                         degree=course.degree,
                         institution=course.institution))
+                    self.session.commit()
                 else:
                     updated += 1
+                    changed = False
                     if course.name is not None and course.name != db_course.name:
                         raise Exception("Attempted to change a course name")
 
                     if course.abbreviation is not None:
                         db_course.abbreviation = course.abbreviation
-
+                        changed = True
                     if course.degree is not None:
                         db_course.degree = course.degree
-
-                    if db_course.first_year is None:
+                        changed = True
+                    if db_course.first_year is None \
+                            or course.first_year is not None and course.first_year < db_course.first_year:
                         db_course.first_year = course.first_year
-                    elif course.first_year is not None and course.first_year < db_course.first_year:
-                        db_course.first_year = course.first_year
-
-                    if db_course.last_year is None:
+                        changed = True
+                    if db_course.last_year is None \
+                            or course.last_year is not None and course.last_year < db_course.last_year:
                         db_course.last_year = course.last_year
-                    elif course.last_year is not None and course.last_year < db_course.last_year:
-                        db_course.last_year = course.last_year
+                        changed = True
+                    if changed:
+                        self.session.commit()
 
-            self.session.commit()
             if len(courses) > 0:
                 log.info("{} courses added successfully! ({} updated)".format(len(courses), updated))
         except Exception:
             self.session.rollback()
             raise Exception("Failed to add courses.\n%s" % traceback.format_exc())
         finally:
-            self.__load_courses__()
+            if self.__caching__:
+                self.__load_courses__()
 
     def add_student(self, student: StudentCandidate):
         if student.name is None or student.name == '':  # TODO Move this out of here
@@ -462,16 +464,19 @@ class Controller:
         else:
             raise Exception("Neither course nor institution provided")
 
-        db_students = self.session.query(Student).filter_by(
-            name=student.name, internal_id=student.id, institution=institution).all()
+        if student.abbreviation is None and student.id is not None:
+            db_students = self.session.query(Student).filter_by(
+                name=student.name, internal_id=student.id, institution=institution).all()
+        elif student.id is None and student.abbreviation is not None:
+            db_students = self.session.query(Student).filter_by(
+                name=student.name, abbreviation=student.abbreviation, institution=institution).all()
+        else:
+            db_students = self.session.query(Student).filter_by(
+                abbreviation=student.abbreviation, internal_id=student.id, institution=institution).all()
 
         if len(db_students) == 0:  # new student, add him
-            db_student = Student(
-                internal_id=student.id,
-                name=student.name,
-                abbreviation=student.abbreviation,
-                institution=institution,
-                course=student.course)
+            db_student = Student(internal_id=student.id, name=student.name, abbreviation=student.abbreviation,
+                                 institution=institution, course=student.course)
             self.session.add(db_student)
             self.session.commit()
         elif len(db_students) == 1:
@@ -490,7 +495,10 @@ class Controller:
                 db_student.course = student.course
                 self.session.commit()
         else:  # bug or several institutions (don't even know if it's possible)
-            raise Exception("Duplicated students found:\n{}".format(db_students))
+            students = ""
+            for student in db_students:
+                students += ("%d," % student)
+            raise Exception("Duplicated students found:\n{}".format(students))
         return db_student
 
     def add_turn(self, turn: TurnCandidate):
@@ -521,22 +529,29 @@ class Controller:
                 if turn.state is not None:
                     db_turn.state = turn.state
 
+            if len(self.session.dirty) > 0:
+                self.session.commit()
+
             for teacher in turn.teachers:  # TODO move this to a separate method
-                if teacher in self.__teachers__:
-                    teacher = self.__teachers__[teacher.name]
+                if self.__caching__:
+                    if teacher in self.__teachers__:
+                        db_teacher = self.__teachers__[teacher.name]
+                    else:
+                        db_teacher = None
                 else:
+                    db_teacher = self.session.query(Teacher).filter_by(name=teacher.name).first()
+
+                if db_teacher is None:
                     new_teachers = True
                     teacher = Teacher(name=teacher.name)
                     self.session.add(teacher)
                 db_turn.teachers.append(teacher)
-
-            self.session.commit()
             return db_turn
         except Exception:
             log.error("Failed to add turn.\n%s" % traceback.format_exc())
             self.session.rollback()
         finally:
-            if new_teachers:
+            if new_teachers and self.__caching__:
                 self.__load_teachers__()
 
     # Reconstructs the instances of a turn , IT'S DESTRUCTIVE!
@@ -574,14 +589,38 @@ class Controller:
             log.info("{} admissions added successfully!".format(len(admissions)))
 
     def add_enrollments(self, enrollments: [EnrollmentCandidate]):
-        enrollments = list(map(lambda enrollment: Enrollment(
-            student=enrollment.student, class_instance=enrollment.class_instance, attempt=enrollment.attempt,
-            student_year=enrollment.student_year, statutes=enrollment.statutes, observation=enrollment.observation
-        ), enrollments))
-        self.session.add_all(enrollments)
-        self.session.commit()
-        if len(enrollments) > 0:
-            log.info("{} enrollments added successfully!".format(len(enrollments)))
+        added = 0
+        updated = 0
+        for enrollment in enrollments:
+            db_enrollment: Enrollment = self.session.query(Enrollment).filter_by(
+                student=enrollment.student, class_instance=enrollment.class_instance).first()
+            if db_enrollment:
+                changed = False
+                if db_enrollment.observation is None and enrollment.observation is not None:
+                    db_enrollment.observation = enrollment.observation
+                    changed = True
+                if db_enrollment.student_year is None and enrollment.student_year is not None:
+                    db_enrollment.student_year = enrollment.student_year
+                    changed = True
+                if db_enrollment.attempt is None and enrollment.attempt is not None:
+                    db_enrollment.attempt = enrollment.attempt
+                    changed = True
+                if db_enrollment.statutes is None and enrollment.statutes is not None:
+                    db_enrollment.statutes = enrollment.statutes
+                    changed = True
+                if changed:
+                    updated += 1
+                    self.session.commit()
+            else:
+                enrollment = Enrollment(student=enrollment.student, class_instance=enrollment.class_instance,
+                                        attempt=enrollment.attempt, student_year=enrollment.student_year,
+                                        statutes=enrollment.statutes, observation=enrollment.observation)
+                added += 1
+                self.session.add(enrollment)
+                self.session.commit()
+
+        log.info("{} enrollments added and {} updated ({} ignored)!".format(
+            added, updated, len(enrollments) - added - updated))
 
     def add_classroom(self, classroom: ClassroomCandidate):
         try:
@@ -596,7 +635,8 @@ class Controller:
             log.error("Failed to add the classroom\n%s" % traceback.format_exc())
             self.session.rollback()
         finally:
-            self.__load_classrooms__()
+            if self.__caching__:
+                self.__load_classrooms__()
 
     def add_building(self, building: BuildingCandidate):
         if building.name in self.__buildings__:
@@ -612,7 +652,8 @@ class Controller:
             log.error("Failed to add the building\n%s" % traceback.format_exc())
             self.session.rollback()
         finally:
-            self.__load_buildings__()
+            if self.__caching__:
+                self.__load_buildings__()
 
     def fetch_class_instances(self, year_asc=True, year=None, period=None) -> [ClassInstance]:
         order = asc(ClassInstance.year) if year_asc else desc(ClassInstance.year)
@@ -628,7 +669,7 @@ class Controller:
                 instances = self.session.query(ClassInstance).filter_by(year=year).order_by(order).all()
             else:
                 instances = self.session.query(ClassInstance). \
-                    filter(year=year, period=period).order_by(order).all()
+                    filter_by(year=year, period=period).order_by(order).all()
         return list(instances)
 
     def find_student(self, name: str, course=None):

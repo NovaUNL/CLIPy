@@ -42,14 +42,17 @@ class PageCrawler(Thread):
                 while True:
                     try:
                         self.crawl_function(self.web_session, db_controller, work_unit)
+                        exception_count = 0
                         break
                     except Exception:
+                        db_session.rollback()
                         exception_count += 1
-                        log.error("Failed to complete the job. Error: \n{}\nRetrying in 5 seconds...".format(
-                            traceback.format_exc()))
-                        if exception_count > 3:
-                            raise Exception("Thread {} failed for more than three times.")
-                        sleep(5 + exception_count)
+                        log.error("Failed to complete the job for the work unit with the ID {}."
+                                  "Error: \n{}\nRetrying in 5 seconds...".format(work_unit.id, traceback.format_exc()))
+
+                    if exception_count > 10:
+                        raise Exception("Thread {} failed for more than 10 times.")
+                    sleep(5 + max(exception_count, 55))
             else:
                 self.queue_lock.release()
                 break
@@ -118,7 +121,8 @@ def crawl_admissions(session: WebSession, database: db.Controller, institution: 
     years = range(institution.first_year, institution.last_year + 1)
     for year in years:
         course_ids = set()  # Courses found in this year's page
-        hierarchy = parse_clean_request(session.get(urls.ADMISSIONS.format(year, institution.internal_id)))  # Fetch the page
+        hierarchy = parse_clean_request(  # Fetch the page
+            session.get(urls.ADMISSIONS.format(year, institution.internal_id)))
         course_links = hierarchy.find_all(href=course_exp)  # Find the course links
         for course_link in course_links:  # For every found course
             course_id = int(course_exp.findall(course_link.attrs['href'])[0])
@@ -130,7 +134,10 @@ def crawl_admissions(session: WebSession, database: db.Controller, institution: 
                 hierarchy = parse_clean_request(session.get(
                     urls.ADMITTED.format(year, institution.internal_id, phase, course_id)))
                 # Find the table structure containing the data (only one with those attributes)
-                table_root = hierarchy.find('th', colspan="8", bgcolor="#95AEA8").parent.parent
+                try:
+                    table_root = hierarchy.find('th', colspan="8", bgcolor="#95AEA8").parent.parent
+                except AttributeError:
+                    continue
 
                 for tag in table_root.find_all('th'):  # for every table header
                     if tag.parent is not None:
@@ -162,6 +169,9 @@ def crawl_admissions(session: WebSession, database: db.Controller, institution: 
 
 
 def crawl_class_instance(session: WebSession, database: db.Controller, class_instance: ClassInstance):
+    log.info("Crawling class instance ID %s" % class_instance.id)
+    class_instance = database.session.merge(class_instance)
+
     institution = class_instance.parent.department.institution
 
     hierarchy = parse_clean_request(session.get(urls.CLASS_ENROLLED.format(

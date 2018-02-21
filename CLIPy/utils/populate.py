@@ -16,8 +16,7 @@ log = logging.getLogger(__name__)
 THREADS = 8  # high number means "Murder CLIP!", take care
 
 
-def institutions(session: Session, db_registry: db.SessionRegistry):
-    database = db.Controller(db_registry)
+def institutions(session: Session, database: db.Controller):
     found = []
     known = {60002: "Escola Nacional de Saúde Publica",
              109054: "Faculdade de Ciências Médicas",
@@ -53,8 +52,7 @@ def institutions(session: Session, db_registry: db.SessionRegistry):
     database.add_institutions(found)
 
 
-def departments(session: Session, db_registry: db.SessionRegistry):
-    database = db.Controller(db_registry)
+def departments(session: Session, database: db.Controller):
     found = {}  # id -> Department
     department_exp = re.compile('\\bsector=(\d+)\\b')
     for institution in database.get_institution_set():
@@ -108,8 +106,7 @@ def classes(session: Session, db_registry: db.SessionRegistry):
         thread.join()
 
 
-def courses(session: Session, db_registry: db.SessionRegistry):
-    database = db.Controller(db_registry)
+def courses(session: Session, database: db.Controller):
     course_exp = re.compile("\\bcurso=(\d+)\\b")
     year_ext = re.compile("\\bano_lectivo=(\d+)\\b")
 
@@ -168,7 +165,7 @@ def nac_admissions(session: Session, db_registry: db.SessionRegistry):
     institution_queue_lock = Lock()
 
     threads = []
-    for thread in range(0, THREADS):  # , THREADS): FIXME
+    for thread in range(0, THREADS):
         threads.append(PageCrawler("Thread-" + str(thread),
                                    session, db_registry, institution_queue, institution_queue_lock, crawl_admissions))
         threads[thread].start()
@@ -189,7 +186,9 @@ def nac_admissions(session: Session, db_registry: db.SessionRegistry):
 
 def class_instances(session: Session, db_registry: db.SessionRegistry):
     database = db.Controller(db_registry)
-    class_instance_queue = Queue(database.fetch_class_instances(year_asc=False))
+    class_instance_queue = Queue()
+    class_instances = database.fetch_class_instances(year_asc=False)
+    [class_instance_queue.put(class_instance) for class_instance in class_instances]
     class_instances_lock = Lock()
 
     threads = []
@@ -214,7 +213,9 @@ def class_instances(session: Session, db_registry: db.SessionRegistry):
 
 def class_instances_turns(session: Session, db_registry: db.SessionRegistry):
     database = db.Controller(db_registry)
-    class_instance_queue = Queue(database.fetch_class_instances(year_asc=False))
+    class_instance_queue = Queue()
+    class_instances = database.fetch_class_instances(year_asc=False)
+    [class_instance_queue.put(class_instance) for class_instance in class_instances]
     class_instances_lock = Lock()
 
     threads = []
@@ -238,10 +239,11 @@ def class_instances_turns(session: Session, db_registry: db.SessionRegistry):
 
 
 def database_from_scratch(session: Session, db_registry: db.SessionRegistry):
-    institutions(session, db_registry)  # 10 seconds
-    departments(session, db_registry)  # 1-2 minutes
+    main_thread_db_controller = db.Controller(db_registry, cache=True)
+    institutions(session, main_thread_db_controller)  # 10 seconds
+    departments(session, main_thread_db_controller)  # 1-2 minutes
     classes(session, db_registry)  # ~15 minutes
-    courses(session, db_registry)  # ~5 minutes
+    courses(session, main_thread_db_controller)  # ~5 minutes
     nac_admissions(session, db_registry)  # ~30 minutes
     class_instances(session, db_registry)  # ~4 hours before ORM
     class_instances_turns(session, db_registry)  # ~16 Hours  before ORM
