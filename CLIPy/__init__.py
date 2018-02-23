@@ -9,3 +9,4 @@ A wrapper/crawler meant to fetch information from the Campus Life Integration Pl
 
 """
 
+from CLIPy.interface import CacheStorage, Clip

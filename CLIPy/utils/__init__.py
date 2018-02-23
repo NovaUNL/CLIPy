@@ -10,3 +10,4 @@ Utils auxiliary to the clip module
 """
 
 from CLIPy.utils.utils import parse_clean_request, weekday_to_id, get_month_periods
+import CLIPy.utils.populate

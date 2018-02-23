@@ -16,13 +16,13 @@ log = logging.getLogger(__name__)
 
 
 def create_db_engine(backend: str, username=None, password=None, schema='CLIPy',
-                     file=os.path.dirname(__file__) + '/CLIPy.db'):
+                     host='localhost', file=os.path.dirname(__file__) + '/CLIPy.db'):
     if backend == 'sqlite':
-        log.debug("Establishing a database connection to file:'{}'".format(file))
+        log.debug(f"Establishing a database connection to file:'{file}'")
         return create_engine("sqlite:///%s" % file, echo=True)
-    elif backend == 'postgre' and username is not None and password is not None and schema is not None:
+    elif backend == 'postgresql' and username is not None and password is not None and schema is not None:
         log.debug("Establishing a database connection to file:'{}'".format(file))
-        return create_engine("postgresql://{}:{}@localhost/{}".format(username, password, schema))
+        return create_engine(f"postgresql://{username}:{password}@{host}/{schema}")
     else:
         raise ValueError('Unsupported database backend or not enough arguments supplied')
 

@@ -245,5 +245,5 @@ def database_from_scratch(session: Session, db_registry: db.SessionRegistry):
     classes(session, db_registry)  # ~15 minutes
     courses(session, main_thread_db_controller)  # ~5 minutes
     nac_admissions(session, db_registry)  # ~30 minutes
-    class_instances(session, db_registry)  # ~4 hours before ORM
-    class_instances_turns(session, db_registry)  # ~16 Hours  before ORM
+    class_instances(session, db_registry)  # ~4 hours
+    class_instances_turns(session, db_registry)  # ~16 Hours
