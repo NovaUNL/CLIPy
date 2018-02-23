@@ -2,6 +2,9 @@ from bs4 import BeautifulSoup
 
 from CLIPy.database import Controller
 
+weekdays = {'segunda': 0, 'terça': 1, 'terca': 1, 'quarta': 2, 'quinta': 3,
+           'sexta': 4, 'sábado': 5, 'sabado': 5, 'domingo': 6}
+
 
 def parse_clean_request(request):
     soup = BeautifulSoup(request.text, 'html.parser')
@@ -17,14 +20,15 @@ def parse_clean_request(request):
     return soup
 
 
-def weekday_to_id(database: Controller, weekday: str):
-    if weekday in database.__weekdays__:
-        return database.__weekdays__[weekday]
+def weekday_to_id(weekday: str):
+    if weekday in weekdays:
+        return weekdays[weekday]
 
     # Portuguese weekdays have the format "[word]" or "[word]-feira"
-    for known_weekday in database.__weekdays__:
-        if weekday.split('-')[0].lower() in known_weekday.lower():
-            return database.__weekdays__[weekday]
+    for known_weekday in weekdays:
+        simplified_weekday = weekday.split('-')[0].lower()
+        if simplified_weekday in known_weekday.lower():
+            return weekdays[simplified_weekday]
 
 
 def get_month_periods(database: Controller, month: int):

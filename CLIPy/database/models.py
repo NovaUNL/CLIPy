@@ -66,7 +66,7 @@ class TemporalEntity:
 class Institution(Base, TemporalEntity):
     __tablename__ = TABLE_PREFIX + 'institutions'
     id = Column(Integer, Sequence(TABLE_PREFIX + 'institution_id_seq'), primary_key=True)
-    internal_id = Column(Integer)
+    internal_id = Column(Integer, nullable=False)
     abbreviation = Column(String(10))
     name = Column(String(100))
 
@@ -77,8 +77,8 @@ class Institution(Base, TemporalEntity):
 class Building(Base):
     __tablename__ = TABLE_PREFIX + 'buildings'
     id = Column(Integer, Sequence(TABLE_PREFIX + 'building_id_seq'), primary_key=True)
-    name = Column(String(30))
-    institution_id = Column(Integer, ForeignKey(Institution.id))
+    name = Column(String(50), nullable=False)
+    institution_id = Column(Integer, ForeignKey(Institution.id), nullable=False)
     institution = relationship(Institution, back_populates="buildings")
     __table_args__ = (UniqueConstraint('institution_id', 'name', name='un_' + TABLE_PREFIX + 'building'),)
 
@@ -128,6 +128,7 @@ class Classroom(Base):
     name = Column(String(70), nullable=False)
     building_id = Column(Integer, ForeignKey(Building.id), nullable=False)
     building = relationship(Building, back_populates="classrooms")
+    __table_args__ = (UniqueConstraint('building_id', 'name', name='un_' + TABLE_PREFIX + 'class_dept'),)
 
     def __str__(self):
         return "{} - {}".format(self.name, self.building.name)
@@ -277,9 +278,9 @@ class Turn(Base):
     enrolled = Column(Integer)  # REDUNDANT
     capacity = Column(Integer)
     minutes = Column(Integer)
-    routes = Column(String(30))
-    restrictions = Column(String(30))
-    state = Column(String(30))
+    routes = Column(String(5000))  # FIXME adjust
+    restrictions = Column(String(200))  # FIXME adjust
+    state = Column(String(200))  # FIXME adjust
     teachers = relationship(Teacher, secondary=turn_teachers, back_populates='turns')
     students = relationship(Student, secondary=turn_students, back_populates='turns')
     class_instance = relationship("ClassInstance", back_populates="turns")
@@ -302,9 +303,9 @@ class TurnInstance(Base):
     start = Column(Integer)
     end = Column(Integer)
     classroom_id = Column(Integer, ForeignKey(Classroom.id))
-    turn = relationship("Turn", back_populates="instances")
+    turn = relationship(Turn, back_populates='instances')
     weekday = Column(SMALLINT)
-    classroom = relationship("Classroom", back_populates="turn_instances")
+    classroom = relationship(Classroom, back_populates="turn_instances")
     __table_args__ = (UniqueConstraint('turn_id', 'start', 'weekday', name='un_' + TABLE_PREFIX + 'turn_instance'),)
 
     @staticmethod
@@ -315,5 +316,6 @@ class TurnInstance(Base):
         return "{}, weekday {}, hour {}".format(self.turn, self.weekday, self.minutes_to_str(self.start))
 
 
-Turn.instances = relationship("TurnInstance", order_by=TurnInstance.weekday, back_populates="turn")
-Classroom.turn_instances = relationship("TurnInstance", order_by=TurnInstance.weekday, back_populates="classroom")
+Turn.instances = relationship(TurnInstance, order_by=TurnInstance.weekday, back_populates='turn',
+                              cascade="save-update, merge, delete")
+Classroom.turn_instances = relationship(TurnInstance, order_by=TurnInstance.weekday, back_populates='classroom')

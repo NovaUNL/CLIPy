@@ -8,7 +8,7 @@ from unicodedata import normalize
 import re
 
 from CLIPy.database.candidates import StudentCandidate, TurnCandidate, TurnInstanceCandidate, ClassroomCandidate, \
-    BuildingCandidate, EnrollmentCandidate, AdmissionCandidate, ClassCandidate, ClassInstanceCandidate
+    BuildingCandidate, EnrollmentCandidate, AdmissionCandidate, ClassCandidate, ClassInstanceCandidate, TeacherCandidate
 from CLIPy.database.database import SessionRegistry
 from CLIPy.database.models import Department, Institution, ClassInstance
 import CLIPy.database as db
@@ -171,7 +171,6 @@ def crawl_admissions(session: WebSession, database: db.Controller, institution: 
 def crawl_class_instance(session: WebSession, database: db.Controller, class_instance: ClassInstance):
     log.info("Crawling class instance ID %s" % class_instance.id)
     class_instance = database.session.merge(class_instance)
-
     institution = class_instance.parent.department.institution
 
     hierarchy = parse_clean_request(session.get(urls.CLASS_ENROLLED.format(
@@ -231,7 +230,10 @@ def crawl_class_instance(session: WebSession, database: db.Controller, class_ins
 
 
 def crawl_class_turns(session: WebSession, database: db.Controller, class_instance: ClassInstance):
+    log.info("Crawling class instance ID %s" % class_instance.id)
+    class_instance = database.session.merge(class_instance)
     institution = class_instance.parent.department.institution
+
     hierarchy = parse_clean_request(
         session.get(urls.TURNS_INFO.format(
             class_instance.parent.internal_id, institution.internal_id, class_instance.year,
@@ -324,7 +326,7 @@ def crawl_class_turns(session: WebSession, database: db.Controller, class_instan
                     if information is None:
                         raise Exception("Bad schedule:" + str(information))
 
-                    weekday = weekday_to_id(database, information.group('weekday'))
+                    weekday = weekday_to_id(information.group('weekday'))
                     start = int(information.group('init_hour')) * 60 + int(information.group('init_min'))
                     end = int(information.group('end_hour')) * 60 + int(information.group('end_min'))
 
@@ -345,7 +347,7 @@ def crawl_class_turns(session: WebSession, database: db.Controller, class_instan
                 routes = content
             elif field == "docentes":
                 for teacher in content:
-                    teachers.append(teacher)
+                    teachers.append(TeacherCandidate(teacher))
             elif "carga" in field:
                 weekly_minutes = int(float(content[0].rstrip(" horas")) * 60)
             elif field == "estado":
@@ -383,7 +385,7 @@ def crawl_class_turns(session: WebSession, database: db.Controller, class_instan
 
             # make sure he/she is in the db and have his/her db id
             student = database.add_student(
-                StudentCandidate(student_id, student_name, course=course, abbreviation=student_abbreviation))
+                StudentCandidate(student_id, student_name, course, institution, abbreviation=student_abbreviation))
             students.append(student)
 
         routes_str = None

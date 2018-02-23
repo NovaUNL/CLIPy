@@ -143,6 +143,10 @@ class EnrollmentCandidate:
 
 class BuildingCandidate:
     def __init__(self, name: str, institution: Institution):
+        if name is None:
+            raise ValueError("A building must have a name")
+        if institution is None:
+            raise ValueError("A building must belong to an institution")
         self.name = name
         self.institution = institution
 
@@ -159,6 +163,10 @@ class BuildingCandidate:
 
 class ClassroomCandidate:
     def __init__(self, name, building: Building):
+        if name is None:
+            raise ValueError("A classroom must have a name")
+        if building is None:
+            raise ValueError("A classroom must belong to a building")
         self.name = name
         self.building = building
 

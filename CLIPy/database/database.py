@@ -10,7 +10,7 @@ from CLIPy.database.models import Base, Degree, Period, TurnType, Institution, D
     Classroom, Class, ClassInstance, Student, Turn, TurnInstance, Admission, Enrollment
 from CLIPy.database.candidates import ClassroomCandidate, BuildingCandidate, TurnCandidate, StudentCandidate, \
     ClassCandidate, InstitutionCandidate, ClassInstanceCandidate, DepartmentCandidate, AdmissionCandidate, \
-    EnrollmentCandidate, CourseCandidate
+    EnrollmentCandidate, CourseCandidate, TeacherCandidate
 
 log = logging.getLogger(__name__)
 
@@ -501,58 +501,65 @@ class Controller:
             raise Exception("Duplicated students found:\n{}".format(students))
         return db_student
 
-    def add_turn(self, turn: TurnCandidate):
-        new_teachers = False
-        try:
-            db_turn: Turn = self.session.query(Turn).filter_by(
-                number=turn.number, class_instance=turn.class_instance, type=turn.type).first()
-
-            if db_turn is None:
-                db_turn = Turn(
-                    class_instance=turn.class_instance, number=turn.number, type=turn.type,
-                    enrolled=turn.enrolled, capacity=turn.capacity, minutes=turn.minutes, routes=turn.routes,
-                    restrictions=turn.restrictions, state=turn.restrictions)
-                self.session.add(db_turn)
+    def add_teacher(self, teacher: TeacherCandidate) -> Teacher:
+        if self.__caching__:
+            if teacher in self.__teachers__:
+                teacher = self.__teachers__[teacher.name]
             else:
-                if turn.minutes is not None and turn.minutes != 0:
-                    db_turn.minutes = turn.minutes
-                if turn.enrolled is not None:
-                    db_turn.enrolled = turn.enrolled
-                if turn.capacity is not None:
-                    db_turn.capacity = turn.capacity
-                if turn.minutes is not None and turn.minutes != 0:
-                    db_turn.minutes = turn.minutes
-                if turn.routes is not None:
-                    db_turn.routes = turn.routes
-                if turn.restrictions is not None:
-                    db_turn.restrictions = turn.restrictions
-                if turn.state is not None:
-                    db_turn.state = turn.state
+                teacher = Teacher(name=teacher.name)
+                self.session.add(teacher)
+                self.session.commit()
+                if self.__caching__:
+                    self.__load_teachers__()
+            return teacher
+        else:
+            db_teacher = self.session.query(Teacher).filter_by(name=teacher.name).first()
 
-            if len(self.session.dirty) > 0:
+            if db_teacher is None:
+                db_teacher = Teacher(name=teacher.name)
+                self.session.add(db_teacher)
+                self.session.commit()
+            return db_teacher
+
+    def add_turn(self, turn: TurnCandidate) -> Turn:
+        db_turn: Turn = self.session.query(Turn).filter_by(
+            number=turn.number, class_instance=turn.class_instance, type=turn.type).first()
+
+        if db_turn is None:
+            db_turn = Turn(
+                class_instance=turn.class_instance, number=turn.number, type=turn.type,
+                enrolled=turn.enrolled, capacity=turn.capacity, minutes=turn.minutes, routes=turn.routes,
+                restrictions=turn.restrictions, state=turn.restrictions)
+            self.session.add(db_turn)
+            self.session.commit()
+        else:
+            changed = False
+            if turn.minutes is not None and turn.minutes != 0:
+                db_turn.minutes = turn.minutes
+                changed = True
+            if turn.enrolled is not None:
+                db_turn.enrolled = turn.enrolled
+                changed = True
+            if turn.capacity is not None:
+                db_turn.capacity = turn.capacity
+                changed = True
+            if turn.minutes is not None and turn.minutes != 0:
+                db_turn.minutes = turn.minutes
+                changed = True
+            if turn.routes is not None:
+                db_turn.routes = turn.routes
+                changed = True
+            if turn.restrictions is not None:
+                db_turn.restrictions = turn.restrictions
+                changed = True
+            if turn.state is not None:
+                db_turn.state = turn.state
+                changed = True
+            if changed:
                 self.session.commit()
 
-            for teacher in turn.teachers:  # TODO move this to a separate method
-                if self.__caching__:
-                    if teacher in self.__teachers__:
-                        db_teacher = self.__teachers__[teacher.name]
-                    else:
-                        db_teacher = None
-                else:
-                    db_teacher = self.session.query(Teacher).filter_by(name=teacher.name).first()
-
-                if db_teacher is None:
-                    new_teachers = True
-                    teacher = Teacher(name=teacher.name)
-                    self.session.add(teacher)
-                db_turn.teachers.append(teacher)
-            return db_turn
-        except Exception:
-            log.error("Failed to add turn.\n%s" % traceback.format_exc())
-            self.session.rollback()
-        finally:
-            if new_teachers and self.__caching__:
-                self.__load_teachers__()
+        [db_turn.teachers.append(self.add_teacher(teacher)) for teacher in turn.teachers]
+        return db_turn
 
     # Reconstructs the instances of a turn , IT'S DESTRUCTIVE!
     def add_turn_instances(self, instances: [TurnInstance]):
@@ -566,17 +573,26 @@ class Controller:
             return
 
         try:
-            self.session.delete(TurnInstance).filter_by(turn=turn)
-            for instance in instances:
-                turn.instances.append(TurnInstance(turn=turn, start=instance.start, end=instance.end,
-                                                   classroom=instance.classroom, weekday=instance.weekday))
-            self.session.commit()
+            deleted = self.session.query(TurnInstance).filter_by(turn=turn).delete()
+            if deleted > 0:
+                log.info(f"Deleted {deleted} turn instances from the turn {turn}")
         except Exception:
-            log.error("Failed to add turn instances.\n%s" % traceback.format_exc())
             self.session.rollback()
+            raise Exception("Error deleting turn instances for turn {}\n{}".format(turn, traceback.format_exc()))
+
+        for instance in instances:
+            turn.instances.append(TurnInstance(turn=turn, start=instance.start, end=instance.end,
+                                               classroom=instance.classroom, weekday=instance.weekday))
+
+        if len(instances) > 0:
+            log.info(f"Added {len(instances)} turn instances to the turn {turn}")
+        self.session.commit()
 
     def add_turn_students(self, turn: Turn, students):
         [turn.students.append(student) for student in students]
+        if len(students) > 0:
+            self.session.commit()
+            log.info("{} students added successfully to the turn {}!".format(len(students), turn))
 
     def add_admissions(self, admissions: [AdmissionCandidate]):
         admissions = list(map(lambda admission: Admission(
@@ -623,37 +639,54 @@ class Controller:
             added, updated, len(enrollments) - added - updated))
 
     def add_classroom(self, classroom: ClassroomCandidate):
-        try:
-            if classroom.building in self.__classrooms__ and classroom.name in self.__classrooms__[classroom.building]:
-                db_classroom = self.__classrooms__[classroom.building][classroom.name]
-            else:
+        if self.__caching__:
+            try:
+                if classroom.building in self.__classrooms__ and \
+                        classroom.name in self.__classrooms__[classroom.building]:
+                    db_classroom = self.__classrooms__[classroom.building][classroom.name]
+                else:
+                    db_classroom = Classroom(name=classroom.name, building=classroom.building)
+                    self.session.add(db_classroom)
+                    self.session.commit()
+                return db_classroom
+            except Exception:
+                log.error("Failed to add the classroom\n%s" % traceback.format_exc())
+                self.session.rollback()
+            finally:
+                if self.__caching__:
+                    self.__load_classrooms__()
+        else:
+            db_classroom = self.session.query(Classroom).filter_by(
+                name=classroom.name, building=classroom.building).first()
+            if db_classroom is None:
                 db_classroom = Classroom(name=classroom.name, building=classroom.building)
                 self.session.add(db_classroom)
                 self.session.commit()
             return db_classroom
-        except Exception:
-            log.error("Failed to add the classroom\n%s" % traceback.format_exc())
-            self.session.rollback()
-        finally:
-            if self.__caching__:
-                self.__load_classrooms__()
 
     def add_building(self, building: BuildingCandidate):
-        if building.name in self.__buildings__:
-            building = self.__buildings__[building.name]
-            return building
-
-        try:
-            building = Building(name=building.name, institution=building.institution)
-            self.session.add(building)
-            self.session.commit()
-            return building
-        except Exception:
-            log.error("Failed to add the building\n%s" % traceback.format_exc())
-            self.session.rollback()
-        finally:
-            if self.__caching__:
-                self.__load_buildings__()
+        if self.__caching__:
+            if building.name in self.__buildings__:
+                return self.__buildings__[building.name]
+            try:
+                building = Building(name=building.name, institution=building.institution)
+                self.session.add(building)
+                self.session.commit()
+                return building
+            except Exception:
+                log.error("Failed to add the building\n%s" % traceback.format_exc())
+                self.session.rollback()
+            finally:
+                if self.__caching__:
+                    self.__load_buildings__()
+        else:
+            db_building = self.session.query(Building).filter_by(
+                name=building.name, institution=building.institution).first()
+            if db_building is None:
+                db_building = Building(name=building.name, institution=building.institution)
+                self.session.add(db_building)
+                self.session.commit()
+            return db_building
 
     def fetch_class_instances(self, year_asc=True, year=None, period=None) -> [ClassInstance]:
         order = asc(ClassInstance.year) if year_asc else desc(ClassInstance.year)
