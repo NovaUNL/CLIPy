@@ -12,13 +12,17 @@ Avoid doing so during times that might disturb other students access to CLIP. Th
 
 
 
-The data is stored onto any database supported by SQLAlchemy.
-
-This has just been ported to SQLAlchemy and it is **not even close to being optimized**. As such it still runs with a single session, with serial transactions.
-Performance is bad when compared to the previous SQLite code, RAM consumption is atrocious.
-
 ### Instalation
     pip install clip-crawler
+
+### Usage
+    from CLIPy import CacheStorage, Clip
+    
+    storage = CacheStorage.postgresql('username', 'password', 'schema')
+    Clip.populate('CLIP ID', 'password', storage) # Run only once. Takes forever.
+    
+    clip = Clip(storage)
+    [print(student) for student in clip.find_student("John Smith")]
 
 ### TODO
 - Crawl grades

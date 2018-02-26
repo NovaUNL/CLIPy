@@ -1,5 +1,5 @@
 import os
-from setuptools import setup
+from setuptools import setup, find_packages
 
 
 def read(fname):
@@ -8,7 +8,7 @@ def read(fname):
 
 setup(
     name="CLIP-Crawler",
-    version="0.1.0",
+    version="0.1.1",
     author="Cláudio Pereira",
     author_email="development@claudiop.com",
     description=(
@@ -16,7 +16,7 @@ setup(
     license="GPL V3",
     keywords="CLIP Clip FCT UNL wrapper crawler",
     url="https://gitlab.com/claudiop/CLIPy",
-    packages=['CLIPy', ],
+    packages=find_packages(),
     long_description=read('README.rst'),
     classifiers=[
         "Development Status :: 3 - Alpha",
