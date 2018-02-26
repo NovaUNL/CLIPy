@@ -184,10 +184,16 @@ def nac_admissions(session: Session, db_registry: db.SessionRegistry):
         thread.join()
 
 
-def class_instances(session: Session, db_registry: db.SessionRegistry):
+def class_instances(session: Session, db_registry: db.SessionRegistry, year=None, period=None):
     database = db.Controller(db_registry)
     class_instance_queue = Queue()
-    class_instances = database.fetch_class_instances(year_asc=False)
+    if year is None:
+        class_instances = database.fetch_class_instances()
+    else:
+        if period is None:
+            class_instances = database.fetch_class_instances(year=year)
+        else:
+            class_instances = database.fetch_class_instances(year=year, period=period)
     [class_instance_queue.put(class_instance) for class_instance in class_instances]
     class_instances_lock = Lock()
 
@@ -211,10 +217,16 @@ def class_instances(session: Session, db_registry: db.SessionRegistry):
         thread.join()
 
 
-def class_instances_turns(session: Session, db_registry: db.SessionRegistry):
+def class_instances_turns(session: Session, db_registry: db.SessionRegistry, year=None, period=None):
     database = db.Controller(db_registry)
     class_instance_queue = Queue()
-    class_instances = database.fetch_class_instances(year_asc=False)
+    if year is None:
+        class_instances = database.fetch_class_instances()
+    else:
+        if period is None:
+            class_instances = database.fetch_class_instances(year=year)
+        else:
+            class_instances = database.fetch_class_instances(year=year, period=period)
     [class_instance_queue.put(class_instance) for class_instance in class_instances]
     class_instances_lock = Lock()
 

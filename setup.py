@@ -8,7 +8,7 @@ def read(fname):
 
 setup(
     name="CLIP-Crawler",
-    version="0.0.5",
+    version="0.1.0",
     author="Cláudio Pereira",
     author_email="development@claudiop.com",
     description=(
@@ -19,7 +19,7 @@ setup(
     packages=['CLIPy', ],
     long_description=read('README.rst'),
     classifiers=[
-        "Development Status :: 2 - Pre-Alpha",
+        "Development Status :: 3 - Alpha",
         "Topic :: Utilities",
         "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
         "Natural Language :: Portuguese",
