@@ -27,4 +27,3 @@ Avoid doing so during times that might disturb other students access to CLIP. Th
 ### TODO
 - Crawl grades
 - Timespan filters (eg: crawl *[thing]* from 2015 to 2017)
-- Some usage demo

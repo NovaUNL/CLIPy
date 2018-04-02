@@ -59,10 +59,12 @@ class DegreeCandidate:
 
 
 class ClassCandidate:
-    def __init__(self, identifier: int, name: str, department: Department):
+    def __init__(self, identifier: int, name: str, department: Department, abbreviation, ects):
         self.id = identifier
         self.name = name
         self.department = department
+        self.abbreviation = abbreviation
+        self.ects = ects
 
     def __str__(self):
         return self.name

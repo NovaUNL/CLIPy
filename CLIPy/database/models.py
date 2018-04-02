@@ -1,7 +1,8 @@
 from datetime import datetime
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
-from sqlalchemy import Sequence, DateTime, ForeignKey, CHAR, SMALLINT, Table, Column, Integer, String, UniqueConstraint
+from sqlalchemy import Sequence, DateTime, ForeignKey, CHAR, SMALLINT, Table, Column, Integer, String, UniqueConstraint, \
+    Float
 
 TABLE_PREFIX = 'clip_'
 Base = declarative_base()
@@ -110,6 +111,8 @@ class Class(Base):
     id = Column(Integer, Sequence(TABLE_PREFIX + 'class_id_seq'), primary_key=True)
     internal_id = Column(Integer)
     name = Column(String(100))
+    abbreviation = Column(String(15), default='UNK')
+    ects = Column(Integer, nullable=True)
     department_id = Column(Integer, ForeignKey(Department.id))
     department = relationship(Department, back_populates="classes")
     __table_args__ = (UniqueConstraint('internal_id', 'department_id', name='un_' + TABLE_PREFIX + 'class_dept'),)
@@ -128,7 +131,7 @@ class Classroom(Base):
     name = Column(String(70), nullable=False)
     building_id = Column(Integer, ForeignKey(Building.id), nullable=False)
     building = relationship(Building, back_populates="classrooms")
-    __table_args__ = (UniqueConstraint('building_id', 'name', name='un_' + TABLE_PREFIX + 'class_dept'),)
+    __table_args__ = (UniqueConstraint('building_id', 'name', name='un_' + TABLE_PREFIX + 'classroom_dept'),)
 
     def __str__(self):
         return "{} - {}".format(self.name, self.building.name)

@@ -68,6 +68,8 @@ def crawl_classes(session: WebSession, database: db.Controller, department: Depa
 
     period_exp = re.compile('&tipo_de_per%EDodo_lectivo=(?P<type>\w)&per%EDodo_lectivo=(?P<stage>\d)$')
     class_exp = re.compile('&unidade_curricular=(\d+)')
+    abbr_exp = re.compile('\(.+\) .* \((?P<abbr>[\S]+)\)')
+    ects_exp = re.compile('(?P<ects>\d|\d.\d)\s?ECTS.*')
 
     # for each year this department operated
     for year in range(department.first_year, department.last_year + 1):
@@ -106,7 +108,28 @@ def crawl_classes(session: WebSession, database: db.Controller, department: Depa
                 class_id = int(class_exp.findall(class_link.attrs['href'])[0])
                 class_name = class_link.contents[0].strip()
                 if class_id not in classes:
-                    classes[class_id] = database.add_class(ClassCandidate(class_id, class_name, department))
+                    # Fetch abbreviation and number of ECTSs
+                    hierarchy = parse_clean_request(
+                        session.get(urls.CLASS.format(period_type, department.internal_id, year,
+                                                      part, department.institution.internal_id, class_id)))
+                    elements = hierarchy.find_all('td', attrs={'class': 'subtitulo'})
+                    abbr = None
+                    ects = None
+                    try:
+                        abbr_matches = abbr_exp.search(elements[0].text)
+                        abbr = str(abbr_matches.group('abbr')).strip()
+                    except:
+                        log.warning(f'Class {class_name}({class_id}) has no abbreviation')
+
+                    try:
+                        ects_matches = ects_exp.search(elements[1].text)
+                        ects_s = str(ects_matches.group('ects')).strip()
+                        # ECTSs are stored in halves. Someone decided it would be cool to award half ECTS...
+                        ects = int(float(ects_s) * 2)
+                    except:
+                        log.warning(f'Class {class_name}({class_id}) has no ECTS information')
+
+                    classes[class_id] = database.add_class(ClassCandidate(class_id, class_name, department, abbr, ects))
 
                 if classes[class_id] is None:
                     raise Exception("Null class")

@@ -384,7 +384,8 @@ class Controller:
 
         log.info("Adding class {}".format(class_candidate))
         db_class = Class(
-            internal_id=class_candidate.id, name=class_candidate.name, department=class_candidate.department)
+            internal_id=class_candidate.id, name=class_candidate.name, department=class_candidate.department,
+            abbreviation=class_candidate.abbreviation, ects=class_candidate.ects)
         self.session.add(db_class)
         self.session.commit()
         return db_class
