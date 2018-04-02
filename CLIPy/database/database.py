@@ -1,6 +1,7 @@
 import logging
 import os
 import traceback
+from typing import List
 
 from sqlalchemy import create_engine, desc, asc
 from sqlalchemy.engine import Engine
@@ -10,7 +11,7 @@ from CLIPy.database.models import Base, Degree, Period, TurnType, Institution, D
     Classroom, Class, ClassInstance, Student, Turn, TurnInstance, Admission, Enrollment
 from CLIPy.database.candidates import ClassroomCandidate, BuildingCandidate, TurnCandidate, StudentCandidate, \
     ClassCandidate, InstitutionCandidate, ClassInstanceCandidate, DepartmentCandidate, AdmissionCandidate, \
-    EnrollmentCandidate, CourseCandidate, TeacherCandidate
+    EnrollmentCandidate, CourseCandidate, TeacherCandidate, TurnInstanceCandidate
 
 log = logging.getLogger(__name__)
 
@@ -154,6 +155,8 @@ class Controller:
         log.debug("Building classroom cache")
         classrooms = {}
         for classroom, building in self.session.query(Classroom, Building).all():
+            if building.name not in classrooms:
+                classrooms[building.name] = {}
             classrooms[building.name][classroom.name] = building
         self.__classrooms__ = classrooms
 
@@ -456,6 +459,9 @@ class Controller:
         if student.name is None or student.name == '':  # TODO Move this out of here
             raise Exception("Invalid name")
 
+        if student.id is None:
+            raise Exception('No student ID provided')
+
         if student.course is not None:
             # Search for institution instead of course since a transfer could have happened
             institution = student.course.institution
@@ -464,15 +470,7 @@ class Controller:
         else:
             raise Exception("Neither course nor institution provided")
 
-        if student.abbreviation is None and student.id is not None:
-            db_students = self.session.query(Student).filter_by(
-                name=student.name, internal_id=student.id, institution=institution).all()
-        elif student.id is None and student.abbreviation is not None:
-            db_students = self.session.query(Student).filter_by(
-                name=student.name, abbreviation=student.abbreviation, institution=institution).all()
-        else:
-            db_students = self.session.query(Student).filter_by(
-                abbreviation=student.abbreviation, internal_id=student.id, institution=institution).all()
+        db_students: List[Student] = self.session.query(Student).filter_by(internal_id=student.id).all()
 
         if len(db_students) == 0:  # new student, add him
             db_student = Student(internal_id=student.id, name=student.name, abbreviation=student.abbreviation,
@@ -481,23 +479,29 @@ class Controller:
             self.session.commit()
         elif len(db_students) == 1:
             db_student = db_students[0]
-            if db_student.abbreviation is None:
-                if student.abbreviation is not None:
-                    db_student.abbreviation = student.abbreviation
-                    self.session.commit()
-            elif student.abbreviation is not None and student.abbreviation != db_student.abbreviation:
-                raise Exception(
-                    "Attempted to change the student abbreviation to another one\n"
-                    "Student:{}\n"
-                    "Candidate{}".format(db_student, student))
+            if db_student.abbreviation == student.abbreviation or db_student.name == student.name:
+                if db_student.abbreviation is None:
+                    if student.abbreviation is not None:
+                        db_student.abbreviation = student.abbreviation
+                        self.session.commit()
+                elif student.abbreviation is not None and student.abbreviation != db_student.abbreviation:
+                    raise Exception(
+                        "Attempted to change the student abbreviation to another one\n"
+                        "Student:{}\n"
+                        "Candidate{}".format(db_student, student))
 
-            if student.course is not None:
-                db_student.course = student.course
-                self.session.commit()
-        else:  # bug or several institutions (don't even know if it's possible)
+                if student.course is not None:
+                    db_student.course = student.course
+                    self.session.commit()
+            else:
+                db_student = Student(internal_id=student.id, name=student.name, abbreviation=student.abbreviation,
+                                     institution=institution, course=student.course)
+                self.session.add(db_student)
+
+        else:  # database inconsistency
             students = ""
             for student in db_students:
-                students += ("%d," % student)
+                students += ("%s," % student)
             raise Exception("Duplicated students found:\n{}".format(students))
         return db_student
 
@@ -561,8 +565,10 @@ class Controller:
         [db_turn.teachers.append(self.add_teacher(teacher)) for teacher in turn.teachers]
         return db_turn
 
-    # Reconstructs the instances of a turn , IT'S DESTRUCTIVE!
-    def add_turn_instances(self, instances: [TurnInstance]):
+    # Reconstructs the instances of a turn.
+    # Destructive is faster because it doesn't worry about checking instance by instance,
+    # it'll delete em' all and rebuilds
+    def add_turn_instances(self, instances: List[TurnInstanceCandidate], destructive=False):
         turn = None
         for instance in instances:
             if turn is None:
@@ -572,21 +578,42 @@ class Controller:
         if turn is None:
             return
 
-        try:
-            deleted = self.session.query(TurnInstance).filter_by(turn=turn).delete()
-            if deleted > 0:
-                log.info(f"Deleted {deleted} turn instances from the turn {turn}")
-        except Exception:
-            self.session.rollback()
-            raise Exception("Error deleting turn instances for turn {}\n{}".format(turn, traceback.format_exc()))
+        if destructive:
+            try:
+                deleted = self.session.query(TurnInstance).filter_by(turn=turn).delete()
+                if deleted > 0:
+                    log.info(f"Deleted {deleted} turn instances from the turn {turn}")
+            except Exception:
+                self.session.rollback()
+                raise Exception("Error deleting turn instances for turn {}\n{}".format(turn, traceback.format_exc()))
 
-        for instance in instances:
-            turn.instances.append(TurnInstance(turn=turn, start=instance.start, end=instance.end,
-                                               classroom=instance.classroom, weekday=instance.weekday))
+            for instance in instances:
+                turn.instances.append(TurnInstance(turn=turn, start=instance.start, end=instance.end,
+                                                   classroom=instance.classroom, weekday=instance.weekday))
 
-        if len(instances) > 0:
-            log.info(f"Added {len(instances)} turn instances to the turn {turn}")
-        self.session.commit()
+            if len(instances) > 0:
+                log.info(f"Added {len(instances)} turn instances to the turn {turn}")
+                self.session.commit()
+        else:
+            db_turn_instances = self.session.query(TurnInstance).filter_by(turn=turn).all()
+            for db_turn_instance in db_turn_instances:
+                matched = False
+                for instance in instances[:]:
+                    if db_turn_instance.start == instance.start and db_turn_instance.end == instance.end and \
+                            db_turn_instance.weekday == instance.weekday:
+                        matched = True
+                        if db_turn_instance.classroom != instance.classroom:
+                            log.info(f'An instance of {turn} changed the classroom from '
+                                     f'{db_turn_instance.classroom} to {instance.classroom}')
+                            db_turn_instance.classroom = instance.classroom
+                        instances.remove(instance)
+                        break
+                if not matched:
+                    log.info(f'An instance of {turn} ceased to exist ({db_turn_instance})')
+                    db_turn_instance.delete()
+            for instance in instances:
+                turn.instances.append(TurnInstance(turn=turn, start=instance.start, end=instance.end,
+                                                   classroom=instance.classroom, weekday=instance.weekday))
 
     def add_turn_students(self, turn: Turn, students):
         [turn.students.append(student) for student in students]
