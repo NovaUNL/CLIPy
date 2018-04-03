@@ -262,7 +262,7 @@ def crawl_class_turns(session: WebSession, database: db.Controller, class_instan
             class_instance.parent.internal_id, institution.internal_id, class_instance.year,
             class_instance.period.letter, class_instance.period.part, class_instance.parent.department.internal_id)))
 
-    turn_link_exp = re.compile("\\b&tipo=(?P<type>\\w)+&n%BA=(?P<number>\\d+)\\b")
+    turn_link_exp = re.compile("\\b&tipo=(?P<type>\\w+)&n%BA=(?P<number>\\d+)\\b")
     schedule_exp = re.compile(  # extract turn information
         '(?P<weekday>[\\w-]+) {2}'
         '(?P<init_hour>\\d{2}):(?P<init_min>\\d{2}) - (?P<end_hour>\\d{2}):(?P<end_min>\\d{2})(?: {2})?'
@@ -318,7 +318,8 @@ def crawl_class_turns(session: WebSession, database: db.Controller, class_instan
         turn_type = database.get_turn_type(page[1])
 
         if turn_type is None:
-            log.error("Unknown turn type: " + page[1])
+            log.error(f"Unknown turn type {page[1]} (For: {class_instance})")
+
 
         # turn information table
         info_table_root = page[0].find('th', colspan="2", bgcolor="#aaaaaa").parent.parent

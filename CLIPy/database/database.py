@@ -603,7 +603,7 @@ class Controller:
                     if db_turn_instance.start == instance.start and db_turn_instance.end == instance.end and \
                             db_turn_instance.weekday == instance.weekday:
                         matched = True
-                        if db_turn_instance.classroom != instance.classroom:
+                        if db_turn_instance.classroom != instance.classroom:  # Update the classroom
                             log.info(f'An instance of {turn} changed the classroom from '
                                      f'{db_turn_instance.classroom} to {instance.classroom}')
                             db_turn_instance.classroom = instance.classroom
@@ -611,7 +611,7 @@ class Controller:
                         break
                 if not matched:
                     log.info(f'An instance of {turn} ceased to exist ({db_turn_instance})')
-                    db_turn_instance.delete()
+                    self.session.delete(db_turn_instance)
             for instance in instances:
                 turn.instances.append(TurnInstance(turn=turn, start=instance.start, end=instance.end,
                                                    classroom=instance.classroom, weekday=instance.weekday))

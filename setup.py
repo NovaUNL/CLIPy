@@ -8,7 +8,7 @@ def read(fname):
 
 setup(
     name="CLIP-Crawler",
-    version="0.2.0",
+    version="0.2.2",
     author="Cláudio Pereira",
     author_email="development@claudiop.com",
     description=(
@@ -26,5 +26,5 @@ setup(
         "Topic :: Internet :: WWW/HTTP",
         "Topic :: Internet :: WWW/HTTP :: Dynamic Content",
         "Topic :: Text Processing :: Markup :: HTML",
-    ], install_requires=['sqlalchemy']
+    ], install_requires=['sqlalchemy', 'requests', 'beautifulsoup4']
 )
