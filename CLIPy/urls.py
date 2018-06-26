@@ -25,7 +25,7 @@ DEPARTMENT_TEACHERS = ROOT + \
                       "tipo_de_per%EDodo_lectivo={period_type}&sector={department}&ano_lectivo={year}" \
                       "&per%EDodo_lectivo={period}&institui%E7%E3o={institution}"
 
-#: List of classes taught by a department (on a given period)
+#: List of classes taught by a department (on a given period) TODO change to make use of DEPARTMENT_PERIODS page
 DEPARTMENT_CLASSES = ROOT + \
                      "/utente/institui%E7%E3o_sede/unidade_organica/ensino/ano_lectivo/sector/ano_lectivo?" \
                      "tipo_de_per%EDodo_lectivo={period_type}&sector={department}&ano_lectivo={year}" \
@@ -129,13 +129,21 @@ CLASS_EVENTS = ROOT + \
                "tipo_de_per%EDodo_lectivo={period_type}&sector={department}&ano_lectivo={year}" \
                "&per%EDodo_lectivo={period}&institui%E7%E3o={institution}&unidade_curricular={class_id}"
 
-#: List of class students enrolled to a given evaluation moment. Sometimes it gives away their grades.
+#: List of class students enrolled to a given evaluation moment.
+CLASS_EVALUATION_ENROLLED_FILE = ROOT + \
+                                 "/utente/institui%E7%E3o_sede/unidade_organica/ensino/ano_lectivo/sector/ano_lectivo/unidade_curricular/actividade/testes_de_avalia%E7%E3o/inscritos?" \
+                                 "institui%E7%E3o={institution}&%EDndice={evaluation_index}&sector={department}" \
+                                 "&ano_lectivo={year}&tipo_de_per%EDodo_lectivo={period_type}&tipo={evaluation_type}" \
+                                 "&per%EDodo_lectivo={period}&unidade_curricular={class_id}" \
+                                 "&%E9poca={period_part}&aux=ficheiro"
+
+#: Same as CLASS_EVALUATION_ENROLLED_FILE but sometimes it gives away student's grades.
 CLASS_EVALUATION_ENROLLED = ROOT + \
                             "/utente/institui%E7%E3o_sede/unidade_organica/ensino/ano_lectivo/sector/ano_lectivo/unidade_curricular/actividade/testes_de_avalia%E7%E3o/inscritos?" \
                             "institui%E7%E3o={institution}&%EDndice={evaluation_index}&sector={department}" \
-                            "&ano_lectivo={year}&tipo_de_per%EDodo_lectivo={period_type}&tipo={evaluation_type}" \
-                            "&per%EDodo_lectivo={period}&unidade_curricular={class_id}" \
-                            "&%E9poca={period_part}&aux=ficheiro"
+                            "&ano_lectivo={yeat}&tipo_de_per%EDodo_lectivo={period_type}&tipo={evaluation_type}" \
+                            "&per%EDodo_lectivo={period}&unidade_curricular={class_id}&%E9poca={period_part}" \
+                            "&n%BA_sec%E7%E3o_de_pauta={part}"
 
 #: | Summaries of what happened on past classes.
 #: | One should send an HTTP POST like:
