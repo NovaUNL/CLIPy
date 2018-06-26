@@ -3,7 +3,7 @@ from bs4 import BeautifulSoup
 from ..database import Controller
 
 weekdays = {'segunda': 0, 'terça': 1, 'terca': 1, 'quarta': 2, 'quinta': 3,
-           'sexta': 4, 'sábado': 5, 'sabado': 5, 'domingo': 6}
+            'sexta': 4, 'sábado': 5, 'sabado': 5, 'domingo': 6}
 
 
 def parse_clean_request(request):

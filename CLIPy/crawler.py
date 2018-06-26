@@ -74,7 +74,9 @@ def crawl_classes(session: WebSession, database: db.Controller, department: Depa
     # for each year this department operated
     for year in range(department.first_year, department.last_year + 1):
         hierarchy = parse_clean_request(
-            session.get(urls.CLASSES.format(department.institution.internal_id, year, department.internal_id)))
+            session.get(urls.DEPARTMENT_PERIODS.format(institution=department.institution.internal_id,
+                                                       department=department.internal_id,
+                                                       year=year)))
 
         period_links = hierarchy.find_all(href=period_exp)
 
@@ -98,8 +100,12 @@ def crawl_classes(session: WebSession, database: db.Controller, department: Depa
                 raise Exception("Unknown period")
 
             period = database.get_period(part, parts)
-            hierarchy = parse_clean_request(session.get(urls.CLASSES_PERIOD.format(
-                period_type, department.internal_id, year, part, department.institution.internal_id)))
+            hierarchy = parse_clean_request(session.get(urls.DEPARTMENT_CLASSES.format(
+                institution=department.institution.internal_id,
+                department=department.internal_id,
+                year=year,
+                period=part,
+                period_type=period_type)))
 
             class_links = hierarchy.find_all(href=class_exp)
 
@@ -109,9 +115,13 @@ def crawl_classes(session: WebSession, database: db.Controller, department: Depa
                 class_name = class_link.contents[0].strip()
                 if class_id not in classes:
                     # Fetch abbreviation and number of ECTSs
-                    hierarchy = parse_clean_request(
-                        session.get(urls.CLASS.format(period_type, department.internal_id, year,
-                                                      part, department.institution.internal_id, class_id)))
+                    hierarchy = parse_clean_request(session.get(urls.CLASS.format(
+                        institution=department.institution.internal_id,
+                        year=year,
+                        department=department.internal_id,
+                        period=part,
+                        period_type=period_type,
+                        class_id=class_id)))
                     elements = hierarchy.find_all('td', attrs={'class': 'subtitulo'})
                     abbr = None
                     ects = None
@@ -145,7 +155,7 @@ def crawl_admissions(session: WebSession, database: db.Controller, institution: 
     for year in years:
         course_ids = set()  # Courses found in this year's page
         hierarchy = parse_clean_request(  # Fetch the page
-            session.get(urls.ADMISSIONS.format(year, institution.internal_id)))
+            session.get(urls.ADMISSIONS.format(institution=institution.internal_id, year=year)))
         course_links = hierarchy.find_all(href=course_exp)  # Find the course links
         for course_link in course_links:  # For every found course
             course_id = int(course_exp.findall(course_link.attrs['href'])[0])
@@ -154,8 +164,11 @@ def crawl_admissions(session: WebSession, database: db.Controller, institution: 
         for course_id in course_ids:
             course = database.get_course(id=course_id)  # TODO ensure that doesn't end up as None
             for phase in range(1, 4):  # For every of the three phases
-                hierarchy = parse_clean_request(session.get(
-                    urls.ADMITTED.format(year, institution.internal_id, phase, course_id)))
+                hierarchy = parse_clean_request(session.get(urls.ADMITTED.format(
+                    institution=institution.internal_id,
+                    year=year,
+                    course=course_id,
+                    phase=phase)))
                 # Find the table structure containing the data (only one with those attributes)
                 try:
                     table_root = hierarchy.find('th', colspan="8", bgcolor="#95AEA8").parent.parent
@@ -197,9 +210,12 @@ def crawl_class_instance(session: WebSession, database: db.Controller, class_ins
     institution = class_instance.parent.department.institution
 
     hierarchy = parse_clean_request(session.get(urls.CLASS_ENROLLED.format(
-        class_instance.period.letter, class_instance.parent.department.internal_id,
-        class_instance.year, class_instance.period.part, institution.internal_id,
-        class_instance.parent.internal_id)))
+        institution=institution.internal_id,
+        department=class_instance.parent.department.internal_id,
+        year=class_instance.year,
+        period=class_instance.period.part,
+        period_type=class_instance.period.letter,
+        class_id=class_instance.parent.internal_id)))
 
     # Strip file header and split it into lines
     content = hierarchy.text.splitlines()[4:]
@@ -258,9 +274,13 @@ def crawl_class_turns(session: WebSession, database: db.Controller, class_instan
     institution = class_instance.parent.department.institution
 
     hierarchy = parse_clean_request(
-        session.get(urls.TURNS_INFO.format(
-            class_instance.parent.internal_id, institution.internal_id, class_instance.year,
-            class_instance.period.letter, class_instance.period.part, class_instance.parent.department.internal_id)))
+        session.get(urls.CLASS_TURNS.format(
+            institution=institution.internal_id,
+            year=class_instance.year,
+            department=class_instance.parent.department.internal_id,
+            class_id=class_instance.parent.internal_id,
+            period=class_instance.period.part,
+            period_type=class_instance.period.letter)))
 
     turn_link_exp = re.compile("\\b&tipo=(?P<type>\\w+)&n%BA=(?P<number>\\d+)\\b")
     schedule_exp = re.compile(  # extract turn information
@@ -319,7 +339,6 @@ def crawl_class_turns(session: WebSession, database: db.Controller, class_instan
 
         if turn_type is None:
             log.error(f"Unknown turn type {page[1]} (For: {class_instance})")
-
 
         # turn information table
         info_table_root = page[0].find('th', colspan="2", bgcolor="#aaaaaa").parent.parent

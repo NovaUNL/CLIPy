@@ -13,7 +13,7 @@ from .. import urls
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
-THREADS = 8  # high number means "Murder CLIP!", take care
+THREADS = 6  # high number means "Murder CLIP!", take care
 
 
 def institutions(session: Session, database: db.Controller):
@@ -39,7 +39,7 @@ def institutions(session: Session, database: db.Controller):
         found.append(institution)
 
     for institution in found:
-        hierarchy = parse_clean_request(session.get(urls.INSTITUTION_YEARS.format(institution.id)))
+        hierarchy = parse_clean_request(session.get(urls.INSTITUTION_YEARS.format(institution=institution.id)))
         year_exp = re.compile("\\b\d{4}\\b")
         institution_links = hierarchy.find_all(href=year_exp)
         for institution_link in institution_links:
@@ -62,7 +62,8 @@ def departments(session: Session, database: db.Controller):
         # Find the departments that existed under each year
         for year in range(institution.first_year, institution.last_year + 1):
             log.info("Crawling departments of institution {}. Year:{}".format(institution, year))
-            hierarchy = parse_clean_request(session.get(urls.DEPARTMENTS.format(year, institution.internal_id)))
+            hierarchy = parse_clean_request(
+                session.get(urls.DEPARTMENTS.format(institution=institution.internal_id, year=year)))
             department_links = hierarchy.find_all(href=department_exp)
             for department_link in department_links:
                 department_id = int(department_exp.findall(department_link.attrs['href'])[0])
@@ -112,7 +113,7 @@ def courses(session: Session, database: db.Controller):
 
     for institution in database.get_institution_set():
         courses = {}
-        hierarchy = parse_clean_request(session.get(urls.COURSES.format(institution.internal_id)))
+        hierarchy = parse_clean_request(session.get(urls.COURSES.format(institution=institution.internal_id)))
         course_links = hierarchy.find_all(href=course_exp)
         for course_link in course_links:  # for every course link in the courses list page
             identifier = int(course_exp.findall(course_link.attrs['href'])[0])
@@ -120,7 +121,7 @@ def courses(session: Session, database: db.Controller):
 
             # fetch the course curricular plan to find the activity years
             hierarchy = parse_clean_request(session.get(
-                urls.CURRICULAR_PLANS.format(institution.internal_id, identifier)))
+                urls.CURRICULAR_PLANS.format(institution=institution.internal_id, course=identifier)))
             year_links = hierarchy.find_all(href=year_ext)
             # find the extremes
             for year_link in year_links:
@@ -130,7 +131,7 @@ def courses(session: Session, database: db.Controller):
         # fetch course abbreviation from the statistics page
         for degree in database.get_degree_set():
             hierarchy = parse_clean_request(session.get(
-                urls.STATISTICS.format(institution.internal_id, degree.internal_id)))
+                urls.STATISTICS.format(institution=institution.internal_id, degree=degree.internal_id)))
             course_links = hierarchy.find_all(href=course_exp)
             for course_link in course_links:
                 identifier = int(course_exp.findall(course_link.attrs['href'])[0])
