@@ -1,7 +1,6 @@
 from datetime import datetime
 
-from CLIPy.database.models import Turn, ClassInstance, Institution, Student, Course, Degree, Period, Class, \
-    Department, Building, TurnType
+from .models import Turn, ClassInstance, Institution, Student, Course, Period, Class, Department, Building, TurnType
 
 
 class TemporalEntity:

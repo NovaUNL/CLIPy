@@ -1,9 +1,9 @@
 from datetime import datetime
 import os
 
-import CLIPy.database as db
-from CLIPy.session import Session
-from CLIPy.utils import populate
+from . import database as db
+from .session import Session
+from .utils import populate
 
 
 class CacheStorage:

@@ -1,6 +1,6 @@
 """
 Clip Crawler Database management
-~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Storage management layer
 
@@ -9,4 +9,4 @@ Storage management layer
 
 """
 
-from CLIPy.database.database import Controller, SessionRegistry, create_db_engine as create_engine
+from .database import Controller, SessionRegistry, create_db_engine as create_engine

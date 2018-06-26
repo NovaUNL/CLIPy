@@ -1,8 +1,7 @@
 from datetime import datetime
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
-from sqlalchemy import Sequence, DateTime, ForeignKey, CHAR, SMALLINT, Table, Column, Integer, String, UniqueConstraint, \
-    Float
+from sqlalchemy import Sequence, DateTime, ForeignKey, CHAR, SMALLINT, Table, Column, Integer, String, UniqueConstraint
 
 TABLE_PREFIX = 'clip_'
 Base = declarative_base()

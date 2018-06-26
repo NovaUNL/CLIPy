@@ -4,12 +4,12 @@ from queue import Queue
 from time import sleep
 from threading import Lock
 
-import CLIPy.database as db
-from CLIPy.session import Session
-from CLIPy.crawler import PageCrawler, crawl_class_turns, crawl_class_instance, crawl_classes, crawl_admissions
-from CLIPy.database.candidates import InstitutionCandidate, DepartmentCandidate, CourseCandidate
-from CLIPy.utils import parse_clean_request
-from CLIPy import urls
+from .. import database as db
+from ..session import Session
+from ..crawler import PageCrawler, crawl_class_turns, crawl_class_instance, crawl_classes, crawl_admissions
+from ..database.candidates import InstitutionCandidate, DepartmentCandidate, CourseCandidate
+from ..utils import parse_clean_request
+from .. import urls
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)

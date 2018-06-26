@@ -7,9 +7,9 @@ from sqlalchemy import create_engine, desc, asc
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import sessionmaker, scoped_session
 
-from CLIPy.database.models import Base, Degree, Period, TurnType, Institution, Department, Course, Teacher, Building, \
+from .models import Base, Degree, Period, TurnType, Institution, Department, Course, Teacher, Building, \
     Classroom, Class, ClassInstance, Student, Turn, TurnInstance, Admission, Enrollment
-from CLIPy.database.candidates import ClassroomCandidate, BuildingCandidate, TurnCandidate, StudentCandidate, \
+from .candidates import ClassroomCandidate, BuildingCandidate, TurnCandidate, StudentCandidate, \
     ClassCandidate, InstitutionCandidate, ClassInstanceCandidate, DepartmentCandidate, AdmissionCandidate, \
     EnrollmentCandidate, CourseCandidate, TeacherCandidate, TurnInstanceCandidate
 

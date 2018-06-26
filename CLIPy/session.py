@@ -3,7 +3,7 @@ import requests
 from http.cookiejar import LWPCookieJar
 import logging
 
-from CLIPy import urls
+from . import urls
 
 log = logging.getLogger(__name__)
 __active_sessions__ = []

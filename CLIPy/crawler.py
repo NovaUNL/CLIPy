@@ -7,14 +7,14 @@ from unicodedata import normalize
 
 import re
 
-from CLIPy.database.candidates import StudentCandidate, TurnCandidate, TurnInstanceCandidate, ClassroomCandidate, \
+from .database.candidates import StudentCandidate, TurnCandidate, TurnInstanceCandidate, ClassroomCandidate, \
     BuildingCandidate, EnrollmentCandidate, AdmissionCandidate, ClassCandidate, ClassInstanceCandidate, TeacherCandidate
-from CLIPy.database.database import SessionRegistry
-from CLIPy.database.models import Department, Institution, ClassInstance
-import CLIPy.database as db
+from .database.database import SessionRegistry
+from .database.models import Department, Institution, ClassInstance
+from . import database as db
 from .session import Session as WebSession
-from CLIPy import urls
-from CLIPy.utils.utils import parse_clean_request, weekday_to_id
+from . import urls
+from .utils.utils import parse_clean_request, weekday_to_id
 
 log = logging.getLogger(__name__)
 

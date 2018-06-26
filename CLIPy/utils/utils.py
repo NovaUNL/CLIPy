@@ -1,6 +1,6 @@
 from bs4 import BeautifulSoup
 
-from CLIPy.database import Controller
+from ..database import Controller
 
 weekdays = {'segunda': 0, 'terça': 1, 'terca': 1, 'quarta': 2, 'quinta': 3,
            'sexta': 4, 'sábado': 5, 'sabado': 5, 'domingo': 6}
