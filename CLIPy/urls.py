@@ -1,4 +1,6 @@
 #: Base URL
+import re
+
 ROOT = 'https://clip.unl.pt'
 
 #: List of institutions registered
@@ -272,3 +274,11 @@ GRADUATIONS = ROOT + \
 GRADUATION_STUDENTS = ROOT + \
                       "/utente/institui%E7%E3o_sede/unidade_organica/ensino/desempenho/diplomados/curso?" \
                       "ano_lectivo={year}&institui%E7%E3o={institution}&curso={course}"
+
+COURSE_EXP = re.compile("\\bcurso=(\d+)\\b")
+PERIOD_EXP = re.compile('\\bper%EDodo_lectivo=(\d)\\b')
+PERIOD_TYPE_EXP = re.compile('\\btipo_de_per%EDodo_lectivo=(\w+)\\b')
+CLASS_EXP = re.compile('\\bunidade_curricular=(\d+)\\b')
+YEAR_EXP = re.compile("\\bano_lectivo=(\d+)\\b")
+TURN_LINK_EXP = re.compile("\\b&tipo=(?P<type>\\w+)&n%BA=(?P<number>\\d+)\\b")
+DEPARTMENT_EXP = department_exp = re.compile('\\bsector=(\d+)\\b')

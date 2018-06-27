@@ -36,6 +36,13 @@ CLIPy.session module
     :undoc-members:
     :show-inheritance:
 
+CLIPy.parser module
+-------------------
+
+.. automodule:: CLIPy.parser
+    :members:
+    :undoc-members:
+
 CLIPy.urls module
 -----------------
 

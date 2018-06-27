@@ -4,9 +4,10 @@ from queue import Queue
 from time import sleep
 from threading import Lock
 
+from .. import parser
 from .. import database as db
 from ..session import Session
-from ..crawler import PageCrawler, crawl_class_turns, crawl_class_instance, crawl_classes, crawl_admissions
+from ..crawler import PageCrawler, crawl_class_turns, crawl_class_enrollments, crawl_classes, crawl_admissions
 from ..database.candidates import InstitutionCandidate, DepartmentCandidate, CourseCandidate
 from ..utils import parse_clean_request
 from .. import urls
@@ -17,6 +18,13 @@ THREADS = 6  # high number means "Murder CLIP!", take care
 
 
 def institutions(session: Session, database: db.Controller):
+    """
+    Finds new institutions and adds them to the database. This is mostly bootstrap code, not very useful later on.
+    This is not thread-safe.
+
+    :param session: Web session
+    :param database: Database controller
+    """
     found = []
     known = {60002: "Escola Nacional de Saúde Publica",
              109054: "Faculdade de Ciências Médicas",
@@ -53,22 +61,23 @@ def institutions(session: Session, database: db.Controller):
 
 
 def departments(session: Session, database: db.Controller):
+    """
+    Finds new departments and adds them to the database. *NOT* thread-safe.
+
+    :param session: Web session
+    :param database: Database controller
+    """
     found = {}  # id -> Department
-    department_exp = re.compile('\\bsector=(\d+)\\b')
     for institution in database.get_institution_set():
         if not institution.has_time_range():  # if it has no time range to iterate through
             continue
 
-        # Find the departments that existed under each year
+        # Find the departments which existed each year
         for year in range(institution.first_year, institution.last_year + 1):
             log.info("Crawling departments of institution {}. Year:{}".format(institution, year))
-            hierarchy = parse_clean_request(
-                session.get(urls.DEPARTMENTS.format(institution=institution.internal_id, year=year)))
-            department_links = hierarchy.find_all(href=department_exp)
-            for department_link in department_links:
-                department_id = int(department_exp.findall(department_link.attrs['href'])[0])
-                department_name = department_link.contents[0]
-
+            hierarchy = parse_clean_request(session.get(urls.DEPARTMENTS.format(
+                institution=institution.internal_id, year=year)))
+            for department_id, name in parser.get_departments(hierarchy):
                 if department_id in found:  # update creation year
                     department = found[department_id]
                     if department.institution != institution:
@@ -76,12 +85,17 @@ def departments(session: Session, database: db.Controller):
                             department.name, department_id, institution.internal_id, department.institution))
                     department.add_year(year)
                 else:  # insert new
-                    department = DepartmentCandidate(department_id, department_name, institution, year, year)
+                    department = DepartmentCandidate(department_id, name, institution, year, year)
                     found[department_id] = department
     database.add_departments(found.values())
 
 
 def classes(session: Session, db_registry: db.SessionRegistry):
+    """
+    Finds new classes and adds them to the database
+    :param session: Web session
+    :param db_registry: Database session registry
+    """
     database = db.Controller(db_registry)
     department_queue = Queue()
     [department_queue.put(department) for department in database.get_department_set()]
@@ -108,36 +122,30 @@ def classes(session: Session, db_registry: db.SessionRegistry):
 
 
 def courses(session: Session, database: db.Controller):
-    course_exp = re.compile("\\bcurso=(\d+)\\b")
-    year_ext = re.compile("\\bano_lectivo=(\d+)\\b")
+    """
+    Finds new courses and adds them to the database. *NOT* thread-safe.
 
+    :param session: Web session
+    :param database: Database controller
+    """
     for institution in database.get_institution_set():
-        courses = {}
-        hierarchy = parse_clean_request(session.get(urls.COURSES.format(institution=institution.internal_id)))
-        course_links = hierarchy.find_all(href=course_exp)
-        for course_link in course_links:  # for every course link in the courses list page
-            identifier = int(course_exp.findall(course_link.attrs['href'])[0])
-            courses[identifier] = CourseCandidate(identifier, course_link.contents[0].text.strip(), institution)
+        courses = {}  # identifier -> Candidate pairs
 
-            # fetch the course curricular plan to find the activity years
-            hierarchy = parse_clean_request(session.get(
+        # Obtain couse id-name pairs from the course list page
+        page = parse_clean_request(session.get(urls.COURSES.format(institution=institution.internal_id)))
+        for identifier, name in parser.get_course_names(page):
+            # Fetch the course curricular plan to find the activity years
+            page = parse_clean_request(session.get(
                 urls.CURRICULAR_PLANS.format(institution=institution.internal_id, course=identifier)))
-            year_links = hierarchy.find_all(href=year_ext)
-            # find the extremes
-            for year_link in year_links:
-                year = int(year_ext.findall(year_link.attrs['href'])[0])
-                courses[identifier].add_year(year)
+            first, last = parser.get_course_activity_years(page)
+            candidate = CourseCandidate(identifier, name, institution, first_year=first, last_year=last)
+            courses[identifier] = candidate
 
         # fetch course abbreviation from the statistics page
         for degree in database.get_degree_set():
-            hierarchy = parse_clean_request(session.get(
-                urls.STATISTICS.format(institution=institution.internal_id, degree=degree.internal_id)))
-            course_links = hierarchy.find_all(href=course_exp)
-            for course_link in course_links:
-                identifier = int(course_exp.findall(course_link.attrs['href'])[0])
-                abbreviation = course_link.contents[0].strip()
-                if abbreviation == '':
-                    abbreviation = None
+            page = parse_clean_request(session.get(urls.STATISTICS.format(
+                institution=institution.internal_id, degree=degree.internal_id)))
+            for identifier, abbreviation in parser.get_course_abbreviations(page):
                 if identifier in courses:
                     courses[identifier].abbreviation = abbreviation
                     courses[identifier].degree = degree
@@ -151,6 +159,12 @@ def courses(session: Session, database: db.Controller):
 
 # populate student list from the national access contest (also obtain their preferences and current status)
 def nac_admissions(session: Session, db_registry: db.SessionRegistry):
+    """
+    Looks up the national access contest admission tables looking for new students and their current statuses.
+
+    :param session: Web session
+    :param db_registry: Database session registry
+    """
     database = db.Controller(db_registry)
     # TODO rework the database to save states apart
     # TODO since the vast, VAST majority of clip students are from only one institution, change the implementation
@@ -186,6 +200,15 @@ def nac_admissions(session: Session, db_registry: db.SessionRegistry):
 
 
 def class_instances(session: Session, db_registry: db.SessionRegistry, year=None, period=None):
+    """
+    Finds student enrollments to class instances.
+    TODO Make it lookup the every class instance static-ish data.
+
+    :param session: Web session
+    :param db_registry: Database session registry
+    :param year: (Optional) Filter crawling to this year
+    :param period: (Optional) Filter crawling to this period. Requires year to be set.
+    """
     database = db.Controller(db_registry)
     class_instance_queue = Queue()
     if year is None:
@@ -201,7 +224,7 @@ def class_instances(session: Session, db_registry: db.SessionRegistry, year=None
     threads = []
     for thread in range(0, THREADS):
         threads.append(PageCrawler("Thread-" + str(thread), session, db_registry,
-                                   class_instance_queue, class_instances_lock, crawl_class_instance))
+                                   class_instance_queue, class_instances_lock, crawl_class_enrollments))
         threads[thread].start()
 
     while True:
@@ -219,6 +242,14 @@ def class_instances(session: Session, db_registry: db.SessionRegistry, year=None
 
 
 def class_instances_turns(session: Session, db_registry: db.SessionRegistry, year=None, period=None):
+    """
+    Finds class instance turns and updates their data if needed.
+
+    :param session: Web session
+    :param db_registry: Database session registry
+    :param year: (Optional) Filter crawling to this year
+    :param period: (Optional) Filter crawling to this period. Requires year to be set.
+    """
     database = db.Controller(db_registry)
     class_instance_queue = Queue()
     if year is None:
@@ -252,6 +283,15 @@ def class_instances_turns(session: Session, db_registry: db.SessionRegistry, yea
 
 
 def database_from_scratch(session: Session, db_registry: db.SessionRegistry):
+    """
+    | Bootstraps a database from scratch.
+    | Can also be used as an updater but would be a waste of resources in most scenarios.
+    | This is a very everything-intensive task. It uses a lot of CPU, DB IO and if I had to guess it also heats
+      up the server by a few degrees.
+
+    :param session: Web session
+    :param db_registry: Database session registry
+    """
     main_thread_db_controller = db.Controller(db_registry, cache=True)
     institutions(session, main_thread_db_controller)  # 10 seconds
     departments(session, main_thread_db_controller)  # 1-2 minutes
