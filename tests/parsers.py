@@ -1,4 +1,6 @@
 import unittest
+from datetime import datetime
+
 from bs4 import BeautifulSoup
 
 from CLIPy import parser
@@ -147,6 +149,20 @@ class ParsingMethods(unittest.TestCase):
                              [('Aàá bcd', 12345, 'a.bcd', 'MIEI'),
                               ('Efgh', 23456, 'e.fgh', 'MIEMat'),
                               ('Ijkl', 34567, 'i.jkl', 'MIEI')])
+
+    def test_bilingual_info_parsing(self):
+        """
+        | Tests :py:func:`CLIPy.parser.get_bilingual_info` against a generic bilingual page snapshot.
+        | Asserts that both languages and edition details are read properly.
+        """
+
+        with open("snapshots/bilingual_info.html", mode='r') as page:
+            page = BeautifulSoup(page, 'html.parser')
+            portuguese, english, edition_datetime, last_editor = parser.get_bilingual_info(page)
+            self.assertTrue('Sample text PT' in portuguese)
+            self.assertTrue('Sample text EN' in english)
+            self.assertEqual(edition_datetime, datetime(2017, 9, 8, 19, 7, 0))
+            self.assertEqual(last_editor, None)
 
 
 if __name__ == '__main__':

@@ -26,5 +26,5 @@ setup(
         "Topic :: Internet :: WWW/HTTP",
         "Topic :: Internet :: WWW/HTTP :: Dynamic Content",
         "Topic :: Text Processing :: Markup :: HTML",
-    ], install_requires=['sqlalchemy', 'requests', 'beautifulsoup4']
+    ], install_requires=['sqlalchemy', 'requests', 'beautifulsoup4', 'htmlmin']
 )

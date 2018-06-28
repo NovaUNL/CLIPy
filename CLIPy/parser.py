@@ -1,6 +1,9 @@
 import logging
 import re
+from datetime import datetime
 from unicodedata import normalize
+
+import htmlmin
 
 from . import urls
 from .utils import weekday_to_id
@@ -257,6 +260,37 @@ def get_turn_students(page):
     Parses the students list from the turn page.
 
     :param page: A page fetched from :py:const:`CLIPy.urls.CLASS_TURN`
+    :return: List of tuples with student details (``name, identifier, abbreviation, course abbreviation``)
+    """
+    students = []
+    student_table_root = page.find('th', colspan="4", bgcolor="#95AEA8").parent.parent
+
+    # Remove useless rows
+    for tag in student_table_root.find_all('th'):
+        if tag.parent is not None:
+            tag.parent.decompose()  # remove its parent row
+
+    student_rows = student_table_root.find_all('tr')
+
+    for student_row in student_rows:
+        name = student_row.contents[1].text.strip()
+        try:
+            identifier = int(student_row.contents[3].text.strip())
+        except ValueError:
+            log.error(f'Student with non-numeric id found.\nData:{student_row.text.strip()}')
+            identifier = student_row.contents[3].text.strip()
+        abbreviation = student_row.contents[5].text.strip()
+        course = student_row.contents[7].text.strip()
+        students.append((name, identifier, abbreviation, course))
+
+    return students
+
+
+def get_turn_students(page):
+    """
+    Parses the students list from the turn page.
+
+    :param page: A page fetched from :py:const:`CLIPy.urls.CLASS_TURN`
     :return: List of tuples with student details (``name, id, abbreviation, course abbreviation``)
     """
     students = []
@@ -272,11 +306,46 @@ def get_turn_students(page):
     for student_row in student_rows:
         name = student_row.contents[1].text.strip()
         try:
-            id = int(student_row.contents[3].text.strip())
+            identifier = int(student_row.contents[3].text.strip())
         except ValueError:
             log.error(f'Student with non-numeric id found.\nData:{student_row.text.strip()}')
         abbreviation = student_row.contents[5].text.strip()
         course = student_row.contents[7].text.strip()
-        students.append((name, id, abbreviation, course))
+        students.append((name, identifier, abbreviation, course))
 
     return students
+
+
+def get_bilingual_info(page) -> (str, str, datetime, str):
+    """
+    Parses a page with a generic bilingual template.
+
+    :param page: A page fetched from one of the following addresses:
+        :py:const:`CLIPy.urls.CLASS_DESCRIPTION`, :py:const:`CLIPy.urls.CLASS_OBJECTIVES`,
+        :py:const:`CLIPy.urls.CLASS_REQUIREMENTS`, :py:const:`CLIPy.urls.CLASS_COMPETENCES`,
+        :py:const:`CLIPy.urls.CLASS_PROGRAM`, :py:const:`CLIPy.urls.CLASS_BIBLIOGRAPHY`,
+        :py:const:`CLIPy.urls.CLASS_TEACHING_METHODS`, :py:const:`CLIPy.urls.CLASS_EVALUATION_METHODS`,
+        :py:const:`CLIPy.urls.CLASS_ASSISTANCE` and possibly a few others.
+    :return: A tuple with ``portuguese_text, english_text, edition_datetime, last_editor`` as its elements.
+    """
+    table_root = page.find('table', width="75%", cellspacing="2", cellpadding="2", border="0", bgcolor="#dddddd")
+    panes = table_root.find_all('td', valign="top", bgcolor="#ffffff")
+    footer = table_root.find_all('small')
+
+    portuguese = ''
+    for content in panes[0].contents:
+        portuguese += str(content)
+    portuguese = htmlmin.minify(portuguese, remove_empty_space=True)
+
+    english = ''
+    for content in panes[1].contents:
+        english += str(content).strip()
+    english = htmlmin.minify(english, remove_empty_space=True)
+
+    last_editor = footer[0].text.split(':')[1].strip()
+    if last_editor == 'Agente de sistema':
+        last_editor = None
+    edition_datetime = footer[1].text.strip()
+    edition_datetime = datetime.strptime(edition_datetime, "Em: %Y-%m-%d %H:%M")
+
+    return portuguese, english, edition_datetime, last_editor
