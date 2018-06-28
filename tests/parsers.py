@@ -164,6 +164,17 @@ class ParsingMethods(unittest.TestCase):
             self.assertEqual(edition_datetime, datetime(2017, 9, 8, 19, 7, 0))
             self.assertEqual(last_editor, None)
 
+    def test_teacher_parsing(self):
+        """
+        | Tests :py:func:`CLIPy.parser.get_teachers` against a :py:const:`CLIPy.urls.DEPARTMENT_TEACHERS` page snapshot.
+        | Asserts that teacher id-name pairs are parsed correctly.
+        """
+
+        with open("snapshots/department_teachers.html", mode='r') as page:
+            page = BeautifulSoup(page, 'html.parser')
+            teachers = parser.get_teachers(page)
+            self.assertEqual(teachers, [(123, 'John Smith'), (456, 'Jane Doe')])
+
 
 if __name__ == '__main__':
     unittest.main()

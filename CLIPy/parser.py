@@ -349,3 +349,19 @@ def get_bilingual_info(page) -> (str, str, datetime, str):
     edition_datetime = datetime.strptime(edition_datetime, "Em: %Y-%m-%d %H:%M")
 
     return portuguese, english, edition_datetime, last_editor
+
+
+def get_teachers(page):
+    """
+    Parses teachers
+
+    :param page: A page fetched from :py:const:`CLIPy.urls.DEPARTMENT_TEACHERS`
+    :return: List of ``(teacher_id, name)`` tuples
+    """
+    teacher = []
+    department_links = page.find_all(href=urls.TEACHER_EXP)
+    for teacher_link in department_links:
+        teacher_id = int(urls.TEACHER_EXP.findall(teacher_link.attrs['href'])[0])
+        name = teacher_link.text.strip()
+        teacher.append((teacher_id, name))
+    return teacher
