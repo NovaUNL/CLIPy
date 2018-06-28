@@ -42,6 +42,14 @@ class ParsingMethods(unittest.TestCase):
             self.assertEqual(first, 2014)
             self.assertEqual(last, 2019)
 
+    def test_course_abbreviation_parsing(self):
+        with open("snapshots/statistics.html", mode='r') as page:
+            page = BeautifulSoup(page, 'html.parser')
+            abbreviations = parser.get_course_abbreviations(page)
+            self.assertEqual(abbreviations,
+                             [(336, 'MACV'),
+                              (450, 'MIEMat')])
+
 
 if __name__ == '__main__':
     unittest.main()

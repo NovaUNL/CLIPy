@@ -75,6 +75,7 @@ def get_course_abbreviations(page):
         if abbreviation == '':
             continue
         courses.append((identifier, abbreviation))
+    return courses
 
 
 def get_admissions(page):
