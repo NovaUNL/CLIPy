@@ -16,7 +16,7 @@ class ParsingMethods(unittest.TestCase):
                               (120529, 'Apoio ao Ensino'),
                               (146811, 'NOVA Escola Doutoral')])
 
-    def test_course_parsing(self):
+    def test_course_name_parsing(self):
         with open("snapshots/courses.html", mode='r') as page:
             page = BeautifulSoup(page, 'html.parser')
             courses = parser.get_course_names(page)
@@ -34,6 +34,13 @@ class ParsingMethods(unittest.TestCase):
                               (374, 'História e Filosofia das Ciências'),
                               (397, 'Alterações Climáticas e Políticas de Desenvolvimento Sustentável'),
                               (402, 'Ambiente')])
+
+    def test_course_activity_years_parsing(self):
+        with open("snapshots/curricular_plans.html", mode='r') as page:
+            page = BeautifulSoup(page, 'html.parser')
+            first, last = parser.get_course_activity_years(page)
+            self.assertEqual(first, 2014)
+            self.assertEqual(last, 2019)
 
 
 if __name__ == '__main__':

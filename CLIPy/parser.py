@@ -55,7 +55,7 @@ def get_course_activity_years(page):
         year = int(urls.YEAR_EXP.findall(year_link.attrs['href'])[0])
         if first is None or year < first:
             first = year
-        if last is None or year < last:
+        if last is None or year > last:
             last = year
     return first, last
 
