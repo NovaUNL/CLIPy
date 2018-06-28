@@ -19,7 +19,7 @@ def get_departments(page):
     department_links = page.find_all(href=urls.DEPARTMENT_EXP)
     for department_link in department_links:
         department_id = int(urls.DEPARTMENT_EXP.findall(department_link.attrs['href'])[0])
-        name = department_link.contents[0].strip()
+        name = department_link.text.strip()
         departments.append((department_id, name))
     return departments
 
@@ -35,8 +35,9 @@ def get_course_names(page):
     course_links = page.find_all(href=urls.COURSE_EXP)
     for course_link in course_links:  # for every course link in the courses list page
         identifier = int(urls.COURSE_EXP.findall(course_link.attrs['href'])[0])
-        name = course_link.contents[0].text.strip()
+        name = course_link.text.strip()
         courses.append((identifier, name))
+    return courses
 
 
 def get_course_activity_years(page):
