@@ -87,6 +87,28 @@ class ParsingMethods(unittest.TestCase):
                               ('Jane Doe', 2, None, None),
                               ('Abcd efgh', 3, 34567, 'Transferido')])
 
+    def test_enrollment_parsing(self):
+        """
+        | Tests :py:func:`CLIPy.parser.get_enrollments` against a :py:const:`CLIPy.urls.CLASS_ENROLLED` page snapshot.
+        | Asserts that every student and his/her enrollment details are found.
+        """
+
+        with open("snapshots/class_enrolled.txt", mode='r') as page:
+            page = BeautifulSoup(page, 'html.parser')
+            enrolled = parser.get_enrollments(page)
+            self.assertEqual(enrolled,
+                             [(12345, 'Aàá', 'a.aa', None, 'MIEI', 1, 2),
+                              (23456, 'Bbb', 'b.bb', 'tpa', 'MIEF', 7, 3),
+                              (34567, 'Ccc', 'c.cc', 'te', 'MIEI', 2, 2),
+                              (45678, 'Ddd', 'd.dd', 'mn', 'MIEI', 1, 2),
+                              (56789, 'Eee', 'e.ee', 'bas', 'MIEI', 1, 3),
+                              (67890, 'Fff', 'f.ff', 'fci', 'MIEI', 3, 3),
+                              (78901, 'Ggg', 'g.gg', 'aac', 'MIEI', 1, 2),
+                              (89012, 'Hhh', 'h.hh', 'baste', 'MIEI', 1, 2),
+                              (90123, 'Iii', 'i.ii', 'tetpa', 'MIEI', 1, 1),
+                              (90124, 'Jjj', 'j.jj', 'basmgd', 'MIEI', 1, 2),
+                              (90125, 'Kkk', 'k.kk', 'mgd', 'MIEI', 1, 2)])
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -1,0 +1,15 @@
+
+Estatuto Especial	Nome	Nº	Identificador	Curso	Vez	Ano
+
+________________________________________________________________________________
+	Aàá	12345	a.aa	MIEI	1ª	2º
+tpa	Bbb	23456	b.bb	MIEF	7ª	3º
+te	Ccc	34567	c.cc	MIEI	2ª	2º
+mn	Ddd	45678	d.dd	MIEI	1ª	2º
+bas	Eee	56789	e.ee	MIEI	1ª	3º
+fci	Fff	67890	f.ff	MIEI	3ª	3º
+aac	Ggg	78901	g.gg	MIEI	1ª	2º
+baste	Hhh	89012	h.hh	MIEI	1ª	2º
+tetpa	Iii	90123	i.ii	MIEI	1ª	1º
+basmgd	Jjj	90124	j.jj	MIEI	1ª	2º
+mgd	Kkk	90125	k.kk	MIEI	1ª	2º
