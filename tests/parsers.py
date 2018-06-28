@@ -175,6 +175,44 @@ class ParsingMethods(unittest.TestCase):
             teachers = parser.get_teachers(page)
             self.assertEqual(teachers, [(123, 'John Smith'), (456, 'Jane Doe')])
 
+    def test_class_summary_parsing(self):
+        """
+        | Tests :py:func:`CLIPy.parser.get_class_summaries`
+          against a :py:const:`CLIPy.urls.CLASS_SUMMARIES` page snapshot.
+        | Asserts summary entries are parsed correctly.
+        """
+
+        with open("snapshots/class_summaries.html", mode='r') as page:
+            page = BeautifulSoup(page, 'html.parser')
+            summaries = parser.get_class_summaries(page)
+            self.assertEqual(summaries, [('T1',
+                                          'Jane Doe',
+                                          datetime(2017, 9, 12, 10, 30),
+                                          90,
+                                          '127',
+                                          'Ed.II',
+                                          110,
+                                          '<p> Message 1 L1 </p><p> Message 1 L2 </p>',
+                                          datetime(2017, 9, 12, 13, 59)),
+                                         ('T2',
+                                          'Jane Doe',
+                                          datetime(2017, 9, 12, 14, 0),
+                                          90,
+                                          '127',
+                                          'Ed.II',
+                                          30,
+                                          '<p> Message 2 L1 </p><p> Message 2 L2 </p>',
+                                          datetime(2017, 9, 12, 15, 21)),
+                                         ('P2',
+                                          'John Smith',
+                                          datetime(2017, 12, 13, 11, 0),
+                                          120,
+                                          'Lab 116',
+                                          'Ed.II',
+                                          21,
+                                          '<p> Message 3 L1 </p><p> Message 3 L2 </p>',
+                                          datetime(2017, 12, 23, 1, 32))])
+
 
 if __name__ == '__main__':
     unittest.main()

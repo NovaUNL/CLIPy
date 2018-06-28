@@ -309,6 +309,7 @@ def get_turn_students(page):
             identifier = int(student_row.contents[3].text.strip())
         except ValueError:
             log.error(f'Student with non-numeric id found.\nData:{student_row.text.strip()}')
+            identifier = student_row.text.strip()
         abbreviation = student_row.contents[5].text.strip()
         course = student_row.contents[7].text.strip()
         students.append((name, identifier, abbreviation, course))
@@ -365,3 +366,51 @@ def get_teachers(page):
         name = teacher_link.text.strip()
         teacher.append((teacher_id, name))
     return teacher
+
+
+building_exp = re.compile('(?:Ed .*: (?P<room>[\\w\\b. ]+)/(?P<building>[\\w\\d. ]+))?')
+
+
+def get_class_summaries(page):
+    """
+    Parses summaries
+
+    :param page: A page fetched from :py:const:`CLIPy.urls.CLASS_SUMMARIES`
+    :return: List of
+        ``(turn, teacher, start_datetime, duration, room, building, attendance, message, edited_datetime)`` tuples
+    """
+    summaries = []
+    tbody = page.find('th', class_="center", colspan="8", bgcolor="#dddddd").parent.parent
+    titles = list(tbody.find_all('tr', class_="center", bgcolor="#aaaaaa"))
+    messages = list(tbody.find_all('tr', bgcolor="#eeeeee"))
+    edited_datetimes = list(tbody.find_all('td', colspan="8", align="right"))
+    if len(titles) != len(messages) != len(edited_datetimes):
+        log.error("There is something missing in the summaries table.")
+        return None
+    for title, message, edited_datetime in zip(titles, messages, edited_datetimes):
+        # Title content
+        turn = title.contents[3].text.strip()
+        teacher = title.contents[7].text.strip()
+        date = title.contents[9].text.strip()
+        start = title.contents[13].text.strip()
+        start_datetime = datetime.strptime(f'{date} {start}', "%Y-%m-%d %H:%M")
+        del date, start
+        duration = title.contents[15].text.strip().split(':')  # ['HH', 'MM']
+        duration = int(duration[0]) * 60 + int(duration[1])
+        place = title.contents[11].text.strip()
+        place = building_exp.search(place)
+        room = place.group('room')
+        building = place.group('building')
+        attendance = int(title.contents[17].text.strip())
+        # Message content
+        message_aux = ''
+        for content in message.contents[1]:
+            message_aux += str(content).strip()
+        message = htmlmin.minify(message_aux, remove_empty_space=True)
+        # Edited datetime content
+        edited_datetime = datetime.strptime(edited_datetime.text.strip(), "Alterado em: %Y-%m-%d %H:%M")
+
+        summaries.append(
+            (turn, teacher, start_datetime, duration, room, building, attendance, message, edited_datetime))
+
+    return summaries
