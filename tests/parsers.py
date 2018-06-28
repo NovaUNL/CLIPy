@@ -7,6 +7,11 @@ from CLIPy import parser
 class ParsingMethods(unittest.TestCase):
 
     def test_department_parsing(self):
+        """
+        | Tests :py:func:`CLIPy.parser.get_departments` against a :py:const:`CLIPy.urls.DEPARTMENTS` page snapshot.
+        | Asserts that all departments are found.
+        """
+
         with open("snapshots/departments.html", mode='r') as page:
             page = BeautifulSoup(page, 'html.parser')
             departments = parser.get_departments(page)
@@ -17,6 +22,11 @@ class ParsingMethods(unittest.TestCase):
                               (146811, 'NOVA Escola Doutoral')])
 
     def test_course_name_parsing(self):
+        """
+        | Tests :py:func:`CLIPy.parser.get_course_names` against a :py:const:`CLIPy.urls.COURSES` page snapshot.
+        | Asserts that every course id-name pair was found.
+        """
+
         with open("snapshots/courses.html", mode='r') as page:
             page = BeautifulSoup(page, 'html.parser')
             courses = parser.get_course_names(page)
@@ -36,6 +46,12 @@ class ParsingMethods(unittest.TestCase):
                               (402, 'Ambiente')])
 
     def test_course_activity_years_parsing(self):
+        """
+        | Tests :py:func:`CLIPy.parser.get_course_activity_years`
+          against a :py:const:`CLIPy.urls.CURRICULAR_PLANS` page snapshot.
+        | Asserts that the proper range is found.
+        """
+
         with open("snapshots/curricular_plans.html", mode='r') as page:
             page = BeautifulSoup(page, 'html.parser')
             first, last = parser.get_course_activity_years(page)
@@ -43,12 +59,33 @@ class ParsingMethods(unittest.TestCase):
             self.assertEqual(last, 2019)
 
     def test_course_abbreviation_parsing(self):
+        """
+        | Tests :py:func:`CLIPy.parser.get_course_activity_years`
+          against a :py:const:`CLIPy.urls.CURRICULAR_PLANS` page snapshot.
+        | Asserts that the proper range is found.
+        """
+
         with open("snapshots/statistics.html", mode='r') as page:
             page = BeautifulSoup(page, 'html.parser')
             abbreviations = parser.get_course_abbreviations(page)
             self.assertEqual(abbreviations,
                              [(336, 'MACV'),
                               (450, 'MIEMat')])
+
+    def test_admitted_parsing(self):
+        """
+        | Tests :py:func:`CLIPy.parser.get_admissions` against a :py:const:`CLIPy.urls.ADMITTED` page snapshot.
+        | Asserts that every student and his/her admission details are found.
+        """
+
+        with open("snapshots/admitted.html", mode='r') as page:
+            page = BeautifulSoup(page, 'html.parser')
+            admitted = parser.get_admissions(page)
+            self.assertEqual(admitted,
+                             [('Aàá ãâ', 1, 12345, 'Activo'),
+                              ('John Smith', 3, 23456, 'Transferido CNA'),
+                              ('Jane Doe', 2, None, None),
+                              ('Abcd efgh', 3, 34567, 'Transferido')])
 
 
 if __name__ == '__main__':

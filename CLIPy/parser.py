@@ -107,7 +107,7 @@ def get_admissions(page):
         student_iid = table_row[11].text.strip()
         state = table_row[13].text.strip()
 
-        student_iid = student_iid if student_iid != '' else None
+        student_iid = int(student_iid) if student_iid != '' else None
         option = None if option == '' else int(option)
         state = state if state != '' else None
 

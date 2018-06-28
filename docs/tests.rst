@@ -1,10 +1,14 @@
 Unit testing
 ============
 
+.. automodule:: tests.parsers
+    :members:
+    :undoc-members:
+    :show-inheritance:
 
 
-Minimize.py
---------------------
+minimize.py
+-----------
 
 | This is a script with the purpose of simplifying html source files to be used with the unit testing framework.
 | It picks up HTML files in the script folder and cleans them leaving resulting files in the same place with the
