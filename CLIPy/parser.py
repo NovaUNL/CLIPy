@@ -196,7 +196,7 @@ def get_turn_info(page):
     fields = {}
     previous_key = None
     for table_row in information_rows:
-        if len(table_row.contents) < 3:  # several lines ['\n', 'value']
+        if len(table_row.contents) <= 3:  # several lines ['\n', 'value']
             fields[previous_key].append(normalize('NFKC', table_row.contents[1].text.strip()))
         else:  # inline info ['\n', 'key', '\n', 'value']
             key = table_row.contents[1].text.strip().lower()
@@ -271,7 +271,10 @@ def get_turn_students(page):
 
     for student_row in student_rows:
         name = student_row.contents[1].text.strip()
-        id = student_row.contents[3].text.strip()
+        try:
+            id = int(student_row.contents[3].text.strip())
+        except ValueError:
+            log.error(f'Student with non-numeric id found.\nData:{student_row.text.strip()}')
         abbreviation = student_row.contents[5].text.strip()
         course = student_row.contents[7].text.strip()
         students.append((name, id, abbreviation, course))
