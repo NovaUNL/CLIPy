@@ -16,10 +16,10 @@ def get_departments(page):
     :return: List of ``(department_id, name)`` tuples
     """
     departments = []
-    department_links = page.find_all(href=urls.DEPARTMENT_EXP.department_exp)
+    department_links = page.find_all(href=urls.DEPARTMENT_EXP)
     for department_link in department_links:
         department_id = int(urls.DEPARTMENT_EXP.findall(department_link.attrs['href'])[0])
-        name = department_link.contents[0]
+        name = department_link.contents[0].strip()
         departments.append((department_id, name))
     return departments
 

@@ -13,7 +13,7 @@ INSTITUTION_YEARS = ROOT + \
 
 #: List of departments for a given institution and year.
 DEPARTMENTS = ROOT + \
-              "/utente/institui%E7%E3o_sede/unidade_organica/ensino/ano_lectivo?" \
+              "/utente/institui%E7%E3o_sede/unidade_organica/ensino/ano_lectivo/sector?" \
               "ano_lectivo={year}&institui%E7%E3o={institution}"
 
 #: List of periods taught by a department, each containing some classes (for a given year)
