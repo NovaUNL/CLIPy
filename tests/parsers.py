@@ -4,6 +4,7 @@ from datetime import datetime
 from bs4 import BeautifulSoup
 
 from CLIPy import parser
+from CLIPy.database.models import RoomType
 
 
 class ParsingMethods(unittest.TestCase):
@@ -13,7 +14,6 @@ class ParsingMethods(unittest.TestCase):
         | Tests :py:func:`CLIPy.parser.get_departments` against a :py:const:`CLIPy.urls.DEPARTMENTS` page snapshot.
         | Asserts that all departments are found.
         """
-
         with open("snapshots/departments.html", mode='r') as page:
             page = BeautifulSoup(page, 'html.parser')
             departments = parser.get_departments(page)
@@ -28,7 +28,6 @@ class ParsingMethods(unittest.TestCase):
         | Tests :py:func:`CLIPy.parser.get_course_names` against a :py:const:`CLIPy.urls.COURSES` page snapshot.
         | Asserts that every course id-name pair was found.
         """
-
         with open("snapshots/courses.html", mode='r') as page:
             page = BeautifulSoup(page, 'html.parser')
             courses = parser.get_course_names(page)
@@ -53,7 +52,6 @@ class ParsingMethods(unittest.TestCase):
           against a :py:const:`CLIPy.urls.CURRICULAR_PLANS` page snapshot.
         | Asserts that the proper range is found.
         """
-
         with open("snapshots/curricular_plans.html", mode='r') as page:
             page = BeautifulSoup(page, 'html.parser')
             first, last = parser.get_course_activity_years(page)
@@ -66,7 +64,6 @@ class ParsingMethods(unittest.TestCase):
           against a :py:const:`CLIPy.urls.CURRICULAR_PLANS` page snapshot.
         | Asserts that the proper range is found.
         """
-
         with open("snapshots/statistics.html", mode='r') as page:
             page = BeautifulSoup(page, 'html.parser')
             abbreviations = parser.get_course_abbreviations(page)
@@ -79,7 +76,6 @@ class ParsingMethods(unittest.TestCase):
         | Tests :py:func:`CLIPy.parser.get_admissions` against a :py:const:`CLIPy.urls.ADMITTED` page snapshot.
         | Asserts that every student and his/her admission details are found.
         """
-
         with open("snapshots/admitted.html", mode='r') as page:
             page = BeautifulSoup(page, 'html.parser')
             admitted = parser.get_admissions(page)
@@ -94,7 +90,6 @@ class ParsingMethods(unittest.TestCase):
         | Tests :py:func:`CLIPy.parser.get_enrollments` against a :py:const:`CLIPy.urls.CLASS_ENROLLED` page snapshot.
         | Asserts that every student and his/her enrollment details are found.
         """
-
         with open("snapshots/class_enrolled.txt", mode='r') as page:
             page = BeautifulSoup(page, 'html.parser')
             enrolled = parser.get_enrollments(page)
@@ -116,7 +111,6 @@ class ParsingMethods(unittest.TestCase):
         | Tests :py:func:`CLIPy.parser.get_turn_info` against a :py:const:`CLIPy.urls.CLASS_TURN` page snapshot.
         | Asserts that the correct turn info is found.
         """
-
         with open("snapshots/class_turn.html", mode='r') as page:
             page = BeautifulSoup(page, 'html.parser')
             info = parser.get_turn_info(page)
@@ -141,7 +135,6 @@ class ParsingMethods(unittest.TestCase):
         | Tests :py:func:`CLIPy.parser.get_turn_students` against a :py:const:`CLIPy.urls.CLASS_TURN` page snapshot.
         | Asserts that every student and his/her details are found.
         """
-
         with open("snapshots/class_turn.html", mode='r') as page:
             page = BeautifulSoup(page, 'html.parser')
             students = parser.get_turn_students(page)
@@ -155,7 +148,6 @@ class ParsingMethods(unittest.TestCase):
         | Tests :py:func:`CLIPy.parser.get_bilingual_info` against a generic bilingual page snapshot.
         | Asserts that both languages and edition details are read properly.
         """
-
         with open("snapshots/bilingual_info.html", mode='r') as page:
             page = BeautifulSoup(page, 'html.parser')
             portuguese, english, edition_datetime, last_editor = parser.get_bilingual_info(page)
@@ -169,7 +161,6 @@ class ParsingMethods(unittest.TestCase):
         | Tests :py:func:`CLIPy.parser.get_teachers` against a :py:const:`CLIPy.urls.DEPARTMENT_TEACHERS` page snapshot.
         | Asserts that teacher id-name pairs are parsed correctly.
         """
-
         with open("snapshots/department_teachers.html", mode='r') as page:
             page = BeautifulSoup(page, 'html.parser')
             teachers = parser.get_teachers(page)
@@ -181,7 +172,6 @@ class ParsingMethods(unittest.TestCase):
           against a :py:const:`CLIPy.urls.CLASS_SUMMARIES` page snapshot.
         | Asserts summary entries are parsed correctly.
         """
-
         with open("snapshots/class_summaries.html", mode='r') as page:
             page = BeautifulSoup(page, 'html.parser')
             summaries = parser.get_class_summaries(page)
@@ -212,6 +202,27 @@ class ParsingMethods(unittest.TestCase):
                                           21,
                                           '<p> Message 3 L1 </p><p> Message 3 L2 </p>',
                                           datetime(2017, 12, 23, 1, 32))])
+
+    def test_place_parsing(self):
+        """
+        | Tests :py:func:`CLIPy.parser.get_places` against a :py:const:`CLIPy.urls.BUILDING_SCHEDULE` page snapshot.
+        | Asserts that place ids, name strings and their type deductions are parsed correctly.
+        """
+        with open("snapshots/building_schedule.html", mode='r') as page:
+            page = BeautifulSoup(page, 'html.parser')
+            places = parser.get_places(page)
+            self.assertEqual(places, [(359, RoomType.laboratory, '334'),
+                                      (418, RoomType.laboratory, '127'),
+                                      (423, RoomType.laboratory, '139'),
+                                      (1140, RoomType.laboratory, 'Hidr.'),
+                                      (1604, RoomType.laboratory, '048'),
+                                      (1605, RoomType.laboratory, '048B'),
+                                      (1624, RoomType.laboratory, 'Laboratório'),  # This is the dumb scenario
+                                      (366, RoomType.classroom, '101'),
+                                      (1227, RoomType.classroom, '2.2'),
+                                      (411, RoomType.computer, '112'),
+                                      (409, RoomType.masters, '105'),
+                                      (1608, RoomType.meeting_room, '217-D')])
 
 
 if __name__ == '__main__':

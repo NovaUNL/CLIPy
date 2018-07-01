@@ -1,4 +1,6 @@
 from datetime import datetime
+from enum import Enum
+
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
 from sqlalchemy import Sequence, DateTime, ForeignKey, CHAR, SMALLINT, Table, Column, Integer, String, UniqueConstraint
@@ -321,3 +323,13 @@ class TurnInstance(Base):
 Turn.instances = relationship(TurnInstance, order_by=TurnInstance.weekday, back_populates='turn',
                               cascade="save-update, merge, delete")
 Classroom.turn_instances = relationship(TurnInstance, order_by=TurnInstance.weekday, back_populates='classroom')
+
+
+class RoomType(Enum):
+    generic = 1
+    classroom = 2
+    auditorium = 3
+    laboratory = 4
+    computer = 5
+    meeting_room = 6
+    masters = 7

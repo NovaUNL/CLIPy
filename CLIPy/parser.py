@@ -5,6 +5,7 @@ from unicodedata import normalize
 
 import htmlmin
 
+from CLIPy.database.models import RoomType
 from . import urls
 from .utils import weekday_to_id
 
@@ -161,7 +162,8 @@ def get_enrollments(page):
     return enrollments
 
 
-schedule_exp = re.compile(  # extract turn information
+#: Generic turn scheduling string. Looks something like 'Segunda-Feira  XX:00 - YY:00  Ed Z: Lab 123 A/Ed.Z'
+TURN_SCHEDULING_EXP = re.compile(
     '(?P<weekday>[\\w-]+) {2}'
     '(?P<init_hour>\\d{2}):(?P<init_min>\\d{2}) - (?P<end_hour>\\d{2}):(?P<end_min>\\d{2})(?: {2})?'
     '(?:Ed .*: (?P<room>[\\w\\b. ]+)/(?P<building>[\\w\\d. ]+))?')
@@ -211,7 +213,7 @@ def get_turn_info(page):
     for field, content in fields.items():
         if field == "marcação":
             for row in content:
-                information = schedule_exp.search(row)
+                information = TURN_SCHEDULING_EXP.search(row)
                 if information is None:
                     raise Exception("Bad schedule:" + str(information))
 
@@ -279,37 +281,6 @@ def get_turn_students(page):
         except ValueError:
             log.error(f'Student with non-numeric id found.\nData:{student_row.text.strip()}')
             identifier = student_row.contents[3].text.strip()
-        abbreviation = student_row.contents[5].text.strip()
-        course = student_row.contents[7].text.strip()
-        students.append((name, identifier, abbreviation, course))
-
-    return students
-
-
-def get_turn_students(page):
-    """
-    Parses the students list from the turn page.
-
-    :param page: A page fetched from :py:const:`CLIPy.urls.CLASS_TURN`
-    :return: List of tuples with student details (``name, id, abbreviation, course abbreviation``)
-    """
-    students = []
-    student_table_root = page.find('th', colspan="4", bgcolor="#95AEA8").parent.parent
-
-    # Remove useless rows
-    for tag in student_table_root.find_all('th'):
-        if tag.parent is not None:
-            tag.parent.decompose()  # remove its parent row
-
-    student_rows = student_table_root.find_all('tr')
-
-    for student_row in student_rows:
-        name = student_row.contents[1].text.strip()
-        try:
-            identifier = int(student_row.contents[3].text.strip())
-        except ValueError:
-            log.error(f'Student with non-numeric id found.\nData:{student_row.text.strip()}')
-            identifier = student_row.text.strip()
         abbreviation = student_row.contents[5].text.strip()
         course = student_row.contents[7].text.strip()
         students.append((name, identifier, abbreviation, course))
@@ -414,3 +385,62 @@ def get_class_summaries(page):
             (turn, teacher, start_datetime, duration, room, building, attendance, message, edited_datetime))
 
     return summaries
+
+
+def get_places(page):
+    """
+    Parses places from a page
+
+    :param page: A page fetched from :py:const:`CLIPy.urls.BUILDING_SCHEDULE`
+    :return: List of room ``(identifier, type, name)`` tuples
+    """
+    places = []
+    row = page.find(href=urls.PLACE_EXP).parent.parent
+    for link in row.find_all(href=urls.PLACE_EXP):
+        identifier = int(urls.PLACE_EXP.findall(link.attrs['href'])[0])
+        name = link.text.strip()
+        places.append((identifier, *parse_place_str(name)))
+    return places
+
+
+#: The generic long room string looks something like `Laboratório de Ensino Ed xyz: Lab 123` most of the times
+LONG_ROOM_EXP = re.compile('(?P<room_type>Sala|Laboratório de Ensino|Anfiteatro)'
+                           '( de (?P<room_subtype>Aula|Reunião|Mestrado|Computadores|Multimédia|Multiusos))?'
+                           '( Ed (?P<building>[\w ]+):)? (Lab[.]? |Laboratório )?(?P<room_name>[\w .-]*)')
+
+
+def parse_place_str(place) -> (RoomType, str):
+    """
+    Parses room types and names from raw strings
+
+    :param place: Raw string
+    :return: ``room type , name``
+    """
+    match = LONG_ROOM_EXP.search(place)
+    room_name = match.group('room_name')
+    room_type = match.group('room_type')
+    subtype = match.group('room_subtype')
+    if subtype:
+        if subtype == 'Aula':
+            room_type = RoomType.classroom
+        elif subtype == 'Computadores':
+            room_type = RoomType.computer
+        elif subtype == 'Reunião':
+            room_type = RoomType.meeting_room
+        elif subtype == 'Mestrado':
+            room_type = RoomType.masters
+        elif subtype == 'Multimédia':
+            room_type = RoomType.masters
+        elif subtype == 'Multiusos':
+            room_type = RoomType.generic
+    else:
+        if room_type == 'Sala':
+            room_type = RoomType.generic
+        elif room_type.startswith('Lab'):
+            room_type = RoomType.laboratory
+        elif room_type.startswith('Anf'):
+            room_type = RoomType.auditorium
+        else:
+            room_type = RoomType.generic
+
+    return room_type, room_name
