@@ -224,6 +224,41 @@ class ParsingMethods(unittest.TestCase):
                                       (409, RoomType.masters, '105'),
                                       (1608, RoomType.meeting_room, '217-D')])
 
+    def test_teacher_activity_parsing(self):
+        """
+        | Tests :py:func:`CLIPy.parser.get_places` against a :py:const:`CLIPy.urls.TEACHER_ACTIVITIES` page snapshot.
+        | Asserts that names, statutes, classes and hours are parsed correctly.
+        """
+        with open("snapshots/teachers_activities.html", mode='r') as page:
+            page = BeautifulSoup(page, 'html.parser')
+            activities = parser.get_teacher_activity(page)
+            self.assertEqual(activities, [
+                (('Jane Doe', 'Colaborador Mestre', 'Parcial 20%'),
+                 [(8148, 'Métodos de Desenvolvimento de Software', 0, 2.0, 0, 0, 2.0)],
+                 (0, 2.0, 0, 0, 2.0)),
+
+                (('John Smith', 'Professor Auxiliar', 'Integral com exclusividade'),
+                 [(10637, 'Introdução à Programação', 0, 0, 9.0, 0, 9.0),
+                  (11560, 'Modelação e Validação de Sistemas Concorrentes', 1.0, 1.0, 0, 0, 2.0)],
+                 (1.0, 1.0, 9.0, 0, 11.0)),
+
+                (('Bob', 'Professor Auxiliar', 'Integral com exclusividade'),
+                 [(11154, 'Algoritmos e Estruturas de Dados', 0, 6.0, 0, 0, 6.0),
+                  (11560, 'Modelação e Validação de Sistemas Concorrentes', 1.0, 1.0, 0, 0, 2.0),
+                  (None, 'Comissão Executiva', 0, 0, 0, 1.0, 1.0)],
+                 (1.0, 7.0, 0, 1.0, 9.0)),
+
+                (('Abcd efgh', 'Professor Associado', 'Integral com exclusividade'),
+                 [(None, 'Licença sabática', 0, 0, 0, 9.0, 9.0)],
+                 (2.0, 4.0, 0, 1.0, 7.0)),
+
+                (('1 234 56789', 'Professor Associado', 'Integral com exclusividade'),
+                 [(9917, 'Heterogeneous Many-Core Environments', 0, 0, 0, 0, 0),
+                  (10344, 'Informática para Ciências e Engenharias', 2.0, 3.0, 0, 0, 5.0),
+                  (None, 'Coordenador MIEI', 0, 0, 0, 2.0, 2.0)],
+                 (2.0, 3.0, 0, 2.0, 7.0))
+            ])
+
 
 if __name__ == '__main__':
     unittest.main()

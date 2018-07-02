@@ -4,6 +4,7 @@ from datetime import datetime
 from unicodedata import normalize
 
 import htmlmin
+from bs4 import NavigableString
 
 from CLIPy.database.models import RoomType
 from . import urls
@@ -444,3 +445,96 @@ def parse_place_str(place) -> (RoomType, str):
             room_type = RoomType.generic
 
     return room_type, room_name
+
+
+def get_teacher_activity(page):
+    """
+    Parses teachers activities from a page
+
+    :param page: A page fetched from :py:const:`CLIPy.urls.TEACHER_ACTIVITIES`
+    :return: | List of ``(teacher, activities, total_hours)`` tuples
+             | With ``teacher`` being a tuple like ``(name, statute, time)``
+             | ``activities`` being a list of ``class_id, activity_name, total_hours``.
+             | Both ``total_hours`` are tuples with the structure
+             | ``(theoretical, practical, theoretical-practical, dispensed, total)``
+    """
+    result = []
+    list_beginning = page.find('td', colspan="8", title="Nome completo (Categoria Profissional, Regime Laboral)")
+    if list_beginning:
+        list_beginning = list_beginning.parent
+        current_teacher = parse_teacher_str(list_beginning.text.strip())
+        activities = []
+
+        for element in list_beginning.next_siblings:
+            if isinstance(element, NavigableString):  # Ignore text (such as line feeds) between tags
+                continue
+
+            if 'bgcolor' in element.attrs:
+                bgcolor = element.attrs['bgcolor'].lower()
+
+                if bgcolor == '#d1dada' or bgcolor == '#edf8f8':  # Tr with the teacher name and statute
+                    current_teacher = parse_teacher_str(element.text.strip())
+                elif bgcolor == '#dddddd':  # Tr with activity info
+                    if current_teacher is None:
+                        raise RuntimeError('Activity appearing before teacher being detected')
+                    children = list(element.children)
+                    class_id = children[3].text.strip()
+                    class_id = None if class_id == '' else int(class_id)
+                    activity_name = children[5].text.strip()
+                    theoretical_h = children[7].text.strip().replace(',', '.')
+                    theoretical_h = 0 if theoretical_h == '' else float(theoretical_h)
+                    theoretical_practical_h = children[9].text.strip().replace(',', '.')
+                    theoretical_practical_h = 0 if theoretical_practical_h == '' else float(theoretical_practical_h)
+                    practical_h = children[11].text.strip().replace(',', '.')
+                    practical_h = 0 if practical_h == '' else float(practical_h)
+                    dispensed_h = children[13].text.strip().replace(',', '.')
+                    dispensed_h = 0 if dispensed_h == '' else float(dispensed_h)
+                    total_h = children[15].text.strip().replace(',', '.')
+                    total_h = 0 if total_h == '' else float(total_h)
+                    if (theoretical_h + practical_h + theoretical_practical_h + dispensed_h) != total_h:
+                        raise RuntimeError("Hours not summing up correctly")
+                    activities.append((class_id, activity_name, theoretical_h, practical_h,
+                                       theoretical_practical_h, dispensed_h, total_h))
+                elif bgcolor == ' bgcolor=':  # Tr with the teacher's total. Ye ye, this is correct. Don't ask me why...
+                    if current_teacher is None:
+                        raise RuntimeError('Class totals appearing before teacher being detected')
+                    children = list(element.children)
+                    theoretical_h = children[3].text.strip().replace(',', '.')
+                    theoretical_h = 0 if theoretical_h == '' else float(theoretical_h)
+                    theoretical_practical_h = children[5].text.strip().replace(',', '.')
+                    theoretical_practical_h = 0 if theoretical_practical_h == '' else float(theoretical_practical_h)
+                    practical_h = children[7].text.strip().replace(',', '.')
+                    practical_h = 0 if practical_h == '' else float(practical_h)
+                    dispensed_h = children[9].text.strip().replace(',', '.')
+                    dispensed_h = 0 if dispensed_h == '' else float(dispensed_h)
+                    total_h = children[11].text.strip().replace(',', '.')
+                    total_h = 0 if total_h == '' else float(total_h)
+                    if (theoretical_h + practical_h + theoretical_practical_h + dispensed_h) != total_h:
+                        raise RuntimeError("Hours not summing up correctly")
+                    result.append(
+                        (current_teacher,
+                         activities,
+                         (theoretical_h, practical_h, theoretical_practical_h, dispensed_h, total_h)))
+                    activities = []
+                    current_teacher = None
+            else:
+                log.warning("Unknown element found")
+    return result
+
+
+#: The generic long room string looks something like `John Smith (Professor Auxiliar, Integral com exclusividade)`
+LONG_TEACHER_EXP = re.compile('(?P<name>[\w ]+) \((?P<statute>[\w ]+), (?P<time>[\w %]+)\)')
+
+
+def parse_teacher_str(teacher: str) -> (str, str, str):
+    """
+    Parses a teacher's name, statute and role time(part/full time) from raw strings
+
+    :param teacher: Raw string
+    :return: ``name , statute, role``
+    """
+    matches = LONG_TEACHER_EXP.search(teacher)
+    result = matches.group('name'), matches.group('statute'), matches.group('time')
+    if None in result:
+        raise ValueError(f'Incorrect source string :\n{teacher}')
+    return result
