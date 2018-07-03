@@ -388,6 +388,22 @@ def get_class_summaries(page):
     return summaries
 
 
+def get_buildings(page):
+    """
+    Parses buildings from a page
+
+    :param page: A page fetched from :py:const:`CLIPy.urls.BUILDINGS`
+    :return: List of room ``(identifier, name)`` tuples
+    """
+    buildings = []
+    building_links = page.find_all(href=urls.BUILDING_EXP)
+    for link in building_links:
+        identifier = int(urls.BUILDING_EXP.findall(link.attrs['href'])[0])
+        name = link.text.strip()
+        buildings.append((identifier, name))
+    return buildings
+
+
 def get_places(page):
     """
     Parses places from a page

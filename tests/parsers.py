@@ -203,6 +203,27 @@ class ParsingMethods(unittest.TestCase):
                                           '<p> Message 3 L1 </p><p> Message 3 L2 </p>',
                                           datetime(2017, 12, 23, 1, 32))])
 
+    def test_building_parsing(self):
+        """
+        | Tests :py:func:`CLIPy.parser.get_buildings` against a :py:const:`CLIPy.urls.BUILDINGS` page snapshot.
+        | Asserts that building identifiers and names are parsed correctly.
+        """
+        with open("snapshots/buildings.html", mode='r') as page:
+            page = BeautifulSoup(page, 'html.parser')
+            buildings = parser.get_buildings(page)
+            self.assertEqual(buildings, [(1176, 'Ed.Departamental'),
+                                         (1177, 'Ed.I'),
+                                         (1178, 'Ed.II'),
+                                         (1180, 'Ed.IV'),
+                                         (1181, 'Ed.IX'),
+                                         (1183, 'Ed.VII'),
+                                         (1184, 'Ed.VIII'),
+                                         (1185, 'Ed.X'),
+                                         (1188, 'H.II'),
+                                         (1189, 'H.III'),
+                                         (1238, 'Cenimat'),
+                                         (1561, 'Biblioteca')])
+
     def test_place_parsing(self):
         """
         | Tests :py:func:`CLIPy.parser.get_places` against a :py:const:`CLIPy.urls.BUILDING_SCHEDULE` page snapshot.
