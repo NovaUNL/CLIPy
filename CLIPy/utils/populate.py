@@ -17,7 +17,7 @@ log = logging.getLogger(__name__)
 THREADS = 6  # high number means "Murder CLIP!", take care
 
 
-def institutions(session: Session, database: db.Controller):
+def populate_institutions(session: Session, database: db.Controller):
     """
     Finds new institutions and adds them to the database. This is mostly bootstrap code, not very useful later on.
     This is not thread-safe.
@@ -60,7 +60,7 @@ def institutions(session: Session, database: db.Controller):
     database.add_institutions(found)
 
 
-def departments(session: Session, database: db.Controller):
+def populate_departments(session: Session, database: db.Controller):
     """
     Finds new departments and adds them to the database. *NOT* thread-safe.
 
@@ -90,7 +90,7 @@ def departments(session: Session, database: db.Controller):
     database.add_departments(found.values())
 
 
-def classes(session: Session, db_registry: db.SessionRegistry):
+def populate_classes(session: Session, db_registry: db.SessionRegistry):
     """
     Finds new classes and adds them to the database
     :param session: Web session
@@ -121,7 +121,7 @@ def classes(session: Session, db_registry: db.SessionRegistry):
         thread.join()
 
 
-def courses(session: Session, database: db.Controller):
+def populate_courses(session: Session, database: db.Controller):
     """
     Finds new courses and adds them to the database. *NOT* thread-safe.
 
@@ -158,7 +158,7 @@ def courses(session: Session, database: db.Controller):
 
 
 # populate student list from the national access contest (also obtain their preferences and current status)
-def nac_admissions(session: Session, db_registry: db.SessionRegistry):
+def populate_nac_admissions(session: Session, db_registry: db.SessionRegistry):
     """
     Looks up the national access contest admission tables looking for new students and their current statuses.
 
@@ -199,7 +199,7 @@ def nac_admissions(session: Session, db_registry: db.SessionRegistry):
         thread.join()
 
 
-def class_instances(session: Session, db_registry: db.SessionRegistry, year=None, period=None):
+def populate_class_instances(session: Session, db_registry: db.SessionRegistry, year=None, period=None):
     """
     Finds student enrollments to class instances.
     TODO Make it lookup the every class instance static-ish data.
@@ -241,7 +241,7 @@ def class_instances(session: Session, db_registry: db.SessionRegistry, year=None
         thread.join()
 
 
-def class_instances_turns(session: Session, db_registry: db.SessionRegistry, year=None, period=None):
+def populate_class_instances_turns(session: Session, db_registry: db.SessionRegistry, year=None, period=None):
     """
     Finds class instance turns and updates their data if needed.
 
@@ -282,7 +282,7 @@ def class_instances_turns(session: Session, db_registry: db.SessionRegistry, yea
         thread.join()
 
 
-def database_from_scratch(session: Session, db_registry: db.SessionRegistry):
+def bootstrap_database(session: Session, db_registry: db.SessionRegistry):
     """
     | Bootstraps a database from scratch.
     | Can also be used as an updater but would be a waste of resources in most scenarios.
@@ -293,10 +293,10 @@ def database_from_scratch(session: Session, db_registry: db.SessionRegistry):
     :param db_registry: Database session registry
     """
     main_thread_db_controller = db.Controller(db_registry, cache=True)
-    institutions(session, main_thread_db_controller)  # 10 seconds
-    departments(session, main_thread_db_controller)  # 1-2 minutes
-    classes(session, db_registry)  # ~15 minutes
-    courses(session, main_thread_db_controller)  # ~5 minutes
-    nac_admissions(session, db_registry)  # ~30 minutes
-    class_instances(session, db_registry)  # ~4 hours
-    class_instances_turns(session, db_registry)  # ~16 Hours
+    populate_institutions(session, main_thread_db_controller)  # 10 seconds
+    populate_departments(session, main_thread_db_controller)  # 1-2 minutes
+    populate_classes(session, db_registry)  # ~15 minutes
+    populate_courses(session, main_thread_db_controller)  # ~5 minutes
+    populate_nac_admissions(session, db_registry)  # ~30 minutes
+    populate_class_instances(session, db_registry)  # ~4 hours
+    populate_class_instances_turns(session, db_registry)  # ~16 Hours

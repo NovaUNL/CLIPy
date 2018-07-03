@@ -38,24 +38,24 @@ class Clip:
         return self.cache.controller.get_course(abbreviation=abbreviation, year=year)
 
     def reload_admissions(self, username, password):
-        populate.nac_admissions(Session(username, password), self.cache.registry)
+        populate.populate_nac_admissions(Session(username, password), self.cache.registry)
 
     def reload_classes(self, username, password):
-        populate.classes(Session(username, password), self.cache.registry)
+        populate.populate_classes(Session(username, password), self.cache.registry)
 
     def reload_class_instances(self, username, password, year, period_part, period_parts):
         period = self.cache.controller.get_period(period_part, period_parts)
         if period is None:
             raise ValueError("Invalid period")
-        populate.class_instances(Session(username, password), self.cache.registry, year=year, period=period)
+        populate.populate_class_instances(Session(username, password), self.cache.registry, year=year, period=period)
 
     def reload_turns(self, username, password, year, period_part, period_parts):
         period = self.cache.controller.get_period(period_part, period_parts)
         if period is None:
             raise ValueError("Invalid period")
-        populate.class_instances_turns(Session(username, password), self.cache.registry, year=year, period=period)
+        populate.populate_class_instances_turns(Session(username, password), self.cache.registry, year=year, period=period)
 
     @staticmethod
     def populate(username, password, storage: CacheStorage):
-        populate.database_from_scratch(Session(username, password), storage.registry)
+        populate.bootstrap_database(Session(username, password), storage.registry)
         return Clip(storage)
