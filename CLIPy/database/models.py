@@ -79,16 +79,11 @@ class Institution(Base, TemporalEntity):
 class Building(Base):
     __tablename__ = TABLE_PREFIX + 'buildings'
     id = Column(Integer, Sequence(TABLE_PREFIX + 'building_id_seq'), primary_key=True)
+    internal_id = Column(Integer)
     name = Column(String(50), nullable=False)
-    institution_id = Column(Integer, ForeignKey(Institution.id), nullable=False)
-    institution = relationship(Institution, back_populates="buildings")
-    __table_args__ = (UniqueConstraint('institution_id', 'name', name='un_' + TABLE_PREFIX + 'building'),)
 
     def __str__(self):
         return self.name
-
-
-Institution.buildings = relationship(Building, order_by=Building.name, back_populates="institution")
 
 
 class Department(Base, TemporalEntity):

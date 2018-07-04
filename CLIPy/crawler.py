@@ -287,7 +287,7 @@ def crawl_class_turns(session: WebSession, database: db.Controller, class_instan
         for weekday, start, end, building, room in instances_aux:
             if building:
                 # TODO change add_building to get_building after building crawler is done, same for room.
-                building = database.add_building(BuildingCandidate(building, institution))
+                building = database.get_building(building, institution)
                 if room:
                     room = database.add_classroom(ClassroomCandidate(room, building))
             instances.append(TurnInstanceCandidate(turn, start, end, weekday, classroom=room))

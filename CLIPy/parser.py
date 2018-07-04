@@ -400,6 +400,8 @@ def get_buildings(page):
     for link in building_links:
         identifier = int(urls.BUILDING_EXP.findall(link.attrs['href'])[0])
         name = link.text.strip()
+        if name == 'Dia da semana':
+            return buildings
         buildings.append((identifier, name))
     return buildings
 

@@ -143,23 +143,21 @@ class EnrollmentCandidate:
 
 
 class BuildingCandidate:
-    def __init__(self, name: str, institution: Institution):
+    def __init__(self, identifier: int, name: str):
         if name is None:
             raise ValueError("A building must have a name")
-        if institution is None:
-            raise ValueError("A building must belong to an institution")
+        self.id = identifier
         self.name = name
-        self.institution = institution
 
     def __str__(self):
-        return "{}, {}".format(self.name, self.institution.name)
+        return self.name
 
     def __hash__(self):
-        return hash(self.name) + hash(self.institution.id)
+        return hash(self.name)
 
     def __eq__(self, other):
         if isinstance(self, other.__class__):
-            return self.name == other.name and self.institution == other.institution
+            return self.id == other.id and self.name == other.name
 
 
 class ClassroomCandidate:

@@ -697,7 +697,7 @@ class Controller:
             if building.name in self.__buildings__:
                 return self.__buildings__[building.name]
             try:
-                building = Building(name=building.name, institution=building.institution)
+                building = Building(id=building.id, name=building.name)
                 self.session.add(building)
                 self.session.commit()
                 return building
@@ -708,13 +708,19 @@ class Controller:
                 if self.__caching__:
                     self.__load_buildings__()
         else:
-            db_building = self.session.query(Building).filter_by(
-                name=building.name, institution=building.institution).first()
+            db_building = self.session.query(Building).filter_by(name=building.name).first()
             if db_building is None:
-                db_building = Building(name=building.name, institution=building.institution)
+                db_building = Building(id=building.id, name=building.name)
                 self.session.add(db_building)
                 self.session.commit()
             return db_building
+
+    def get_building(self, building: str):
+        if self.__caching__:
+            if building in self.__buildings__:
+                return self.__buildings__[building]
+        else:
+            return self.session.query(Building).filter_by(name=building).first()
 
     def fetch_class_instances(self, year_asc=True, year=None, period=None) -> [ClassInstance]:
         order = asc(ClassInstance.year) if year_asc else desc(ClassInstance.year)

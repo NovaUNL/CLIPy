@@ -8,7 +8,7 @@ from .. import parser
 from .. import database as db
 from ..session import Session
 from ..crawler import PageCrawler, crawl_class_turns, crawl_class_enrollments, crawl_classes, crawl_admissions
-from ..database.candidates import InstitutionCandidate, DepartmentCandidate, CourseCandidate
+from ..database.candidates import InstitutionCandidate, DepartmentCandidate, CourseCandidate, BuildingCandidate
 from ..utils import parse_clean_request
 from .. import urls
 
@@ -88,6 +88,38 @@ def populate_departments(session: Session, database: db.Controller):
                     department = DepartmentCandidate(department_id, name, institution, year, year)
                     found[department_id] = department
     database.add_departments(found.values())
+
+
+def populate_buildings(session: Session, database: db.Controller):
+    """
+    Finds new buildings and adds them to the database. *NOT* thread-safe.
+
+    :param session: Web session
+    :param database: Database controller
+    """
+
+    buildings = {}  # id -> Candidate
+    for institution in database.get_institution_set():
+        if not institution.has_time_range():  # if it has no time range to iterate through
+            continue
+
+        for year in range(institution.first_year, institution.last_year + 1):
+            for period in database.get_period_set():
+                log.info(f"Crawling buildings of institution {institution}. Year:{year}. Period: {period}")
+                page = parse_clean_request(session.get(urls.BUILDINGS.format(
+                    institution=institution.internal_id, year=year, period=period.part, period_type=period.letter)))
+                page_buildings = parser.get_buildings(page)
+                for identifier, name in page_buildings:
+                    candidate = BuildingCandidate(identifier=identifier, name=name)
+                    if identifier in buildings:
+                        if buildings[identifier] != candidate:
+                            raise Exception("Found two different buildings going by the same ID")
+                    else:
+                        buildings[identifier] = candidate
+
+    for building in buildings.values():
+        log.debug("Adding building {} to the database.")
+        database.add_building(building)
 
 
 def populate_classes(session: Session, db_registry: db.SessionRegistry):
@@ -292,9 +324,10 @@ def bootstrap_database(session: Session, db_registry: db.SessionRegistry):
     :param session: Web session
     :param db_registry: Database session registry
     """
-    main_thread_db_controller = db.Controller(db_registry, cache=True)
+    main_thread_db_controller = db.Controller(db_registry, cache=False)
     populate_institutions(session, main_thread_db_controller)  # 10 seconds
     populate_departments(session, main_thread_db_controller)  # 1-2 minutes
+    populate_buildings(session, main_thread_db_controller)  # ~ 4 minutes (10 seconds if gets capped to last year)
     populate_classes(session, db_registry)  # ~15 minutes
     populate_courses(session, main_thread_db_controller)  # ~5 minutes
     populate_nac_admissions(session, db_registry)  # ~30 minutes
