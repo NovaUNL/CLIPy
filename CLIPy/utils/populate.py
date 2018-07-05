@@ -122,6 +122,46 @@ def populate_buildings(session: Session, database: db.Controller):
         database.add_building(building)
 
 
+def populate_rooms(session: Session, db_registry: db.SessionRegistry):
+    """
+    Finds new rooms and adds them to the database.
+
+    :param session: Web session
+    :param database: Database controller
+    """
+
+    database = db.Controller(db_registry)
+    # TODO since the vast, VAST majority of clip students are from only one institution, change the implementation
+    # to have threads crawling each year instead of each institution.
+
+    institution_queue = Queue()
+    for institution in database.get_institution_set():
+        if not institution.has_time_range():  # if it has no time range to iterate through
+            continue
+        institution_queue.put(institution)
+
+    institution_queue_lock = Lock()
+
+    threads = []
+    for thread in range(0, THREADS):
+        threads.append(PageCrawler("Thread-" + str(thread),
+                                   session, db_registry, institution_queue, institution_queue_lock, crawl_admissions))
+        threads[thread].start()
+
+    while True:
+        institution_queue_lock.acquire()
+        if institution_queue.empty():
+            institution_queue_lock.release()
+            break
+        else:
+            log.info("Approximately {} institutions remaining".format(institution_queue.qsize()))
+            institution_queue_lock.release()
+            sleep(5)
+
+    for thread in threads:
+        thread.join()
+
+
 def populate_classes(session: Session, db_registry: db.SessionRegistry):
     """
     Finds new classes and adds them to the database
@@ -201,7 +241,7 @@ def populate_nac_admissions(session: Session, db_registry: db.SessionRegistry):
     # TODO rework the database to save states apart
     # TODO since the vast, VAST majority of clip students are from only one institution, change the implementation
     # to have threads crawling each year instead of each institution.
-    # Since this only has to be run once at every trimester guess its not top priority
+    # Since this only has to be run once at every trimester guess it's not a top priority
 
     institution_queue = Queue()
     for institution in database.get_institution_set():

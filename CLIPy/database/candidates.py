@@ -1,6 +1,7 @@
 from datetime import datetime
 
-from .models import Turn, ClassInstance, Institution, Student, Course, Period, Class, Department, Building, TurnType
+from .models import Turn, ClassInstance, Institution, Student, Course, Period, Class, Department, Building, TurnType, \
+    RoomType
 
 
 class TemporalEntity:
@@ -160,17 +161,23 @@ class BuildingCandidate:
             return self.id == other.id and self.name == other.name
 
 
-class ClassroomCandidate:
-    def __init__(self, name, building: Building):
+class RoomCandidate:
+    def __init__(self, identifier: int, name, room_type: RoomType, building: Building):
         if name is None:
-            raise ValueError("A classroom must have a name")
+            raise ValueError("A room must have a name")
         if building is None:
-            raise ValueError("A classroom must belong to a building")
+            raise ValueError("A room must belong to a building")
+        self.id = identifier
         self.name = name
+        self.type = room_type
         self.building = building
 
     def __str__(self):
-        return "{}, {}".format(self.name, self.building.name)
+        return "{} {}, {}".format(self.type, self.name, self.building.name)
+
+    def __eq__(self, other):
+        if isinstance(self, other.__class__):
+            return self.id == other.id and self.name == other.name and self.type == other.type
 
 
 class TurnCandidate:
@@ -194,12 +201,12 @@ class TurnCandidate:
 
 
 class TurnInstanceCandidate:
-    def __init__(self, turn: Turn, start: int, end: int, weekday: int, classroom=None):
+    def __init__(self, turn: Turn, start: int, end: int, weekday: int, room=None):
         self.turn = turn
         self.start = start
         self.end = end
         self.weekday = weekday
-        self.classroom = classroom
+        self.room = room
 
     @staticmethod
     def time_str(time):

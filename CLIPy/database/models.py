@@ -5,6 +5,8 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
 from sqlalchemy import Sequence, DateTime, ForeignKey, CHAR, SMALLINT, Table, Column, Integer, String, UniqueConstraint
 
+from .types import IntEnum
+
 TABLE_PREFIX = 'clip_'
 Base = declarative_base()
 
@@ -121,19 +123,31 @@ Department.classes = relationship(
     "Class", order_by=Class.name, back_populates="department")
 
 
-class Classroom(Base):
-    __tablename__ = TABLE_PREFIX + 'classrooms'
-    id = Column(Integer, Sequence(TABLE_PREFIX + 'classroom_id_seq'), primary_key=True)
+class RoomType(Enum):
+    generic = 1
+    classroom = 2
+    auditorium = 3
+    laboratory = 4
+    computer = 5
+    meeting_room = 6
+    masters = 7
+
+
+class Room(Base):
+    __tablename__ = TABLE_PREFIX + 'rooms'
+    id = Column(Integer, Sequence(TABLE_PREFIX + 'room_id_seq'), primary_key=True)
     name = Column(String(70), nullable=False)
+    # room_type = Column(sqlalchemy.types.Enum(RoomType))
+    room_type = Column(IntEnum(RoomType))
     building_id = Column(Integer, ForeignKey(Building.id), nullable=False)
-    building = relationship(Building, back_populates="classrooms")
-    __table_args__ = (UniqueConstraint('building_id', 'name', name='un_' + TABLE_PREFIX + 'classroom_dept'),)
+    building = relationship(Building, back_populates="rooms")
+    __table_args__ = (UniqueConstraint('building_id', 'name', 'room_type', name='un_' + TABLE_PREFIX + 'room'),)
 
     def __str__(self):
         return "{} - {}".format(self.name, self.building.name)
 
 
-Building.classrooms = relationship(Classroom, order_by=Classroom.name, back_populates="building")
+Building.rooms = relationship(Room, order_by=Room.name, back_populates="building")
 
 
 class ClassInstance(Base):
@@ -301,10 +315,10 @@ class TurnInstance(Base):
     turn_id = Column(Integer, ForeignKey(Turn.id))
     start = Column(Integer)
     end = Column(Integer)
-    classroom_id = Column(Integer, ForeignKey(Classroom.id))
+    room_id = Column(Integer, ForeignKey(Room.id))
     turn = relationship(Turn, back_populates='instances')
     weekday = Column(SMALLINT)
-    classroom = relationship(Classroom, back_populates="turn_instances")
+    room = relationship(Room, back_populates="turn_instances")
     __table_args__ = (UniqueConstraint('turn_id', 'start', 'weekday', name='un_' + TABLE_PREFIX + 'turn_instance'),)
 
     @staticmethod
@@ -317,14 +331,4 @@ class TurnInstance(Base):
 
 Turn.instances = relationship(TurnInstance, order_by=TurnInstance.weekday, back_populates='turn',
                               cascade="save-update, merge, delete")
-Classroom.turn_instances = relationship(TurnInstance, order_by=TurnInstance.weekday, back_populates='classroom')
-
-
-class RoomType(Enum):
-    generic = 1
-    classroom = 2
-    auditorium = 3
-    laboratory = 4
-    computer = 5
-    meeting_room = 6
-    masters = 7
+Room.turn_instances = relationship(TurnInstance, order_by=TurnInstance.weekday, back_populates='room')

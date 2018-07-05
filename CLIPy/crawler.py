@@ -7,7 +7,7 @@ from time import sleep
 import re
 
 from . import parser
-from .database.candidates import StudentCandidate, TurnCandidate, TurnInstanceCandidate, ClassroomCandidate, \
+from .database.candidates import StudentCandidate, TurnCandidate, TurnInstanceCandidate, RoomCandidate, \
     BuildingCandidate, EnrollmentCandidate, AdmissionCandidate, ClassCandidate, ClassInstanceCandidate, TeacherCandidate
 from .database.database import SessionRegistry
 from .database.models import Department, Institution, ClassInstance
@@ -59,6 +59,34 @@ class PageCrawler(Thread):
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.db_registry.remove()
+
+
+def crawl_rooms(session: WebSession, database: db.Controller, institution: Institution):
+    institution = database.session.merge(institution)
+    rooms = {}  # id -> Candidate
+    buildings = database.get_building_set()
+    periods = database.get_period_set()
+
+    # for each year this department operated
+    for year in range(institution.first_year, institution.last_year + 1):
+        for building in buildings:
+            for period in periods:
+                page = parse_clean_request(session.get(urls.BUILDING_SCHEDULE.format(
+                    institution=institution.internal_id,
+                    building=building,
+                    year=year,
+                    period=period.part,
+                    period_type=period.letter)))
+                rooms = parser.get_places(page)
+                for identifier, room_type, name in rooms:
+                    candidate = RoomCandidate(identifier=identifier, room_type=room_type, name=name, building=building)
+                    if identifier in rooms:
+                        if rooms[identifier] != candidate:
+                            raise Exception("Found two different rooms going by the same ID")
+                    else:
+                        rooms[identifier] = candidate
+    for room in rooms:
+        database.add_room(room)
 
 
 def crawl_classes(session: WebSession, database: db.Controller, department: Department):
@@ -286,11 +314,10 @@ def crawl_class_turns(session: WebSession, database: db.Controller, class_instan
         instances = []
         for weekday, start, end, building, room in instances_aux:
             if building:
-                # TODO change add_building to get_building after building crawler is done, same for room.
-                building = database.get_building(building, institution)
+                building = database.get_building(building)
                 if room:
-                    room = database.add_classroom(ClassroomCandidate(room, building))
-            instances.append(TurnInstanceCandidate(turn, start, end, weekday, classroom=room))
+                    room = database.get_room(room, building)
+            instances.append(TurnInstanceCandidate(turn, start, end, weekday, room=room))
         del instances_aux
         database.add_turn_instances(instances)
 

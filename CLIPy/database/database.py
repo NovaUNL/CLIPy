@@ -3,13 +3,14 @@ import os
 import traceback
 from typing import List
 
+import sqlalchemy as sa
 from sqlalchemy import create_engine, desc, asc
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import sessionmaker, scoped_session
 
 from .models import Base, Degree, Period, TurnType, Institution, Department, Course, Teacher, Building, \
-    Classroom, Class, ClassInstance, Student, Turn, TurnInstance, Admission, Enrollment
-from .candidates import ClassroomCandidate, BuildingCandidate, TurnCandidate, StudentCandidate, \
+    Room, Class, ClassInstance, Student, Turn, TurnInstance, Admission, Enrollment, RoomType
+from .candidates import RoomCandidate, BuildingCandidate, TurnCandidate, StudentCandidate, \
     ClassCandidate, InstitutionCandidate, ClassInstanceCandidate, DepartmentCandidate, AdmissionCandidate, \
     EnrollmentCandidate, CourseCandidate, TeacherCandidate, TurnInstanceCandidate
 
@@ -81,7 +82,7 @@ class Controller:
         self.__load_turn_types__()
         self.__load_teachers__()
         self.__load_buildings__()
-        self.__load_classrooms__()
+        self.__load_rooms__()
         log.debug("Finished building cache")
 
     def __load_institutions__(self):
@@ -151,14 +152,16 @@ class Controller:
             buildings[building.name] = building
         self.__buildings__ = buildings
 
-    def __load_classrooms__(self):
-        log.debug("Building classroom cache")
-        classrooms = {}
-        for classroom, building in self.session.query(Classroom, Building).all():
-            if building.name not in classrooms:
-                classrooms[building.name] = {}
-            classrooms[building.name][classroom.name] = building
-        self.__classrooms__ = classrooms
+    def __load_rooms__(self):
+        log.debug("Building room cache")
+        rooms = {}
+        for room, building in self.session.query(Room, Building).all():
+            if building.name not in rooms:
+                rooms[building.name] = {}
+            if room.room_type not in rooms[building.name]:
+                rooms[building.name][room.room_type] = {}
+            rooms[building.name][room.room_type][room.name] = building
+        self.__rooms__ = rooms
 
     def __insert_default_periods__(self):
         # TODO don't just leave this here hardcoded...
@@ -232,6 +235,12 @@ class Controller:
             return set(self.__institutions__.values())
         else:
             return set(self.session.query(Institution).all())
+
+    def get_building_set(self):
+        if self.__caching__:
+            return set(self.__buildings__.values())
+        else:
+            return set(self.session.query(Building).all())
 
     def get_department_set(self):
         if self.__caching__:
@@ -590,7 +599,7 @@ class Controller:
 
             for instance in instances:
                 turn.instances.append(TurnInstance(turn=turn, start=instance.start, end=instance.end,
-                                                   classroom=instance.classroom, weekday=instance.weekday))
+                                                   room=instance.room, weekday=instance.weekday))
 
             if len(instances) > 0:
                 log.info(f"Added {len(instances)} turn instances to the turn {turn}")
@@ -603,10 +612,10 @@ class Controller:
                     if db_turn_instance.start == instance.start and db_turn_instance.end == instance.end and \
                             db_turn_instance.weekday == instance.weekday:
                         matched = True
-                        if db_turn_instance.classroom != instance.classroom:  # Update the classroom
-                            log.info(f'An instance of {turn} changed the classroom from '
-                                     f'{db_turn_instance.classroom} to {instance.classroom}')
-                            db_turn_instance.classroom = instance.classroom
+                        if db_turn_instance.room != instance.room:  # Update the room
+                            log.info(f'An instance of {turn} changed the room from '
+                                     f'{db_turn_instance.room} to {instance.room}')
+                            db_turn_instance.room = instance.room
                         instances.remove(instance)
                         break
                 if not matched:
@@ -614,7 +623,7 @@ class Controller:
                     self.session.delete(db_turn_instance)
             for instance in instances:
                 turn.instances.append(TurnInstance(turn=turn, start=instance.start, end=instance.end,
-                                                   classroom=instance.classroom, weekday=instance.weekday))
+                                                   room=instance.room, weekday=instance.weekday))
 
     def add_turn_students(self, turn: Turn, students):
         [turn.students.append(student) for student in students]
@@ -666,33 +675,49 @@ class Controller:
         log.info("{} enrollments added and {} updated ({} ignored)!".format(
             added, updated, len(enrollments) - added - updated))
 
-    def add_classroom(self, classroom: ClassroomCandidate):
+    def add_room(self, room: RoomCandidate) -> Room:
         if self.__caching__:
             try:
-                if classroom.building in self.__classrooms__ and \
-                        classroom.name in self.__classrooms__[classroom.building]:
-                    db_classroom = self.__classrooms__[classroom.building][classroom.name]
+                if room.building in self.__rooms__ \
+                        and room.type in self.__rooms__[room.building] \
+                        and room.name in self.__rooms__[room.building][room.type]:
+                    db_room = self.__rooms__[room.building][room.type][room.name]
                 else:
-                    db_classroom = Classroom(name=classroom.name, building=classroom.building)
-                    self.session.add(db_classroom)
+                    db_room = Room(name=room.name, room_type=room.type, building=room.building)
+                    self.session.add(db_room)
                     self.session.commit()
-                return db_classroom
+                return db_room
             except Exception:
-                log.error("Failed to add the classroom\n%s" % traceback.format_exc())
+                log.error("Failed to add the room\n%s" % traceback.format_exc())
                 self.session.rollback()
             finally:
                 if self.__caching__:
-                    self.__load_classrooms__()
+                    self.__load_rooms__()
         else:
-            db_classroom = self.session.query(Classroom).filter_by(
-                name=classroom.name, building=classroom.building).first()
-            if db_classroom is None:
-                db_classroom = Classroom(name=classroom.name, building=classroom.building)
-                self.session.add(db_classroom)
+            db_room = self.session.query(Room).filter_by(
+                name=room.name, room_type=room.type, building=room.building).first()
+            if db_room is None:
+                db_room = Room(name=room.name, room_type=room.type, building=room.building)
+                self.session.add(db_room)
                 self.session.commit()
-            return db_classroom
+            return db_room
 
-    def add_building(self, building: BuildingCandidate):
+    def get_room(self, name: str, building: Building, room_type: RoomType = None) -> Room:
+        if self.__caching__:
+            if building in self.__rooms__ and name in self.__rooms__[building]:
+                db_room = self.__rooms__[building][room_type][name]
+                return db_room
+        else:
+            if room_type:
+                return self.session.query(Room).filter_by(name=name, room_type=room_type, building=building).first()
+            else:
+                matches = self.session.query(Room).filter_by(name=name, building=building)
+                if len(matches) == 1:
+                    return matches.first()
+                else:
+                    raise Exception("Unable to determine which room is the correct one")
+
+    def add_building(self, building: BuildingCandidate) -> Building:
         if self.__caching__:
             if building.name in self.__buildings__:
                 return self.__buildings__[building.name]
@@ -715,7 +740,7 @@ class Controller:
                 self.session.commit()
             return db_building
 
-    def get_building(self, building: str):
+    def get_building(self, building: str) -> Building:
         if self.__caching__:
             if building in self.__buildings__:
                 return self.__buildings__[building]
@@ -748,3 +773,5 @@ class Controller:
             return self.session.query(Student).filter(Student.name.ilike(query_string)).all()
         else:
             return self.session.query(Student).filter(Student.name.ilike(query_string), course=course).all()
+
+
