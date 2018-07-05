@@ -72,7 +72,7 @@ def crawl_rooms(session: WebSession, database: db.Controller, institution: Insti
         for building in buildings:
             for period in periods:
                 page = parse_clean_request(session.get(urls.BUILDING_SCHEDULE.format(
-                    institution=institution.internal_id,
+                    institution=institution.id,
                     building=building,
                     year=year,
                     period=period.part,
@@ -101,8 +101,8 @@ def crawl_classes(session: WebSession, database: db.Controller, department: Depa
     # for each year this department operated
     for year in range(department.first_year, department.last_year + 1):
         hierarchy = parse_clean_request(session.get(urls.DEPARTMENT_PERIODS.format(
-            institution=department.institution.internal_id,
-            department=department.internal_id,
+            institution=department.institution.id,
+            department=department.id,
             year=year)))
 
         period_links = hierarchy.find_all(href=period_exp)
@@ -128,8 +128,8 @@ def crawl_classes(session: WebSession, database: db.Controller, department: Depa
 
             period = database.get_period(part, parts)
             hierarchy = parse_clean_request(session.get(urls.DEPARTMENT_CLASSES.format(
-                institution=department.institution.internal_id,
-                department=department.internal_id,
+                institution=department.institution.id,
+                department=department.id,
                 year=year,
                 period=part,
                 period_type=period_type)))
@@ -143,9 +143,9 @@ def crawl_classes(session: WebSession, database: db.Controller, department: Depa
                 if class_id not in classes:
                     # Fetch abbreviation and number of ECTSs
                     hierarchy = parse_clean_request(session.get(urls.CLASS.format(
-                        institution=department.institution.internal_id,
+                        institution=department.institution.id,
                         year=year,
-                        department=department.internal_id,
+                        department=department.id,
                         period=part,
                         period_type=period_type,
                         class_id=class_id)))
@@ -181,7 +181,7 @@ def crawl_admissions(session: WebSession, database: db.Controller, institution: 
     for year in years:
         course_ids = set()  # Courses found in this year's page
         page = parse_clean_request(  # Fetch the page
-            session.get(urls.ADMISSIONS.format(institution=institution.internal_id, year=year)))
+            session.get(urls.ADMISSIONS.format(institution=institution.id, year=year)))
         course_links = page.find_all(href=urls.COURSE_EXP)
         for course_link in course_links:  # For every found course
             course_id = int(urls.COURSE_EXP.findall(course_link.attrs['href'])[0])
@@ -191,7 +191,7 @@ def crawl_admissions(session: WebSession, database: db.Controller, institution: 
             course = database.get_course(id=course_id)  # TODO ensure that doesn't end up as None
             for phase in range(1, 4):  # For every of the three phases
                 page = parse_clean_request(session.get(urls.ADMITTED.format(
-                    institution=institution.internal_id,
+                    institution=institution.id,
                     year=year,
                     course=course_id,
                     phase=phase)))
@@ -213,8 +213,8 @@ def crawl_class_enrollments(session: WebSession, database: db.Controller, class_
     institution = class_instance.parent.department.institution
 
     page = parse_clean_request(session.get(urls.CLASS_ENROLLED.format(
-        institution=institution.internal_id,
-        department=class_instance.parent.department.internal_id,
+        institution=institution.id,
+        department=class_instance.parent.department.id,
         year=class_instance.year,
         period=class_instance.period.part,
         period_type=class_instance.period.letter,
@@ -254,10 +254,10 @@ def crawl_class_turns(session: WebSession, database: db.Controller, class_instan
 
     # --- Prepare the list of turns to crawl ---
     page = parse_clean_request(session.get(urls.CLASS_TURNS.format(
-        institution=institution.internal_id,
+        institution=institution.id,
         year=class_instance.year,
-        department=class_instance.parent.department.internal_id,
-        class_id=class_instance.parent.internal_id,
+        department=class_instance.parent.department.id,
+        class_id=class_instance.parent.id,
         period=class_instance.period.part,
         period_type=class_instance.period.letter)))
 

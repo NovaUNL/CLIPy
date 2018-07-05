@@ -7,7 +7,8 @@ from threading import Lock
 from .. import parser
 from .. import database as db
 from ..session import Session
-from ..crawler import PageCrawler, crawl_class_turns, crawl_class_enrollments, crawl_classes, crawl_admissions
+from ..crawler import PageCrawler, crawl_class_turns, crawl_class_enrollments, crawl_classes, crawl_admissions, \
+    crawl_rooms
 from ..database.candidates import InstitutionCandidate, DepartmentCandidate, CourseCandidate, BuildingCandidate
 from ..utils import parse_clean_request
 from .. import urls
@@ -76,13 +77,13 @@ def populate_departments(session: Session, database: db.Controller):
         for year in range(institution.first_year, institution.last_year + 1):
             log.info("Crawling departments of institution {}. Year:{}".format(institution, year))
             hierarchy = parse_clean_request(session.get(urls.DEPARTMENTS.format(
-                institution=institution.internal_id, year=year)))
+                institution=institution.id, year=year)))
             for department_id, name in parser.get_departments(hierarchy):
                 if department_id in found:  # update creation year
                     department = found[department_id]
                     if department.institution != institution:
                         raise Exception("Department {}({}) found in different institutions ({} and {})".format(
-                            department.name, department_id, institution.internal_id, department.institution))
+                            department.name, department_id, institution.id, department.institution))
                     department.add_year(year)
                 else:  # insert new
                     department = DepartmentCandidate(department_id, name, institution, year, year)
@@ -107,7 +108,7 @@ def populate_buildings(session: Session, database: db.Controller):
             for period in database.get_period_set():
                 log.info(f"Crawling buildings of institution {institution}. Year:{year}. Period: {period}")
                 page = parse_clean_request(session.get(urls.BUILDINGS.format(
-                    institution=institution.internal_id, year=year, period=period.part, period_type=period.letter)))
+                    institution=institution.id, year=year, period=period.part, period_type=period.letter)))
                 page_buildings = parser.get_buildings(page)
                 for identifier, name in page_buildings:
                     candidate = BuildingCandidate(identifier=identifier, name=name)
@@ -127,7 +128,7 @@ def populate_rooms(session: Session, db_registry: db.SessionRegistry):
     Finds new rooms and adds them to the database.
 
     :param session: Web session
-    :param database: Database controller
+    :param db_registry: Database controller
     """
 
     database = db.Controller(db_registry)
@@ -145,7 +146,7 @@ def populate_rooms(session: Session, db_registry: db.SessionRegistry):
     threads = []
     for thread in range(0, THREADS):
         threads.append(PageCrawler("Thread-" + str(thread),
-                                   session, db_registry, institution_queue, institution_queue_lock, crawl_admissions))
+                                   session, db_registry, institution_queue, institution_queue_lock, crawl_rooms))
         threads[thread].start()
 
     while True:
@@ -204,11 +205,11 @@ def populate_courses(session: Session, database: db.Controller):
         courses = {}  # identifier -> Candidate pairs
 
         # Obtain couse id-name pairs from the course list page
-        page = parse_clean_request(session.get(urls.COURSES.format(institution=institution.internal_id)))
+        page = parse_clean_request(session.get(urls.COURSES.format(institution=institution.id)))
         for identifier, name in parser.get_course_names(page):
             # Fetch the course curricular plan to find the activity years
             page = parse_clean_request(session.get(
-                urls.CURRICULAR_PLANS.format(institution=institution.internal_id, course=identifier)))
+                urls.CURRICULAR_PLANS.format(institution=institution.id, course=identifier)))
             first, last = parser.get_course_activity_years(page)
             candidate = CourseCandidate(identifier, name, institution, first_year=first, last_year=last)
             courses[identifier] = candidate
@@ -216,7 +217,7 @@ def populate_courses(session: Session, database: db.Controller):
         # fetch course abbreviation from the statistics page
         for degree in database.get_degree_set():
             page = parse_clean_request(session.get(urls.STATISTICS.format(
-                institution=institution.internal_id, degree=degree.internal_id)))
+                institution=institution.id, degree=degree.internal_id)))
             for identifier, abbreviation in parser.get_course_abbreviations(page):
                 if identifier in courses:
                     courses[identifier].abbreviation = abbreviation
@@ -368,6 +369,7 @@ def bootstrap_database(session: Session, db_registry: db.SessionRegistry):
     populate_institutions(session, main_thread_db_controller)  # 10 seconds
     populate_departments(session, main_thread_db_controller)  # 1-2 minutes
     populate_buildings(session, main_thread_db_controller)  # ~ 4 minutes (10 seconds if gets capped to last year)
+    populate_rooms(session, db_registry)
     populate_classes(session, db_registry)  # ~15 minutes
     populate_courses(session, main_thread_db_controller)  # ~5 minutes
     populate_nac_admissions(session, db_registry)  # ~30 minutes

@@ -90,7 +90,7 @@ class Controller:
         log.debug("Building institution cache")
         institutions = {}
         for institution in self.session.query(Institution).all():
-            institutions[institution.internal_id] = institution
+            institutions[institution.id] = institution
         self.__institutions__ = institutions
 
     def __load_degrees__(self):
@@ -116,7 +116,7 @@ class Controller:
         log.debug("Building department cache")
         departments = {}
         for department in self.session.query(Department).all():
-            departments[department.internal_id] = department
+            departments[department.id] = department
         self.__departments__ = departments
 
     def __load_courses__(self):
@@ -196,21 +196,21 @@ class Controller:
              TurnType(id=5, name="Tutorial Orientation", abbreviation="ot")])
         self.session.commit()
 
-    def get_institution(self, internal_id: int):
+    def get_institution(self, identifier: int):
         if self.__caching__:
-            if internal_id not in self.__institutions__:
+            if identifier not in self.__institutions__:
                 return None
-            return self.__institutions__[internal_id]
+            return self.__institutions__[identifier]
         else:
-            return self.session.query(Institution).filter_by(internal_id=internal_id).first()
+            return self.session.query(Institution).filter_by(id=identifier).first()
 
-    def get_department(self, internal_id: int):
+    def get_department(self, identifier: int):
         if self.__caching__:
-            if internal_id not in self.__departments__:
+            if identifier not in self.__departments__:
                 return None
-            return self.__departments__[internal_id]
+            return self.__departments__[identifier]
         else:
-            return self.session.query(Department).filter_by(internal_id=internal_id).first()
+            return self.session.query(Department).filter_by(id=identifier).first()
 
     def get_degree(self, abbreviation: str):
         if self.__caching__:
@@ -218,7 +218,7 @@ class Controller:
                 return None
             return self.__degrees__[abbreviation]
         else:
-            return self.session.query(Degree).filter_by(internal_id=abbreviation).first()
+            return self.session.query(Degree).filter_by(id=abbreviation).first()
 
     def get_period(self, part: int, parts: int):
         if self.__caching__:
@@ -330,11 +330,11 @@ class Controller:
                     if candidate.id in self.__institutions__:
                         institution = self.__institutions__[candidate.id]
                 else:
-                    institution = self.session.query(Institution).filter_by(internal_id=candidate.id).first()
+                    institution = self.session.query(Institution).filter_by(id=candidate.id).first()
 
                 if institution is None:  # Create a new institution
                     self.session.add(Institution(
-                        internal_id=candidate.id,
+                        id=candidate.id,
                         name=candidate.name,
                         abbreviation=candidate.abbreviation,
                         first_year=candidate.first_year,
@@ -391,11 +391,11 @@ class Controller:
                     if candidate.id in self.__departments__:
                         department = self.__departments__[candidate.id]
                 else:
-                    department = self.session.query(Department).filter_by(internal_id=candidate.id).first()
+                    department = self.session.query(Department).filter_by(id=candidate.id).first()
 
                 if department is None:  # Create a new department
                     self.session.add(Department(
-                        internal_id=candidate.id,
+                        id=candidate.id,
                         name=candidate.name,
                         first_year=candidate.first_year,
                         last_year=candidate.last_year,
