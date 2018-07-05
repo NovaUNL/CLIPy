@@ -3,6 +3,7 @@ import os
 import traceback
 from typing import List
 
+import sqlalchemy
 import sqlalchemy as sa
 from sqlalchemy import create_engine, desc, asc
 from sqlalchemy.engine import Engine
@@ -21,7 +22,7 @@ def create_db_engine(backend: str, username=None, password=None, schema='CLIPy',
                      host='localhost', file=os.path.dirname(__file__) + '/CLIPy.db'):
     if backend == 'sqlite':
         log.debug(f"Establishing a database connection to file:'{file}'")
-        return create_engine("sqlite:///%s" % file, echo=True)
+        return create_engine("sqlite:///%s" % file)  # , echo=True)
     elif backend == 'postgresql' and username is not None and password is not None and schema is not None:
         log.debug("Establishing a database connection to file:'{}'".format(file))
         return create_engine(f"postgresql://{username}:{password}@{host}/{schema}")
@@ -47,7 +48,7 @@ class SessionRegistry:
 class Controller:
     def __init__(self, database_registry: SessionRegistry, cache: bool = False):
         self.registry = database_registry
-        self.session = database_registry.get_session()
+        self.session: sqlalchemy.orm.Session = database_registry.get_session()
 
         self.__caching__ = cache
 
@@ -314,33 +315,60 @@ class Controller:
         return self.session.query(Class).filter_by(internal_id=internal_id).first()
 
     def add_institutions(self, institutions: [InstitutionCandidate]):
+        """
+        Adds institutions to the database. It updates then in case they already exist but details differ.
+
+        :param institutions: An iterable collection of institution candidates
+        """
+        new_count = 0
+        updated_count = 0
         try:
-            for institution in institutions:
-                if institution.id in self.__institutions__:
-                    stored_institution = self.__institutions__[institution.id]
-                    if institution.name is not None:
-                        stored_institution.name = institution.name
-                    if institution.abbreviation is not None:
-                        stored_institution.abbreviation = institution.abbreviation
-
-                    if stored_institution.first_year is None:
-                        stored_institution.first_year = institution.first_year
-                    elif institution.first_year is not None and institution.first_year < stored_institution.first_year:
-                        stored_institution.first_year = institution.first_year
-
-                    if stored_institution.last_year is None:
-                        stored_institution.last_year = institution.last_year
-                    elif institution.last_year is not None and institution.last_year < stored_institution.last_year:
-                        stored_institution.last_year = institution.last_year
+            for candidate in institutions:
+                # Lookup for existing institutions matching the new candidate
+                institution = None
+                if self.__caching__:
+                    if candidate.id in self.__institutions__:
+                        institution = self.__institutions__[candidate.id]
                 else:
+                    institution = self.session.query(Institution).filter_by(internal_id=candidate.id).first()
+
+                if institution is None:  # Create a new institution
                     self.session.add(Institution(
-                        internal_id=institution.id,
-                        name=institution.name,
-                        abbreviation=institution.abbreviation,
-                        first_year=institution.first_year,
-                        last_year=institution.last_year))
+                        internal_id=candidate.id,
+                        name=candidate.name,
+                        abbreviation=candidate.abbreviation,
+                        first_year=candidate.first_year,
+                        last_year=candidate.last_year))
+                    new_count += 1
+                else:  # Update the existing one accordingly
+                    updated = False
+                    if candidate.name is not None and institution.name != candidate.name:
+                        institution.name = candidate.name
+                        updated = True
+
+                    if candidate.abbreviation is not None:
+                        institution.abbreviation = candidate.abbreviation
+                        updated = True
+
+                    if institution.first_year is None:
+                        institution.first_year = candidate.first_year
+                        updated = True
+                    elif candidate.first_year is not None and candidate.first_year < institution.first_year:
+                        institution.first_year = candidate.first_year
+                        updated = True
+
+                    if institution.last_year is None:
+                        institution.last_year = candidate.last_year
+                        updated = True
+                    elif candidate.last_year is not None and candidate.last_year > institution.last_year:
+                        institution.last_year = candidate.last_year
+                        updated = True
+
+                    if updated:
+                        updated_count += 1
+
             self.session.commit()
-            log.info("{} institutions added successfully!".format(len(institutions)))
+            log.info(f"{new_count} institutions added and {updated_count} updated!")
             if self.__caching__:
                 self.__load_institutions__()
         except Exception:
@@ -348,30 +376,55 @@ class Controller:
             self.session.rollback()
 
     def add_departments(self, departments: [DepartmentCandidate]):
+        """
+        Adds departments to the database. It updates then in case they already exist but details differ.
+
+        :param departments: An iterable collection of department candidates
+        """
+        new_count = 0
+        updated_count = 0
         try:
-            for department in departments:
-                if department.id in self.__departments__:
-                    stored_department = self.__departments__[department.id]
-                    if department.name is not None:
-                        stored_department.name = department.name
-
-                    if stored_department.first_year is None:
-                        stored_department.first_year = department.first_year
-                    elif department.first_year is not None and department.first_year < stored_department.first_year:
-                        stored_department.first_year = department.first_year
-
-                    if stored_department.last_year is None:
-                        stored_department.last_year = department.last_year
-                    elif department.last_year is not None and department.last_year < stored_department.last_year:
-                        stored_department.last_year = department.last_year
+            for candidate in departments:
+                # Lookup for existing departments matching the new candidate
+                department = None
+                if self.__caching__:
+                    if candidate.id in self.__departments__:
+                        department = self.__departments__[candidate.id]
                 else:
+                    department = self.session.query(Department).filter_by(internal_id=candidate.id).first()
+
+                if department is None:  # Create a new department
                     self.session.add(Department(
-                        internal_id=department.id,
-                        name=department.name,
-                        first_year=department.first_year,
-                        last_year=department.last_year,
-                        institution=department.institution))
-            log.info("{} departments added successfully!".format(len(departments)))
+                        internal_id=candidate.id,
+                        name=candidate.name,
+                        first_year=candidate.first_year,
+                        last_year=candidate.last_year,
+                        institution=candidate.institution))
+                    new_count += 1
+                else:  # Update the existing one accordingly
+                    updated = False
+                    if candidate.name is not None and department.name != candidate.name:
+                        department.name = candidate.name
+                        updated = True
+
+                    if department.first_year is None:
+                        department.first_year = candidate.first_year
+                        updated = True
+                    elif candidate.first_year is not None and candidate.first_year < department.first_year:
+                        department.first_year = candidate.first_year
+                        updated = True
+
+                    if department.last_year is None:
+                        department.last_year = candidate.last_year
+                        updated = True
+                    elif candidate.last_year is not None and candidate.last_year > department.last_year:
+                        department.last_year = candidate.last_year
+                        updated = True
+
+                    if updated:
+                        updated_count += 1
+
+            log.info(f"{new_count} departments added and {updated_count} updated!")
             self.session.commit()
             if self.__caching__:
                 self.__load_departments__()
@@ -773,5 +826,3 @@ class Controller:
             return self.session.query(Student).filter(Student.name.ilike(query_string)).all()
         else:
             return self.session.query(Student).filter(Student.name.ilike(query_string), course=course).all()
-
-

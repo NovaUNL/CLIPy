@@ -137,7 +137,6 @@ class Room(Base):
     __tablename__ = TABLE_PREFIX + 'rooms'
     id = Column(Integer, Sequence(TABLE_PREFIX + 'room_id_seq'), primary_key=True)
     name = Column(String(70), nullable=False)
-    # room_type = Column(sqlalchemy.types.Enum(RoomType))
     room_type = Column(IntEnum(RoomType))
     building_id = Column(Integer, ForeignKey(Building.id), nullable=False)
     building = relationship(Building, back_populates="rooms")
