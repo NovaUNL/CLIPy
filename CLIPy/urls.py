@@ -71,7 +71,7 @@ ADMITTED = ROOT + \
 #: Statistics for courses of a given degree. Can be used to extract course abbreviations and degrees.
 STATISTICS = ROOT + \
              "/utente/institui%E7%E3o_sede/unidade_organica/ensino/estat%EDstica/alunos/evolu%E7%E3o?" \
-             "institui%E7%E3o={institution}&n%EDvel_acad%E9mico={grade}"
+             "institui%E7%E3o={institution}&n%EDvel_acad%E9mico={degree}"
 
 #: A teacher's schedule for a given period. It can be used to confirm teachers turns.
 TEACHER_SCHEDULE = ROOT + \

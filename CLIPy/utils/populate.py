@@ -119,7 +119,7 @@ def populate_buildings(session: Session, database: db.Controller):
                         buildings[identifier] = candidate
 
     for building in buildings.values():
-        log.debug("Adding building {} to the database.")
+        log.debug(f"Adding building {building} to the database.")
         database.add_building(building)
 
 
@@ -369,7 +369,7 @@ def bootstrap_database(session: Session, db_registry: db.SessionRegistry):
     populate_institutions(session, main_thread_db_controller)  # 10 seconds
     populate_departments(session, main_thread_db_controller)  # 1-2 minutes
     populate_buildings(session, main_thread_db_controller)  # ~ 4 minutes (10 seconds if gets capped to last year)
-    populate_rooms(session, db_registry)
+    populate_rooms(session, db_registry)  # ~15 minutes
     populate_classes(session, db_registry)  # ~15 minutes
     populate_courses(session, main_thread_db_controller)  # ~5 minutes
     populate_nac_admissions(session, db_registry)  # ~30 minutes

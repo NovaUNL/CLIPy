@@ -47,8 +47,10 @@ class PageCrawler(Thread):
                     except Exception:
                         db_session.rollback()
                         exception_count += 1
-                        log.error("Failed to complete the job for the work unit with the ID {}."
-                                  "Error: \n{}\nRetrying in 5 seconds...".format(work_unit.id, traceback.format_exc()))
+                        log.error(f"Failed to complete the job for the work unit with the ID {work_unit.id}."
+                                  "Error: \n"
+                                  "{traceback.format_exc()}\n"
+                                  "Retrying in {5 + max(exception_count, 55)} seconds...")
 
                     if exception_count > 10:
                         raise Exception("Thread {} failed for more than 10 times.")
@@ -196,8 +198,8 @@ def crawl_admissions(session: WebSession, database: db.Controller, institution: 
                     year=year,
                     course=course_id,
                     phase=phase)))
-                admissions = parser.get_admissions(page)
-                for name, option, student_iid, state in admissions:
+                candidates = parser.get_admissions(page)
+                for name, option, student_iid, state in candidates:
                     student = None
                     if student_iid:  # if the student has an id add him/her to the database
                         student = database.add_student(StudentCandidate(student_iid, name, course, institution))
