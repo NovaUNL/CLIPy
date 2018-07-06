@@ -163,6 +163,9 @@ class RoomType(Enum):
     #: A room reserved for students completing their master's
     masters = 7
 
+    def __str__(self):
+        return str(self.name)
+
 
 class Room(Base):
     __tablename__ = TABLE_PREFIX + 'rooms'

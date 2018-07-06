@@ -65,27 +65,28 @@ def crawl_rooms(session: WebSession, database: db.Controller, institution: Insti
     institution = database.session.merge(institution)
     rooms = {}  # id -> Candidate
     buildings = database.get_building_set()
-    periods = database.get_period_set()
 
-    # for each year this department operated
-    for year in range(institution.first_year, institution.last_year + 1):
+    # for each year this institution operated (knowing that the first building was recorded in 2001)
+    for year in range(max(2001, institution.first_year), institution.last_year + 1):
         for building in buildings:
-            for period in periods:
-                page = parse_clean_request(session.get(urls.BUILDING_SCHEDULE.format(
-                    institution=institution.id,
-                    building=building,
-                    year=year,
-                    period=period.part,
-                    period_type=period.letter)))
-                rooms = parser.get_places(page)
-                for identifier, room_type, name in rooms:
-                    candidate = RoomCandidate(identifier=identifier, room_type=room_type, name=name, building=building)
-                    if identifier in rooms:
-                        if rooms[identifier] != candidate:
-                            raise Exception("Found two different rooms going by the same ID")
-                    else:
-                        rooms[identifier] = candidate
-    for room in rooms:
+            page = parse_clean_request(session.get(urls.BUILDING_SCHEDULE.format(
+                institution=institution.id,
+                building=building.id,
+                year=year,
+                period=1,
+                period_type='s',
+                weekday=2)))  # 2 is monday
+            candidates = parser.get_places(page)
+            if len(candidates) > 0:
+                log.info(f'Found the following rooms in {building}, {year}:\n{candidates}')
+            for identifier, room_type, name in candidates:
+                candidate = RoomCandidate(identifier=identifier, room_type=room_type, name=name, building=building)
+                if identifier in rooms:
+                    if rooms[identifier] != candidate:
+                        raise Exception("Found two different rooms going by the same ID")
+                else:
+                    rooms[identifier] = candidate
+    for room in rooms.values():
         database.add_room(room)
 
 

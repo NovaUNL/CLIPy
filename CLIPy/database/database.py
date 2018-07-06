@@ -22,7 +22,7 @@ def create_db_engine(backend: str, username=None, password=None, schema='CLIPy',
                      host='localhost', file=os.path.dirname(__file__) + '/CLIPy.db'):
     if backend == 'sqlite':
         log.debug(f"Establishing a database connection to file:'{file}'")
-        return create_engine("sqlite:///%s" % file)  # , echo=True)
+        return create_engine(f"sqlite:///{file}?check_same_thread=False")  # , echo=True)
     elif backend == 'postgresql' and username is not None and password is not None and schema is not None:
         log.debug("Establishing a database connection to file:'{}'".format(file))
         return create_engine(f"postgresql://{username}:{password}@{host}/{schema}")
@@ -729,37 +729,46 @@ class Controller:
             added, updated, len(enrollments) - added - updated))
 
     def add_room(self, room: RoomCandidate) -> Room:
-        if self.__caching__:
-            try:
+        changed = False
+        try:
+            if self.__caching__:
                 if room.building in self.__rooms__ \
                         and room.type in self.__rooms__[room.building] \
                         and room.name in self.__rooms__[room.building][room.type]:
                     db_room = self.__rooms__[room.building][room.type][room.name]
                 else:
-                    db_room = Room(name=room.name, room_type=room.type, building=room.building)
+                    db_room = Room(id=room.id, name=room.name, room_type=room.type, building=room.building)
                     self.session.add(db_room)
                     self.session.commit()
+                    changed = True
                 return db_room
-            except Exception:
-                log.error("Failed to add the room\n%s" % traceback.format_exc())
-                self.session.rollback()
-            finally:
-                if self.__caching__:
-                    self.__load_rooms__()
-        else:
-            db_room = self.session.query(Room).filter_by(
-                name=room.name, room_type=room.type, building=room.building).first()
-            if db_room is None:
-                db_room = Room(name=room.name, room_type=room.type, building=room.building)
-                self.session.add(db_room)
-                self.session.commit()
-            return db_room
+            else:
+                db_room = self.session.query(Room).filter_by(
+                    name=room.name, room_type=room.type, building=room.building).first()
+                if db_room is None:
+                    db_room = Room(id=room.id, name=room.name, room_type=room.type, building=room.building)
+                    self.session.add(db_room)
+                    self.session.commit()
+                    changed = True
+                return db_room
+        except Exception:
+            log.error("Failed to add the room\n%s" % traceback.format_exc())
+            self.session.rollback()
+        finally:
+            if self.__caching__ and changed:
+                self.__load_rooms__()
 
     def get_room(self, name: str, building: Building, room_type: RoomType = None) -> Room:
         if self.__caching__:
             if building in self.__rooms__ and name in self.__rooms__[building]:
-                db_room = self.__rooms__[building][room_type][name]
-                return db_room
+                matches = []
+                for type in self.__rooms__[building]:
+                    if name in type:
+                        matches.append(type[name])
+                if len(matches) == 1:
+                    return matches[0]
+                if len(matches) > 1:
+                    raise Exception("Unable to determine which room is the correct one")
         else:
             if room_type:
                 return self.session.query(Room).filter_by(name=name, room_type=room_type, building=building).first()

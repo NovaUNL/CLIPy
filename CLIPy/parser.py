@@ -414,7 +414,13 @@ def get_places(page):
     :return: List of room ``(identifier, type, name)`` tuples
     """
     places = []
-    row = page.find(href=urls.PLACE_EXP).parent.parent
+    row = page.find(href=urls.PLACE_EXP)
+    if row:
+        row = row.parent.parent
+    else:
+        return places
+        # TODO raise Exception
+
     for link in row.find_all(href=urls.PLACE_EXP):
         identifier = int(urls.PLACE_EXP.findall(link.attrs['href'])[0])
         name = link.text.strip()
@@ -423,9 +429,9 @@ def get_places(page):
 
 
 #: The generic long room string looks something like `Laboratório de Ensino Ed xyz: Lab 123` most of the times
-LONG_ROOM_EXP = re.compile('(?P<room_type>Sala|Laboratório de Ensino|Anfiteatro)'
+LONG_ROOM_EXP = re.compile('(?P<room_type>Sala|Laboratório de Ensino|Anfiteatro|Hangar|Edifício|Auditório)'
                            '( de (?P<room_subtype>Aula|Reunião|Mestrado|Computadores|Multimédia|Multiusos))?'
-                           '( Ed (?P<building>[\w ]+):)? (Lab[.]? |Laboratório )?(?P<room_name>[\w .-]*)')
+                           '( Ed (?P<building>[\w ]+):)? (Lab[. ]? |Laboratório |H.|Ed: )?(?P<room_name>[\w .-]*)')
 
 
 def parse_place_str(place) -> (RoomType, str):
@@ -436,6 +442,8 @@ def parse_place_str(place) -> (RoomType, str):
     :return: ``room type , name``
     """
     match = LONG_ROOM_EXP.search(place)
+    if match is None:
+        return RoomType.generic, place
     room_name = match.group('room_name')
     room_type = match.group('room_type')
     subtype = match.group('room_subtype')
