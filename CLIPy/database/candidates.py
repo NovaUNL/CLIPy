@@ -106,8 +106,12 @@ class StudentCandidate:
 
 
 class TeacherCandidate:
-    def __init__(self, name):
+    def __init__(self, identifier: int, name: str):
+        self.id = identifier
         self.name = name
+
+    def __str__(self):
+        return f'{self.name} ({self.id})'
 
 
 class AdmissionCandidate:

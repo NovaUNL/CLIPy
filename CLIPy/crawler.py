@@ -47,14 +47,13 @@ class PageCrawler(Thread):
                     except Exception:
                         db_session.rollback()
                         exception_count += 1
-                        log.error(f"Failed to complete the job for the work unit with the ID {work_unit.id}."
-                                  "Error: \n"
-                                  "{traceback.format_exc()}\n"
-                                  "Retrying in {5 + max(exception_count, 55)} seconds...")
+                        log.error(f'Failed to complete the job for the work unit with the ID {work_unit.id}.'
+                                  f'Error: \n{traceback.format_exc()}\n'
+                                  f'Retrying in {5 + min(exception_count, 55)} seconds...')
 
                     if exception_count > 10:
                         raise Exception("Thread {} failed for more than 10 times.")
-                    sleep(5 + max(exception_count, 55))
+                    sleep(5 + min(exception_count, 55))
             else:
                 self.queue_lock.release()
                 break
@@ -90,6 +89,37 @@ def crawl_rooms(session: WebSession, database: db.Controller, institution: Insti
                     rooms[identifier] = candidate
     for room in rooms.values():
         database.add_room(room)
+
+
+def crawl_teachers(session: WebSession, database: db.Controller, department: Department):
+    department = database.session.merge(department)
+    teachers = {}  # id -> Candidate
+    periods = database.get_period_set()
+
+    # for each year this institution operated (knowing that the first building was recorded in 2001)
+    for year in range(department.first_year, department.last_year + 1):
+        for period in periods:
+            page = parse_clean_request(session.get(urls.DEPARTMENT_TEACHERS.format(
+                institution=department.institution.id,
+                department=department.id,
+                year=year,
+                period=period.part,
+                period_type=period.letter)))
+            candidates = parser.get_teachers(page)
+            for identifier, name in candidates:
+                # If there's a single teacher for a given period, a page with his/her schedule is served instead.
+                # In those pages only the first match is the teacher, the second and so on aren't relevant.
+                if name == 'Ficheiro':
+                    break
+
+                if identifier in teachers:
+                    if teachers[identifier].name != name:
+                        raise Exception(f'Found two teachers with the same id ({identifier}).\n'
+                                        f'\tT1:"{teachers[identifier].name}"\n\tT2:{name}')
+                else:
+                    teachers[identifier] = TeacherCandidate(identifier=identifier, name=name)
+    for candidate in teachers.values():
+        database.add_teacher(candidate)
 
 
 def crawl_classes(session: WebSession, database: db.Controller, department: Department):
@@ -260,7 +290,7 @@ def crawl_class_turns(session: WebSession, database: db.Controller, class_instan
         institution=institution.id,
         year=class_instance.year,
         department=class_instance.parent.department.id,
-        class_id=class_instance.parent.id,
+        class_id=class_instance.parent.internal_id,
         period=class_instance.period.part,
         period_type=class_instance.period.letter)))
 
@@ -301,16 +331,26 @@ def crawl_class_turns(session: WebSession, database: db.Controller, class_instan
     # --- Crawl found turns ---
     for page, turn_type, turn_number in turn_pages:  # for every turn in this class instance
         # Create turn
-        instances, routes, teachers, restrictions, minutes, state, enrolled, capacity = parser.get_turn_info(page)
+        instances, routes, teachers_names, restrictions, minutes, state, enrolled, capacity = parser.get_turn_info(page)
         routes_str = None  # TODO get rid of this pseudo-array after the curricular plans are done.
         for route in routes:
             if routes_str is None:
                 routes_str = route
             else:
                 routes_str += (';' + route)
+
+        turn_type = database.get_turn_type(turn_type)
+        teachers = []
+        for name in teachers_names:
+            teacher = database.get_teacher(name)
+            if teacher is None:
+                log.warning(f'Unknown teacher {name}')
+            else:
+                teachers.append(database.get_teacher(name))
         turn = database.add_turn(
-            TurnCandidate(class_instance, turn_number, turn_type, enrolled, capacity, minutes=minutes,
-                          routes=routes_str, restrictions=restrictions, state=state, teachers=teachers))
+            TurnCandidate(class_instance=class_instance, number=turn_number, turn_type=turn_type,
+                          enrolled=enrolled, capacity=capacity, minutes=minutes, routes=routes_str,
+                          restrictions=restrictions, state=state, teachers=teachers))
 
         # Create instances of this turn
         instances_aux = instances

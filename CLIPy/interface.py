@@ -47,7 +47,7 @@ class Clip:
         period = self.cache.controller.get_period(period_part, period_parts)
         if period is None:
             raise ValueError("Invalid period")
-        populate.populate_class_instances(Session(username, password), self.cache.registry, year=year, period=period)
+        populate.populate_class_enrollments(Session(username, password), self.cache.registry, year=year, period=period)
 
     def reload_turns(self, username, password, year, period_part, period_parts):
         period = self.cache.controller.get_period(period_part, period_parts)

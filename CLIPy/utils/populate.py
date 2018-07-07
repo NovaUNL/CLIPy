@@ -8,7 +8,7 @@ from .. import parser
 from .. import database as db
 from ..session import Session
 from ..crawler import PageCrawler, crawl_class_turns, crawl_class_enrollments, crawl_classes, crawl_admissions, \
-    crawl_rooms
+    crawl_rooms, crawl_teachers
 from ..database.candidates import InstitutionCandidate, DepartmentCandidate, CourseCandidate, BuildingCandidate
 from ..utils import parse_clean_request
 from .. import urls
@@ -130,7 +130,6 @@ def populate_rooms(session: Session, db_registry: db.SessionRegistry):
     :param session: Web session
     :param db_registry: Database controller
     """
-
     database = db.Controller(db_registry)
     # TODO since the vast, VAST majority of clip students are from only one institution, change the implementation
     # to have threads crawling each year instead of each institution.
@@ -163,6 +162,37 @@ def populate_rooms(session: Session, db_registry: db.SessionRegistry):
         thread.join()
 
 
+def populate_teachers(session: Session, db_registry: db.SessionRegistry):
+    """
+    Finds new teachers and adds them to the database
+    :param session: Web session
+    :param db_registry: Database session registry
+    """
+    database = db.Controller(db_registry)
+    department_queue = Queue()
+    [department_queue.put(department) for department in database.get_department_set()]
+    department_queue_lock = Lock()
+
+    threads = []
+    for thread in range(0, THREADS):
+        threads.append(PageCrawler("Thread-" + str(thread),
+                                   session, db_registry, department_queue, department_queue_lock, crawl_teachers))
+        threads[thread].start()
+
+    while True:
+        department_queue_lock.acquire()
+        if department_queue.empty():
+            department_queue_lock.release()
+            break
+        else:
+            log.info("Approximately {} departments remaining".format(department_queue.qsize()))
+            department_queue_lock.release()
+            sleep(5)
+
+    for thread in threads:
+        thread.join()
+
+
 def populate_classes(session: Session, db_registry: db.SessionRegistry):
     """
     Finds new classes and adds them to the database
@@ -172,22 +202,22 @@ def populate_classes(session: Session, db_registry: db.SessionRegistry):
     database = db.Controller(db_registry)
     department_queue = Queue()
     [department_queue.put(department) for department in database.get_department_set()]
-    department_lock = Lock()
+    department_queue_lock = Lock()
 
     threads = []
     for thread in range(0, THREADS):
         threads.append(PageCrawler("Thread-" + str(thread),
-                                   session, db_registry, department_queue, department_lock, crawl_classes))
+                                   session, db_registry, department_queue, department_queue_lock, crawl_classes))
         threads[thread].start()
 
     while True:
-        department_lock.acquire()
+        department_queue_lock.acquire()
         if department_queue.empty():
-            department_lock.release()
+            department_queue_lock.release()
             break
         else:
             log.info("{} departments remaining!".format(department_queue.qsize()))
-            department_lock.release()
+            department_queue_lock.release()
             sleep(5)
 
     for thread in threads:
@@ -272,7 +302,7 @@ def populate_nac_admissions(session: Session, db_registry: db.SessionRegistry):
         thread.join()
 
 
-def populate_class_instances(session: Session, db_registry: db.SessionRegistry, year=None, period=None):
+def populate_class_enrollments(session: Session, db_registry: db.SessionRegistry, year=None, period=None):
     """
     Finds student enrollments to class instances.
     TODO Make it lookup the every class instance static-ish data.
@@ -370,8 +400,9 @@ def bootstrap_database(session: Session, db_registry: db.SessionRegistry):
     populate_departments(session, main_thread_db_controller)  # 1-2 minutes
     populate_buildings(session, main_thread_db_controller)  # ~ 4 minutes (10 seconds if gets capped to last year)
     populate_rooms(session, db_registry)  # ~15 minutes
+    populate_teachers(session, db_registry)  # ~ 15 minutes
     populate_classes(session, db_registry)  # ~15 minutes
     populate_courses(session, main_thread_db_controller)  # ~5 minutes
     populate_nac_admissions(session, db_registry)  # ~30 minutes
-    populate_class_instances(session, db_registry)  # ~4 hours
-    populate_class_instances_turns(session, db_registry)  # ~16 Hours
+    populate_class_enrollments(session, db_registry, year=2018)  # ~4 hours
+    populate_class_instances_turns(session, db_registry, year=2018)  # ~16 Hours

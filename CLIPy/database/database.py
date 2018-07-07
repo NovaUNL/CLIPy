@@ -297,19 +297,21 @@ class Controller:
 
     def get_turn_type(self, abbreviation: str):
         if self.__caching__:
-            if abbreviation not in self.__turn_types__:
-                return None
-            return self.__turn_types__[abbreviation]
+            if abbreviation in self.__turn_types__:
+                return self.__turn_types__[abbreviation]
         else:
             return self.session.query(TurnType).filter_by(abbreviation=abbreviation).first()
 
     def get_teacher(self, name: str):
         if self.__caching__:
-            if name not in self.__teachers__:
-                return None
-            return self.__teachers__[name]
+            if name in self.__teachers__:
+                return self.__teachers__[name]
         else:
-            return self.session.query(Teacher).filter_by(name=name).first()
+            matches = self.session.query(Teacher).filter_by(name=name).all()
+            if len(matches) == 1:
+                return matches[0]
+            if len(matches) > 1:
+                raise Exception(f'Several teachers with the name {name}')
 
     def get_class(self, internal_id: int):
         return self.session.query(Class).filter_by(internal_id=internal_id).first()
@@ -569,24 +571,16 @@ class Controller:
         return db_student
 
     def add_teacher(self, teacher: TeacherCandidate) -> Teacher:
-        if self.__caching__:
-            if teacher in self.__teachers__:
-                teacher = self.__teachers__[teacher.name]
-            else:
-                teacher = Teacher(name=teacher.name)
-                self.session.add(teacher)
-                self.session.commit()
-                if self.__caching__:
-                    self.__load_teachers__()
-            return teacher
-        else:
-            db_teacher = self.session.query(Teacher).filter_by(name=teacher.name).first()
+        db_teacher = self.session.query(Teacher).filter_by(id=teacher.id, name=teacher.name).first()
 
-            if db_teacher is None:
-                db_teacher = Teacher(name=teacher.name)
-                self.session.add(db_teacher)
-                self.session.commit()
-            return db_teacher
+        if db_teacher is None:
+            db_teacher = Teacher(id=teacher.id, name=teacher.name)
+            self.session.add(db_teacher)
+            self.session.commit()
+            if self.__caching__:
+                self.__load_teachers__()
+
+        return db_teacher
 
     def add_turn(self, turn: TurnCandidate) -> Turn:
         db_turn: Turn = self.session.query(Turn).filter_by(
@@ -625,7 +619,7 @@ class Controller:
             if changed:
                 self.session.commit()
 
-        [db_turn.teachers.append(self.add_teacher(teacher)) for teacher in turn.teachers]
+        [db_turn.teachers.append(teacher) for teacher in turn.teachers]
         return db_turn
 
     # Reconstructs the instances of a turn.
