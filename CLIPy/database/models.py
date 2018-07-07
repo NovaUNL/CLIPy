@@ -3,12 +3,54 @@ from enum import Enum
 
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
-from sqlalchemy import Sequence, DateTime, ForeignKey, CHAR, SMALLINT, Table, Column, Integer, String, UniqueConstraint
+from sqlalchemy import Sequence, DateTime, ForeignKey, CHAR, SMALLINT, Table, Column, Integer, String, UniqueConstraint, \
+    Text, Boolean, Date, SmallInteger
 
 from .types import IntEnum
 
 TABLE_PREFIX = 'clip_'
 Base = declarative_base()
+
+
+# Static information
+
+class RoomType(Enum):
+    #: A room without a specific purpose
+    generic = 1
+    #: A classroom with chairs tables n' a good ol' blackboard.
+    classroom = 2
+    #: Some big room which sits a lot of folks.
+    auditorium = 3
+    #: The rooms in which the practical wombo-mambo happens.
+    laboratory = 4
+    #: A classroom with computers
+    computer = 5
+    #: A room meant for meetings ???
+    meeting_room = 6
+    #: A room reserved for students completing their master's
+    masters = 7
+
+    def __str__(self):
+        return str(self.name)
+
+
+class FileType(Enum):
+    #: A room without a specific purpose
+    image = 1
+    #: AKA "acetatos"
+    slides = 2
+    protocols = 3
+    seminar = 4
+    exams = 5
+    tests = 6
+    support = 7
+    others = 8
+
+
+class EvaluationType(Enum):
+    test = 1
+    exam = 2
+    project = 3
 
 
 class Degree(Base):
@@ -51,6 +93,8 @@ class TurnType(Base):
     def __str__(self):
         return self.name
 
+
+# Dynamic information
 
 class TemporalEntity:
     first_year = Column(Integer)
@@ -118,6 +162,11 @@ class Department(Base, TemporalEntity):
 
 Institution.departments = relationship(Department, order_by=Institution.id, back_populates="institution")
 
+curricular_plan_classes = Table(TABLE_PREFIX + 'curricular_plan_classes', Base.metadata,
+                                Column('curricular_plan_id', ForeignKey(TABLE_PREFIX + 'curricular_plans.id'),
+                                       primary_key=True),
+                                Column('class_id', ForeignKey(TABLE_PREFIX + 'classes.id'), primary_key=True))
+
 
 class Class(Base):
     __tablename__ = TABLE_PREFIX + 'classes'
@@ -137,6 +186,7 @@ class Class(Base):
 
     # Relations and constraints
     department = relationship(Department, back_populates="classes")
+    curricular_plans = relationship('CurricularPlan', secondary=curricular_plan_classes, back_populates='classes')
     __table_args__ = (UniqueConstraint('internal_id', 'department_id', name='un_' + TABLE_PREFIX + 'class_dept'),)
 
     def __str__(self):
@@ -145,26 +195,6 @@ class Class(Base):
 
 Department.classes = relationship(
     "Class", order_by=Class.name, back_populates="department")
-
-
-class RoomType(Enum):
-    #: A room without a specific purpose
-    generic = 1
-    #: A classroom with chairs tables n' a good ol' blackboard.
-    classroom = 2
-    #: Some big room which sits a lot of folks.
-    auditorium = 3
-    #: The rooms in which the practical wombo-mambo happens.
-    laboratory = 4
-    #: A classroom with computers
-    computer = 5
-    #: A room meant for meetings ???
-    meeting_room = 6
-    #: A room reserved for students completing their master's
-    masters = 7
-
-    def __str__(self):
-        return str(self.name)
 
 
 class Room(Base):
@@ -188,8 +218,33 @@ class Room(Base):
 
 Building.rooms = relationship(Room, order_by=Room.name, back_populates="building")
 
+class_instance_files = Table(TABLE_PREFIX + 'class_instance_files', Base.metadata,
+                             Column('class_instance_id', ForeignKey(TABLE_PREFIX + 'class_instances.id'),
+                                    primary_key=True),
+                             Column('file_id', ForeignKey(TABLE_PREFIX + 'files.id'), primary_key=True))
+
+
+class File(Base):
+    __tablename__ = TABLE_PREFIX + 'files'
+    #: CLIP assigned identifier
+    id = Column(Integer, primary_key=True)
+    #: File name (some places don't tell the file name)
+    name = Column(String(256), nullable=True)
+    #: Time at which the file was uploaded
+    upload_datetime = Column(DateTime)
+    #: Uploader TODO check if this can be anyone beside teachers and adapt the field
+    uploader = Column(String(100))
+    #: What this file represents or the category it got dumped into
+    file_type = Column(IntEnum(FileType))
+    class_instances = relationship('ClassInstance', secondary=class_instance_files, back_populates='files')
+
 
 class ClassInstance(Base):
+    """
+    | A ClassInstance is the existence of a :py:class:`Class` with a temporal period associated with it.
+    | There's a lot of redundancy between different ClassInstances of the same :py:class:`Class`, but sometimes the
+        associated information and related teachers change wildly.
+    """
     __tablename__ = TABLE_PREFIX + 'class_instances'
     #: Crawler generated identifier
     id = Column(Integer, Sequence(TABLE_PREFIX + 'class_instance_id_seq'), primary_key=True)
@@ -199,18 +254,62 @@ class ClassInstance(Base):
     period_id = Column(Integer, ForeignKey(Period.id), nullable=False)
     #: Year on which this instance happened
     year = Column(Integer)
+    #: Description of what happens in this class
+    description = Column(Text, nullable=True)
+    #: Planned student competence acquisition
+    objectives = Column(Text, nullable=True)
+    #: Requirements to participate in this class
+    requirements = Column(Text, nullable=True)
+    #: Class planned student competence acquisition
+    competences = Column(Text, nullable=True)
+    #: Planned teachings
+    program = Column(Text, nullable=True)
+    #: Teaching sources / bibliography
+    bibliography = Column(Text, nullable=True)
+    #: Verbose schedules for individual teacher assistance
+    assistance = Column(Text, nullable=True)
+    #: Teaching methods verbosely explained
+    teaching_methods = Column(Text, nullable=True)
+    #: Evaluation methods verbosely explained
+    evaluation_methods = Column(Text, nullable=True)
+    #: Additional information such as start date and moodle pages
+    extra_info = Column(Text, nullable=True)
+    #: JSON encoded representation of the class working hours type of work
+    working_hours = Column(Text, nullable=True)
 
     # Relations and constraints
     parent = relationship(Class, back_populates="instances")
     period = relationship(Period, back_populates="class_instances")
+    files = relationship(File, secondary=class_instance_files, back_populates='class_instances')
     __table_args__ = (UniqueConstraint('class_id', 'year', 'period_id', name='un_' + TABLE_PREFIX + 'class_instance'),)
 
     def __str__(self):
         return "{} on period {} of {}".format(self.parent, self.period, self.year)
 
 
-Class.instances = relationship("ClassInstance", order_by=ClassInstance.year, back_populates="parent")
-Period.class_instances = relationship("ClassInstance", order_by=ClassInstance.year, back_populates="period")
+Class.instances = relationship(ClassInstance, order_by=ClassInstance.year, back_populates="parent")
+Period.class_instances = relationship(ClassInstance, order_by=ClassInstance.year, back_populates="period")
+
+
+class ClassEvaluations(Base):
+    __tablename__ = TABLE_PREFIX + 'class_evaluations'
+    #: Crawler generated identifier
+    id = Column(Integer, Sequence(TABLE_PREFIX + 'class_instance_id_seq'), primary_key=True)
+    #: Class instance
+    class_instance_id = Column(Integer, ForeignKey(ClassInstance.id), nullable=False)
+    #: Occasion on which this evaluation will happen/happened
+    datetime = Column(DateTime)
+    #: Type of evaluation (test, exam, work...)
+    evaluation_type = Column(IntEnum(EvaluationType))
+
+    # Relations and constraints
+    class_instance = relationship(ClassInstance, back_populates="evaluations")
+    __table_args__ = (UniqueConstraint(
+        'class_instance_id', 'datetime', 'evaluation_type', name='un_' + TABLE_PREFIX + 'class_evaluation'),)
+
+
+ClassInstance.evaluations = relationship(ClassEvaluations,
+                                         order_by=ClassEvaluations.datetime, back_populates="class_instance")
 
 
 class Course(Base, TemporalEntity):
@@ -245,13 +344,11 @@ Institution.courses = relationship("Course", order_by=Course.internal_id, back_p
 
 turn_students = Table(TABLE_PREFIX + 'turn_students', Base.metadata,
                       Column('turn_id', ForeignKey(TABLE_PREFIX + 'turns.id'), primary_key=True),
-                      Column('student_id', ForeignKey(TABLE_PREFIX + 'students.id'), primary_key=True)
-                      )
+                      Column('student_id', ForeignKey(TABLE_PREFIX + 'students.id'), primary_key=True))
 
 turn_teachers = Table(TABLE_PREFIX + 'turn_teachers', Base.metadata,
                       Column('turn_id', ForeignKey(TABLE_PREFIX + 'turns.id'), primary_key=True),
-                      Column('teacher_id', ForeignKey(TABLE_PREFIX + 'teachers.id'), primary_key=True)
-                      )
+                      Column('teacher_id', ForeignKey(TABLE_PREFIX + 'teachers.id'), primary_key=True))
 
 
 class Teacher(Base):
@@ -262,9 +359,12 @@ class Teacher(Base):
     internal_id = Column(Integer, nullable=True, unique=True)
     #: Full name
     name = Column(String)
+    #: The grade the student obtained at his/her graduation (0-200)
+    graduation_grade = Column(Integer, nullable=True, default=None)
 
     # Relation
     turns = relationship('Turn', secondary=turn_teachers, back_populates='teachers')
+    class_messages = relationship('ClassMessages')
 
     def __str__(self):
         return self.name
@@ -289,6 +389,8 @@ class Student(Base):
     course_id = Column(Integer, ForeignKey(Course.id))
     #: (kinda redudant) student institution
     institution_id = Column(Integer, ForeignKey(Institution.id), nullable=False)
+    #: Student sexual gender (0 - boy, 1 - grill)
+    gender = Column(Boolean, nullable=True, default=True)
 
     # Relations and constraints
     course = relationship(Course, back_populates="students")
@@ -301,8 +403,26 @@ class Student(Base):
         return "{} ({}, {})".format(self.name, self.internal_id, self.abbreviation)
 
 
-Course.students = relationship("Student", order_by=Student.internal_id, back_populates="course")
-Institution.students = relationship("Student", order_by=Student.internal_id, back_populates="institution")
+Course.students = relationship(Student, order_by=Student.internal_id, back_populates="course")
+Institution.students = relationship(Student, order_by=Student.internal_id, back_populates="institution")
+
+
+class ClassMessages(Base):
+    __tablename__ = TABLE_PREFIX + 'class_instance_messages'
+    id = Column(Integer, Sequence(TABLE_PREFIX + 'class_instance_message_id_seq'), primary_key=True)
+    class_instance_id = Column(Integer, ForeignKey(ClassInstance.id))
+    teacher_id = Column(Integer, ForeignKey(Teacher.id))
+    title = Column(String(200), nullable=False)
+    message = Column(Text, nullable=False)
+    datetime = Column(DateTime, nullable=False)
+
+    # Relations and constraints
+    teacher = relationship(Teacher, back_populates="class_messages")
+    class_instance = relationship(ClassInstance, back_populates="messages")
+
+
+ClassInstance.messages = relationship(ClassMessages,
+                                      order_by=ClassMessages.datetime, back_populates="class_instance")
 
 
 class Admission(Base):
@@ -366,6 +486,26 @@ class Enrollment(Base):
     statutes = Column(String(20))
     #: Additional information such as course specialization TODO remove
     observation = Column(String(30))
+    #: Whether the enrolled student obtained frequency to this class
+    attendance = Column(Boolean, nullable=True, default=None)
+    #: Date on which the frequency was published
+    attendance_date = Column(Date, nullable=True, default=None)
+    #: Whether the student managed to improve his grade. Null if there wasn't an attempt.
+    improved = Column(Boolean, nullable=True, default=None)
+    #: Grade the student obtained
+    improvement_grade = Column(SmallInteger, default=0)
+    #: Date on which the improvement was published
+    improvement_date = Column(Date, nullable=True, default=None)
+    #: Continuous grade that the student obtained
+    continuous_grade = Column(SmallInteger, default=0)
+    #: Date on which the continuous grade was published
+    continuous_grade_date = Column(Date, nullable=True, default=None)
+    #: Continuous grade that the student obtained
+    exam_grade = Column(SmallInteger, default=0)
+    #: Date on which the continuous grade was published
+    exam_grade_date = Column(Date, nullable=True, default=None)
+    #: Whether the final result was an approval
+    approved = Column(Boolean, nullable=True, default=None)
 
     # Relations and constraints
     student = relationship("Student", back_populates="enrollments")
@@ -459,3 +599,22 @@ class TurnInstance(Base):
 Turn.instances = relationship(TurnInstance, order_by=TurnInstance.weekday, back_populates='turn',
                               cascade="save-update, merge, delete")
 Room.turn_instances = relationship(TurnInstance, order_by=TurnInstance.weekday, back_populates='room')
+
+
+class CurricularPlan(Base):
+    __tablename__ = TABLE_PREFIX + 'curricular_plans'
+    #: CLIP assigned identifier
+    id = Column(Integer, primary_key=True)
+    #: Short title description
+    title = Column(String(50))
+    #: Course it belong to
+    course_id = Column(Integer, ForeignKey(Course.id))
+    #: Major revision number for this plan
+    major = Column(Integer)
+    #: Year this plan was applied
+    year = Column(Integer)
+
+    # Relations
+    course = relationship(Course)
+    classes = relationship(Class, secondary=curricular_plan_classes, back_populates='curricular_plans')
+    # TODO constraints when this is well understood

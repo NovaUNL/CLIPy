@@ -404,5 +404,5 @@ def bootstrap_database(session: Session, db_registry: db.SessionRegistry):
     populate_classes(session, db_registry)  # ~15 minutes
     populate_courses(session, main_thread_db_controller)  # ~5 minutes
     populate_nac_admissions(session, db_registry)  # ~30 minutes
-    populate_class_enrollments(session, db_registry, year=2018)  # ~4 hours
-    populate_class_instances_turns(session, db_registry, year=2018)  # ~16 Hours
+    populate_class_enrollments(session, db_registry)  # ~4 hours
+    populate_class_instances_turns(session, db_registry)  # ~16 Hours
