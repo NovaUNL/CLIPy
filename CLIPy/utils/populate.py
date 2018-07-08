@@ -7,7 +7,7 @@ from threading import Lock
 from .. import parser
 from .. import database as db
 from ..session import Session
-from ..crawler import PageCrawler, crawl_class_turns, crawl_class_enrollments, crawl_classes, crawl_admissions, \
+from ..crawler import PageCrawler, crawl_class_turns, crawl_class_info, crawl_classes, crawl_admissions, \
     crawl_rooms, crawl_teachers
 from ..database.candidates import InstitutionCandidate, DepartmentCandidate, CourseCandidate, BuildingCandidate
 from ..utils import parse_clean_request
@@ -302,10 +302,9 @@ def populate_nac_admissions(session: Session, db_registry: db.SessionRegistry):
         thread.join()
 
 
-def populate_class_enrollments(session: Session, db_registry: db.SessionRegistry, year=None, period=None):
+def populate_class_info(session: Session, db_registry: db.SessionRegistry, year=None, period=None):
     """
     Finds student enrollments to class instances.
-    TODO Make it lookup the every class instance static-ish data.
 
     :param session: Web session
     :param db_registry: Database session registry
@@ -327,7 +326,7 @@ def populate_class_enrollments(session: Session, db_registry: db.SessionRegistry
     threads = []
     for thread in range(0, THREADS):
         threads.append(PageCrawler("Thread-" + str(thread), session, db_registry,
-                                   class_instance_queue, class_instances_lock, crawl_class_enrollments))
+                                   class_instance_queue, class_instances_lock, crawl_class_info))
         threads[thread].start()
 
     while True:
@@ -342,7 +341,6 @@ def populate_class_enrollments(session: Session, db_registry: db.SessionRegistry
 
     for thread in threads:
         thread.join()
-
 
 def populate_class_instances_turns(session: Session, db_registry: db.SessionRegistry, year=None, period=None):
     """
@@ -404,5 +402,5 @@ def bootstrap_database(session: Session, db_registry: db.SessionRegistry):
     populate_classes(session, db_registry)  # ~15 minutes
     populate_courses(session, main_thread_db_controller)  # ~5 minutes
     populate_nac_admissions(session, db_registry)  # ~30 minutes
-    populate_class_enrollments(session, db_registry)  # ~4 hours
+    populate_class_info(session, db_registry)  # ~? hours
     populate_class_instances_turns(session, db_registry)  # ~16 Hours

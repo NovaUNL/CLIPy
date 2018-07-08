@@ -1,3 +1,4 @@
+import json
 import logging
 import os
 import traceback
@@ -470,6 +471,32 @@ class Controller:
                 self.session.commit()
         if len(instances) > 0:
             log.info("{} class instances added successfully! ({} ignored)".format(len(instances), ignored))
+
+    def update_class_instance_info(self, instance: ClassInstance, info):
+        if 'description' in info:
+            instance.description = info['description']
+        if 'objectives' in info:
+            instance.objectives = info['objectives']
+        if 'requirements' in info:
+            instance.requirements = info['requirements']
+        if 'competences' in info:
+            instance.competences = info['competences']
+        if 'program' in info:
+            instance.program = info['program']
+        if 'bibliography' in info:
+            instance.bibliography = info['bibliography']
+        if 'assistance' in info:
+            instance.assistance = info['assistance']
+        if 'teaching_methods' in info:
+            instance.teaching_methods = info['teaching_methods']
+        if 'evaluation_methods' in info:
+            instance.evaluation_methods = info['evaluation_methods']
+        if 'extra_info' in info:
+            instance.extra_info = info['extra_info']
+        if 'working_hours' in info:
+            instance.working_hours = json.dumps(info['working_hours'])
+
+        self.session.commit()
 
     def add_courses(self, courses: [CourseCandidate]):
         updated = 0
