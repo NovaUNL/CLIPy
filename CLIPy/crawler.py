@@ -7,10 +7,6 @@ from time import sleep
 import re
 
 from . import parser
-from .database.candidates import StudentCandidate, TurnCandidate, TurnInstanceCandidate, RoomCandidate, \
-    BuildingCandidate, EnrollmentCandidate, AdmissionCandidate, ClassCandidate, ClassInstanceCandidate, TeacherCandidate
-from .database.database import SessionRegistry
-from .database.models import Department, Institution, ClassInstance
 from . import database as db
 from .session import Session as WebSession
 from . import urls
@@ -20,7 +16,7 @@ log = logging.getLogger(__name__)
 
 
 class PageCrawler(Thread):
-    def __init__(self, name, clip_session: WebSession, db_registry: SessionRegistry, work_queue: Queue,
+    def __init__(self, name, clip_session: WebSession, db_registry: db.SessionRegistry, work_queue: Queue,
                  queue_lock: Lock, crawl_function):
         Thread.__init__(self)
         self.name = name
@@ -62,7 +58,7 @@ class PageCrawler(Thread):
         self.db_registry.remove()
 
 
-def crawl_rooms(session: WebSession, database: db.Controller, institution: Institution):
+def crawl_rooms(session: WebSession, database: db.Controller, institution: db.models.Institution):
     institution = database.session.merge(institution)
     rooms = {}  # id -> Candidate
     buildings = database.get_building_set()
@@ -81,7 +77,7 @@ def crawl_rooms(session: WebSession, database: db.Controller, institution: Insti
             if len(candidates) > 0:
                 log.info(f'Found the following rooms in {building}, {year}:\n{candidates}')
             for identifier, room_type, name in candidates:
-                candidate = RoomCandidate(identifier=identifier, room_type=room_type, name=name, building=building)
+                candidate = db.candidates.Room(identifier=identifier, room_type=room_type, name=name, building=building)
                 if identifier in rooms:
                     if rooms[identifier] != candidate:
                         raise Exception("Found two different rooms going by the same ID")
@@ -91,7 +87,7 @@ def crawl_rooms(session: WebSession, database: db.Controller, institution: Insti
         database.add_room(room)
 
 
-def crawl_teachers(session: WebSession, database: db.Controller, department: Department):
+def crawl_teachers(session: WebSession, database: db.Controller, department: db.models.Department):
     department = database.session.merge(department)
     teachers = {}  # id -> Candidate
     periods = database.get_period_set()
@@ -117,12 +113,12 @@ def crawl_teachers(session: WebSession, database: db.Controller, department: Dep
                         raise Exception(f'Found two teachers with the same id ({identifier}).\n'
                                         f'\tT1:"{teachers[identifier].name}"\n\tT2:{name}')
                 else:
-                    teachers[identifier] = TeacherCandidate(identifier=identifier, name=name)
+                    teachers[identifier] = db.candidates.Teacher(identifier=identifier, name=name)
     for candidate in teachers.values():
         database.add_teacher(candidate)
 
 
-def crawl_classes(session: WebSession, database: db.Controller, department: Department):
+def crawl_classes(session: WebSession, database: db.Controller, department: db.models.Department):
     department = database.session.merge(department)
     classes = {}
     class_instances = []
@@ -199,15 +195,16 @@ def crawl_classes(session: WebSession, database: db.Controller, department: Depa
                     except:
                         log.warning(f'Class {class_name}({class_id}) has no ECTS information')
 
-                    classes[class_id] = database.add_class(ClassCandidate(class_id, class_name, department, abbr, ects))
+                    classes[class_id] = database.add_class(
+                        db.candidates.Class(class_id, class_name, department, abbr, ects))
 
                 if classes[class_id] is None:
                     raise Exception("Null class")
-                class_instances.append(ClassInstanceCandidate(classes[class_id], period, year))
+                class_instances.append(db.candidates.ClassInstance(classes[class_id], period, year))
     database.add_class_instances(class_instances)
 
 
-def crawl_admissions(session: WebSession, database: db.Controller, institution: Institution):
+def crawl_admissions(session: WebSession, database: db.Controller, institution: db.models.Institution):
     institution = database.session.merge(institution)
     admissions = []
     years = range(institution.first_year, institution.last_year + 1)
@@ -221,7 +218,7 @@ def crawl_admissions(session: WebSession, database: db.Controller, institution: 
             course_ids.add(course_id)
 
         for course_id in course_ids:
-            course = database.get_course(id=course_id)  # TODO ensure that doesn't end up as None
+            course = database.get_course(identifier=course_id)  # TODO ensure that doesn't end up as None
             for phase in range(1, 4):  # For every of the three phases
                 page = parse_clean_request(session.get(urls.ADMITTED.format(
                     institution=institution.id,
@@ -232,15 +229,15 @@ def crawl_admissions(session: WebSession, database: db.Controller, institution: 
                 for name, option, student_iid, state in candidates:
                     student = None
                     if student_iid:  # if the student has an id add him/her to the database
-                        student = database.add_student(StudentCandidate(student_iid, name, course, institution))
+                        student = database.add_student(db.candidates.Student(student_iid, name, course, institution))
 
                     name = name if student is None else None
-                    admission = AdmissionCandidate(student, name, course, phase, year, option, state)
+                    admission = db.candidates.Admission(student, name, course, phase, year, option, state)
                     admissions.append(admission)
     database.add_admissions(admissions)
 
 
-def crawl_class_info(session: WebSession, database: db.Controller, class_instance: ClassInstance):
+def crawl_class_info(session: WebSession, database: db.Controller, class_instance: db.models.ClassInstance):
     log.info("Crawling class instance ID %s" % class_instance.id)
     class_instance = database.session.merge(class_instance)
     institution = class_instance.parent.department.institution
@@ -265,10 +262,10 @@ def crawl_class_info(session: WebSession, database: db.Controller, class_instanc
         # TODO consider sub-courses EG: MIEA/[Something]
         observation = course_abbr if course is not None else (course_abbr + "(Unknown)")
         # update student info and take id
-        student = database.add_student(StudentCandidate(
+        student = database.add_student(db.candidates.Student(
             student_id, name, abbreviation=abbreviation, course=course, institution=institution))
 
-        enrollment = EnrollmentCandidate(student, class_instance, attempt, student_year, statutes, observation)
+        enrollment = db.candidates.Enrollment(student, class_instance, attempt, student_year, statutes, observation)
         enrollments.append(enrollment)
 
     database.add_enrollments(enrollments)
@@ -357,7 +354,7 @@ def crawl_class_info(session: WebSession, database: db.Controller, class_instanc
     database.update_class_instance_info(class_instance, class_info)
 
 
-def crawl_class_turns(session: WebSession, database: db.Controller, class_instance: ClassInstance):
+def crawl_class_turns(session: WebSession, database: db.Controller, class_instance: db.models.ClassInstance):
     """
     Updates information on turns belonging to a given class instance.
     :param session: Browsing session
@@ -431,9 +428,17 @@ def crawl_class_turns(session: WebSession, database: db.Controller, class_instan
             else:
                 teachers.append(database.get_teacher(name))
         turn = database.add_turn(
-            TurnCandidate(class_instance=class_instance, number=turn_number, turn_type=turn_type,
-                          enrolled=enrolled, capacity=capacity, minutes=minutes, routes=routes_str,
-                          restrictions=restrictions, state=state, teachers=teachers))
+            db.candidates.Turn(
+                class_instance=class_instance,
+                number=turn_number,
+                turn_type=turn_type,
+                enrolled=enrolled,
+                capacity=capacity,
+                minutes=minutes,
+                routes=routes_str,
+                restrictions=restrictions,
+                state=state,
+                teachers=teachers))
 
         # Create instances of this turn
         instances_aux = instances
@@ -443,7 +448,7 @@ def crawl_class_turns(session: WebSession, database: db.Controller, class_instan
                 building = database.get_building(building)
                 if room:
                     room = database.get_room(room, building)
-            instances.append(TurnInstanceCandidate(turn, start, end, weekday, room=room))
+            instances.append(db.candidates.TurnInstance(turn, start, end, weekday, room=room))
         del instances_aux
         database.add_turn_instances(instances)
 
@@ -452,6 +457,6 @@ def crawl_class_turns(session: WebSession, database: db.Controller, class_instan
         for name, student_id, abbreviation, course_abbreviation in parser.get_turn_students(page):
             course = database.get_course(abbreviation=course_abbreviation, year=class_instance.year)
             student = database.add_student(
-                StudentCandidate(student_id, name, course, institution, abbreviation=abbreviation))
+                db.candidates.Student(student_id, name, course, institution, abbreviation=abbreviation))
             students.append(student)
         database.add_turn_students(turn, students)

@@ -10,3 +10,5 @@ Storage management layer
 """
 
 from .database import Controller, SessionRegistry, create_db_engine as create_engine
+from . import models
+from . import candidates

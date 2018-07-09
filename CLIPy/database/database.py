@@ -4,17 +4,10 @@ import os
 import traceback
 from typing import List
 
-import sqlalchemy
 import sqlalchemy as sa
-from sqlalchemy import create_engine, desc, asc
-from sqlalchemy.engine import Engine
-from sqlalchemy.orm import sessionmaker, scoped_session
+import sqlalchemy.orm as orm
 
-from .models import Base, Degree, Period, TurnType, Institution, Department, Course, Teacher, Building, \
-    Room, Class, ClassInstance, Student, Turn, TurnInstance, Admission, Enrollment, RoomType
-from .candidates import RoomCandidate, BuildingCandidate, TurnCandidate, StudentCandidate, \
-    ClassCandidate, InstitutionCandidate, ClassInstanceCandidate, DepartmentCandidate, AdmissionCandidate, \
-    EnrollmentCandidate, CourseCandidate, TeacherCandidate, TurnInstanceCandidate
+from . import models, candidates
 
 log = logging.getLogger(__name__)
 
@@ -23,20 +16,20 @@ def create_db_engine(backend: str, username=None, password=None, schema='CLIPy',
                      host='localhost', file=os.path.dirname(__file__) + '/CLIPy.db'):
     if backend == 'sqlite':
         log.debug(f"Establishing a database connection to file:'{file}'")
-        return create_engine(f"sqlite:///{file}?check_same_thread=False")  # , echo=True)
+        return sa.create_engine(f"sqlite:///{file}?check_same_thread=False")  # , echo=True)
     elif backend == 'postgresql' and username is not None and password is not None and schema is not None:
         log.debug("Establishing a database connection to file:'{}'".format(file))
-        return create_engine(f"postgresql://{username}:{password}@{host}/{schema}")
+        return sa.create_engine(f"postgresql://{username}:{password}@{host}/{schema}")
     else:
         raise ValueError('Unsupported database backend or not enough arguments supplied')
 
 
 class SessionRegistry:
-    def __init__(self, engine: Engine):
+    def __init__(self, engine: sa.engine.Engine):
         self.engine = engine
-        self.factory = sessionmaker(bind=engine)
-        self.scoped_session = scoped_session(self.factory)
-        Base.metadata.create_all(engine)
+        self.factory = orm.sessionmaker(bind=engine)
+        self.scoped_session = orm.scoped_session(self.factory)
+        models.Base.metadata.create_all(engine)
 
     def get_session(self):
         return self.scoped_session()
@@ -49,17 +42,17 @@ class SessionRegistry:
 class Controller:
     def __init__(self, database_registry: SessionRegistry, cache: bool = False):
         self.registry = database_registry
-        self.session: sqlalchemy.orm.Session = database_registry.get_session()
+        self.session: orm.Session = database_registry.get_session()
 
         self.__caching__ = cache
 
-        if self.session.query(Degree).count() == 0:
+        if self.session.query(models.Degree).count() == 0:
             self.__insert_default_degrees__()
 
-        if self.session.query(Period).count() == 0:
+        if self.session.query(models.Period).count() == 0:
             self.__insert_default_periods__()
 
-        if self.session.query(TurnType).count() == 0:
+        if self.session.query(models.TurnType).count() == 0:
             self.__insert_default_turn_types__()
 
         self.__weekdays__ = {'segunda': 0,
@@ -90,14 +83,14 @@ class Controller:
     def __load_institutions__(self):
         log.debug("Building institution cache")
         institutions = {}
-        for institution in self.session.query(Institution).all():
+        for institution in self.session.query(models.Institution).all():
             institutions[institution.id] = institution
         self.__institutions__ = institutions
 
     def __load_degrees__(self):
         log.debug("Building degree cache")
         degrees = {}
-        for degree in self.session.query(Degree).all():
+        for degree in self.session.query(models.Degree).all():
             if degree.id == 4:  # FIXME, skipping the Integrated Master to avoid having it replace the Master
                 continue
             degrees[degree.internal_id] = degree
@@ -107,7 +100,7 @@ class Controller:
         log.debug("Building period cache")
         periods = {}
 
-        for period in self.session.query(Period).all():
+        for period in self.session.query(models.Period).all():
             if period.parts not in periods:  # unseen letter
                 periods[period.parts] = {}
             periods[period.parts][period.part] = period
@@ -116,7 +109,7 @@ class Controller:
     def __load_departments__(self):
         log.debug("Building department cache")
         departments = {}
-        for department in self.session.query(Department).all():
+        for department in self.session.query(models.Department).all():
             departments[department.id] = department
         self.__departments__ = departments
 
@@ -124,7 +117,7 @@ class Controller:
         log.debug("Building course cache")
         courses = {}
         course_abbreviations = {}
-        for course in self.session.query(Course).all():
+        for course in self.session.query(models.Course).all():
             courses[course.internal_id] = course
 
             if course.abbreviation not in course_abbreviations:
@@ -136,28 +129,28 @@ class Controller:
     def __load_turn_types__(self):
         log.debug("Building turn types cache")
         turn_types = {}
-        for turn_type in self.session.query(TurnType).all():
+        for turn_type in self.session.query(models.TurnType).all():
             turn_types[turn_type.abbreviation] = turn_type
         self.__turn_types__ = turn_types
 
     def __load_teachers__(self):
         log.debug("Building teacher cache")
         teachers = {}
-        for teacher in self.session.query(Teacher).all():
+        for teacher in self.session.query(models.Teacher).all():
             teachers[teacher.name] = teacher
         self.__teachers__ = teachers
 
     def __load_buildings__(self):
         log.debug("Building building cache")
         buildings = {}
-        for building in self.session.query(Building).all():
+        for building in self.session.query(models.Building).all():
             buildings[building.name] = building
         self.__buildings__ = buildings
 
     def __load_rooms__(self):
         log.debug("Building room cache")
         rooms = {}
-        for room, building in self.session.query(Room, Building).all():
+        for room, building in self.session.query(models.Room, models.Building).all():
             if building.name not in rooms:
                 rooms[building.name] = {}
             if room.room_type not in rooms[building.name]:
@@ -166,35 +159,34 @@ class Controller:
         self.__rooms__ = rooms
 
     def __insert_default_periods__(self):
-        # TODO don't just leave this here hardcoded...
         self.session.add_all(
-            [Period(id=1, part=1, parts=1, letter='a'),
-             Period(id=2, part=1, parts=2, letter='s'),
-             Period(id=3, part=2, parts=2, letter='s'),
-             Period(id=4, part=1, parts=4, letter='t'),
-             Period(id=5, part=2, parts=4, letter='t'),
-             Period(id=6, part=3, parts=4, letter='t'),
-             Period(id=7, part=4, parts=4, letter='t')])
+            [models.Period(id=1, part=1, parts=1, letter='a'),
+             models.Period(id=2, part=1, parts=2, letter='s'),
+             models.Period(id=3, part=2, parts=2, letter='s'),
+             models.Period(id=4, part=1, parts=4, letter='t'),
+             models.Period(id=5, part=2, parts=4, letter='t'),
+             models.Period(id=6, part=3, parts=4, letter='t'),
+             models.Period(id=7, part=4, parts=4, letter='t')])
         self.session.commit()
 
     def __insert_default_degrees__(self):
         self.session.add_all(
-            [Degree(id=1, internal_id='L', name="Licenciatura"),
-             Degree(id=2, internal_id='M', name="Mestrado"),
-             Degree(id=3, internal_id='D', name="Doutoramento"),
-             Degree(id=4, internal_id='M', name="Mestrado Integrado"),  # FIXME, distinguish M from Mi
-             Degree(id=5, internal_id='Pg', name="Pos-Graduação"),
-             Degree(id=6, internal_id='EA', name="Estudos Avançados"),
-             Degree(id=7, internal_id='pG', name="Pré-Graduação")])
+            [models.Degree(id=1, internal_id='L', name="Licenciatura"),
+             models.Degree(id=2, internal_id='M', name="Mestrado"),
+             models.Degree(id=3, internal_id='D', name="Doutoramento"),
+             models.Degree(id=4, internal_id='M', name="Mestrado Integrado"),
+             models.Degree(id=5, internal_id='Pg', name="Pos-Graduação"),
+             models.Degree(id=6, internal_id='EA', name="Estudos Avançados"),
+             models.Degree(id=7, internal_id='pG', name="Pré-Graduação")])
         self.session.commit()
 
     def __insert_default_turn_types__(self):
         self.session.add_all(
-            [TurnType(id=1, name="Theoretical", abbreviation="t"),
-             TurnType(id=2, name="Practical", abbreviation="p"),
-             TurnType(id=3, name="Practical-Theoretical", abbreviation="tp"),
-             TurnType(id=4, name="Seminar", abbreviation="s"),
-             TurnType(id=5, name="Tutorial Orientation", abbreviation="ot")])
+            [models.TurnType(id=1, name="Theoretical", abbreviation="t"),
+             models.TurnType(id=2, name="Practical", abbreviation="p"),
+             models.TurnType(id=3, name="Practical-Theoretical", abbreviation="tp"),
+             models.TurnType(id=4, name="Seminar", abbreviation="s"),
+             models.TurnType(id=5, name="Tutorial Orientation", abbreviation="ot")])
         self.session.commit()
 
     def get_institution(self, identifier: int):
@@ -203,7 +195,7 @@ class Controller:
                 return None
             return self.__institutions__[identifier]
         else:
-            return self.session.query(Institution).filter_by(id=identifier).first()
+            return self.session.query(models.Institution).filter_by(id=identifier).first()
 
     def get_department(self, identifier: int):
         if self.__caching__:
@@ -211,7 +203,7 @@ class Controller:
                 return None
             return self.__departments__[identifier]
         else:
-            return self.session.query(Department).filter_by(id=identifier).first()
+            return self.session.query(models.Department).filter_by(id=identifier).first()
 
     def get_degree(self, abbreviation: str):
         if self.__caching__:
@@ -219,7 +211,7 @@ class Controller:
                 return None
             return self.__degrees__[abbreviation]
         else:
-            return self.session.query(Degree).filter_by(id=abbreviation).first()
+            return self.session.query(models.Degree).filter_by(id=abbreviation).first()
 
     def get_period(self, part: int, parts: int):
         if self.__caching__:
@@ -230,42 +222,42 @@ class Controller:
             except KeyError:
                 return None
         else:
-            return self.session.query(Period).filter_by(part=part, parts=parts).first()
+            return self.session.query(models.Period).filter_by(part=part, parts=parts).first()
 
     def get_institution_set(self):
         if self.__caching__:
             return set(self.__institutions__.values())
         else:
-            return set(self.session.query(Institution).all())
+            return set(self.session.query(models.Institution).all())
 
     def get_building_set(self):
         if self.__caching__:
             return set(self.__buildings__.values())
         else:
-            return set(self.session.query(Building).all())
+            return set(self.session.query(models.Building).all())
 
     def get_department_set(self):
         if self.__caching__:
             return set(self.__departments__.values())
         else:
-            return set(self.session.query(Department).all())
+            return set(self.session.query(models.Department).all())
 
     def get_degree_set(self):
         if self.__caching__:
             return set(self.__degrees__.values())
         else:
-            return set(self.session.query(Degree).all())
+            return set(self.session.query(models.Degree).all())
 
     def get_period_set(self):
-        return set(self.session.query(Period).all())
+        return set(self.session.query(models.Period).all())
 
-    def get_course(self, id=None, abbreviation=None, year=None):
-        if id is not None:
+    def get_course(self, identifier=None, abbreviation=None, year=None):
+        if identifier is not None:
             if self.__caching__:
-                if id in self.__courses__:
-                    return self.__courses__[id]
+                if identifier in self.__courses__:
+                    return self.__courses__[identifier]
             else:
-                return self.session.query(Course).filter_by(internal_id=id).first()
+                return self.session.query(models.Course).filter_by(internal_id=identifier).first()
         elif abbreviation is not None:
             if self.__caching__:
                 if abbreviation not in self.__course_abbrs__:
@@ -283,7 +275,7 @@ class Controller:
                         if match.initial_year <= year <= match.last_year:
                             return match
             else:
-                matches = self.session.query(Course).filter_by(internal_id=id).all()
+                matches = self.session.query(models.Course).filter_by(internal_id=identifier).all()
                 if len(matches) == 0:
                     return None
                 elif len(matches) == 1:
@@ -301,23 +293,23 @@ class Controller:
             if abbreviation in self.__turn_types__:
                 return self.__turn_types__[abbreviation]
         else:
-            return self.session.query(TurnType).filter_by(abbreviation=abbreviation).first()
+            return self.session.query(models.TurnType).filter_by(abbreviation=abbreviation).first()
 
     def get_teacher(self, name: str):
         if self.__caching__:
             if name in self.__teachers__:
                 return self.__teachers__[name]
         else:
-            matches = self.session.query(Teacher).filter_by(name=name).all()
+            matches = self.session.query(models.Teacher).filter_by(name=name).all()
             if len(matches) == 1:
                 return matches[0]
             if len(matches) > 1:
                 raise Exception(f'Several teachers with the name {name}')
 
     def get_class(self, internal_id: int):
-        return self.session.query(Class).filter_by(internal_id=internal_id).first()
+        return self.session.query(models.Class).filter_by(internal_id=internal_id).first()
 
-    def add_institutions(self, institutions: [InstitutionCandidate]):
+    def add_institutions(self, institutions: [candidates.Institution]):
         """
         Adds institutions to the database. It updates then in case they already exist but details differ.
 
@@ -333,10 +325,10 @@ class Controller:
                     if candidate.id in self.__institutions__:
                         institution = self.__institutions__[candidate.id]
                 else:
-                    institution = self.session.query(Institution).filter_by(id=candidate.id).first()
+                    institution = self.session.query(models.Institution).filter_by(id=candidate.id).first()
 
                 if institution is None:  # Create a new institution
-                    self.session.add(Institution(
+                    self.session.add(models.Institution(
                         id=candidate.id,
                         name=candidate.name,
                         abbreviation=candidate.abbreviation,
@@ -378,7 +370,7 @@ class Controller:
             log.error("Failed to add the institutions\n" + traceback.format_exc())
             self.session.rollback()
 
-    def add_departments(self, departments: [DepartmentCandidate]):
+    def add_departments(self, departments: [candidates.Department]):
         """
         Adds departments to the database. It updates then in case they already exist but details differ.
 
@@ -394,10 +386,10 @@ class Controller:
                     if candidate.id in self.__departments__:
                         department = self.__departments__[candidate.id]
                 else:
-                    department = self.session.query(Department).filter_by(id=candidate.id).first()
+                    department = self.session.query(models.Department).filter_by(id=candidate.id).first()
 
                 if department is None:  # Create a new department
-                    self.session.add(Department(
+                    self.session.add(models.Department(
                         id=candidate.id,
                         name=candidate.name,
                         first_year=candidate.first_year,
@@ -435,9 +427,11 @@ class Controller:
             log.error("Failed to add the departments\n" + traceback.format_exc())
             self.session.rollback()
 
-    def add_class(self, class_candidate: ClassCandidate):
-        db_class = self.session.query(Class). \
-            filter_by(internal_id=class_candidate.id, department=class_candidate.department).first()
+    def add_class(self, class_candidate: candidates.Class):
+        db_class = self.session.query(models.Class).filter_by(
+            internal_id=class_candidate.id,
+            department=class_candidate.department
+        ).first()
 
         if db_class is not None:  # Already stored
             if db_class.name != class_candidate.name:
@@ -448,22 +442,28 @@ class Controller:
                 return db_class
 
         log.info("Adding class {}".format(class_candidate))
-        db_class = Class(
-            internal_id=class_candidate.id, name=class_candidate.name, department=class_candidate.department,
-            abbreviation=class_candidate.abbreviation, ects=class_candidate.ects)
+        db_class = models.Class(
+            internal_id=class_candidate.id,
+            name=class_candidate.name,
+            department=class_candidate.department,
+            abbreviation=class_candidate.abbreviation,
+            ects=class_candidate.ects)
         self.session.add(db_class)
         self.session.commit()
         return db_class
 
-    def add_class_instances(self, instances: [ClassInstanceCandidate]):
+    def add_class_instances(self, instances: [candidates.ClassInstance]):
         ignored = 0
         for instance in instances:
-            db_class_instance = self.session.query(ClassInstance).filter_by(
-                parent=instance.parent, year=instance.year, period=instance.period).first()
+            db_class_instance = self.session.query(models.ClassInstance).filter_by(
+                parent=instance.parent,
+                year=instance.year,
+                period=instance.period
+            ).first()
             if db_class_instance is not None:
                 ignored += 1
             else:
-                self.session.add(ClassInstance(
+                self.session.add(models.ClassInstance(
                     parent=instance.parent,
                     year=instance.year,
                     period=instance.period
@@ -472,7 +472,7 @@ class Controller:
         if len(instances) > 0:
             log.info("{} class instances added successfully! ({} ignored)".format(len(instances), ignored))
 
-    def update_class_instance_info(self, instance: ClassInstance, info):
+    def update_class_instance_info(self, instance: models.ClassInstance, info):
         if 'description' in info:
             instance.description = info['description']
         if 'objectives' in info:
@@ -498,15 +498,17 @@ class Controller:
 
         self.session.commit()
 
-    def add_courses(self, courses: [CourseCandidate]):
+    def add_courses(self, courses: [candidates.Course]):
         updated = 0
         try:
             for course in courses:
-                db_course = self.session.query(Course).filter_by(
-                    internal_id=course.id, institution=course.institution).first()
+                db_course = self.session.query(models.Course).filter_by(
+                    internal_id=course.id,
+                    institution=course.institution
+                ).first()
 
                 if db_course is None:
-                    self.session.add(Course(
+                    self.session.add(models.Course(
                         internal_id=course.id,
                         name=course.name,
                         abbreviation=course.abbreviation,
@@ -547,7 +549,7 @@ class Controller:
             if self.__caching__:
                 self.__load_courses__()
 
-    def add_student(self, student: StudentCandidate):
+    def add_student(self, student: candidates.Student):
         if student.name is None or student.name == '':  # TODO Move this out of here
             raise Exception("Invalid name")
 
@@ -562,11 +564,15 @@ class Controller:
         else:
             raise Exception("Neither course nor institution provided")
 
-        db_students: List[Student] = self.session.query(Student).filter_by(internal_id=student.id).all()
+        db_students: List[models.Student] = self.session.query(models.Student).filter_by(internal_id=student.id).all()
 
         if len(db_students) == 0:  # new student, add him
-            db_student = Student(internal_id=student.id, name=student.name, abbreviation=student.abbreviation,
-                                 institution=institution, course=student.course)
+            db_student = models.Student(
+                internal_id=student.id,
+                name=student.name,
+                abbreviation=student.abbreviation,
+                institution=institution,
+                course=student.course)
             self.session.add(db_student)
             self.session.commit()
         elif len(db_students) == 1:
@@ -586,8 +592,12 @@ class Controller:
                     db_student.course = student.course
                     self.session.commit()
             else:
-                db_student = Student(internal_id=student.id, name=student.name, abbreviation=student.abbreviation,
-                                     institution=institution, course=student.course)
+                db_student = models.Student(
+                    internal_id=student.id,
+                    name=student.name,
+                    abbreviation=student.abbreviation,
+                    institution=institution,
+                    course=student.course)
                 self.session.add(db_student)
 
         else:  # database inconsistency
@@ -597,11 +607,11 @@ class Controller:
             raise Exception("Duplicated students found:\n{}".format(students))
         return db_student
 
-    def add_teacher(self, teacher: TeacherCandidate) -> Teacher:
-        db_teacher = self.session.query(Teacher).filter_by(id=teacher.id, name=teacher.name).first()
+    def add_teacher(self, teacher: candidates.Teacher) -> models.Teacher:
+        db_teacher = self.session.query(models.Teacher).filter_by(id=teacher.id, name=teacher.name).first()
 
         if db_teacher is None:
-            db_teacher = Teacher(id=teacher.id, name=teacher.name)
+            db_teacher = models.Teacher(id=teacher.id, name=teacher.name)
             self.session.add(db_teacher)
             self.session.commit()
             if self.__caching__:
@@ -609,15 +619,24 @@ class Controller:
 
         return db_teacher
 
-    def add_turn(self, turn: TurnCandidate) -> Turn:
-        db_turn: Turn = self.session.query(Turn).filter_by(
-            number=turn.number, class_instance=turn.class_instance, type=turn.type).first()
+    def add_turn(self, turn: candidates.Turn) -> models.Turn:
+        db_turn: models.Turn = self.session.query(models.Turn).filter_by(
+            number=turn.number,
+            class_instance=turn.class_instance,
+            type=turn.type
+        ).first()
 
         if db_turn is None:
-            db_turn = Turn(
-                class_instance=turn.class_instance, number=turn.number, type=turn.type,
-                enrolled=turn.enrolled, capacity=turn.capacity, minutes=turn.minutes, routes=turn.routes,
-                restrictions=turn.restrictions, state=turn.restrictions)
+            db_turn = models.Turn(
+                class_instance=turn.class_instance,
+                number=turn.number,
+                type=turn.type,
+                enrolled=turn.enrolled,
+                capacity=turn.capacity,
+                minutes=turn.minutes,
+                routes=turn.routes,
+                restrictions=turn.restrictions,
+                state=turn.restrictions)
             self.session.add(db_turn)
             self.session.commit()
         else:
@@ -652,7 +671,7 @@ class Controller:
     # Reconstructs the instances of a turn.
     # Destructive is faster because it doesn't worry about checking instance by instance,
     # it'll delete em' all and rebuilds
-    def add_turn_instances(self, instances: List[TurnInstanceCandidate], destructive=False):
+    def add_turn_instances(self, instances: List[candidates.TurnInstance], destructive=False):
         turn = None
         for instance in instances:
             if turn is None:
@@ -664,7 +683,7 @@ class Controller:
 
         if destructive:
             try:
-                deleted = self.session.query(TurnInstance).filter_by(turn=turn).delete()
+                deleted = self.session.query(models.TurnInstance).filter_by(turn=turn).delete()
                 if deleted > 0:
                     log.info(f"Deleted {deleted} turn instances from the turn {turn}")
             except Exception:
@@ -672,14 +691,18 @@ class Controller:
                 raise Exception("Error deleting turn instances for turn {}\n{}".format(turn, traceback.format_exc()))
 
             for instance in instances:
-                turn.instances.append(TurnInstance(turn=turn, start=instance.start, end=instance.end,
-                                                   room=instance.room, weekday=instance.weekday))
+                turn.instances.append(models.TurnInstance(
+                    turn=turn,
+                    start=instance.start,
+                    end=instance.end,
+                    room=instance.room,
+                    weekday=instance.weekday))
 
             if len(instances) > 0:
                 log.info(f"Added {len(instances)} turn instances to the turn {turn}")
                 self.session.commit()
         else:
-            db_turn_instances = self.session.query(TurnInstance).filter_by(turn=turn).all()
+            db_turn_instances = self.session.query(models.TurnInstance).filter_by(turn=turn).all()
             for db_turn_instance in db_turn_instances:
                 matched = False
                 for instance in instances[:]:
@@ -696,31 +719,44 @@ class Controller:
                     log.info(f'An instance of {turn} ceased to exist ({db_turn_instance})')
                     self.session.delete(db_turn_instance)
             for instance in instances:
-                turn.instances.append(TurnInstance(turn=turn, start=instance.start, end=instance.end,
-                                                   room=instance.room, weekday=instance.weekday))
+                turn.instances.append(
+                    models.TurnInstance(
+                        turn=turn,
+                        start=instance.start,
+                        end=instance.end,
+                        room=instance.room,
+                        weekday=instance.weekday))
 
-    def add_turn_students(self, turn: Turn, students):
+    def add_turn_students(self, turn: models.Turn, students: [candidates.Student]):
         [turn.students.append(student) for student in students]
         if len(students) > 0:
             self.session.commit()
             log.info("{} students added successfully to the turn {}!".format(len(students), turn))
 
-    def add_admissions(self, admissions: [AdmissionCandidate]):
-        admissions = list(map(lambda admission: Admission(
-            student=admission.student, name=admission.name, course=admission.course, phase=admission.phase,
-            year=admission.year, option=admission.option, state=admission.state), admissions))
+    def add_admissions(self, admissions: [candidates.Admission]):
+        admissions = list(map(lambda admission: models.Admission(
+            student=admission.student,
+            name=admission.name,
+            course=admission.course,
+            phase=admission.phase,
+            year=admission.year,
+            option=admission.option,
+            state=admission.state
+        ), admissions))
         self.session.add_all(admissions)
 
         if len(admissions) > 0:
             self.session.commit()
             log.info("{} admissions added successfully!".format(len(admissions)))
 
-    def add_enrollments(self, enrollments: [EnrollmentCandidate]):
+    def add_enrollments(self, enrollments: [candidates.Enrollment]):
         added = 0
         updated = 0
         for enrollment in enrollments:
-            db_enrollment: Enrollment = self.session.query(Enrollment).filter_by(
-                student=enrollment.student, class_instance=enrollment.class_instance).first()
+            db_enrollment: models.Enrollment = self.session.query(models.Enrollment).filter_by(
+                student=enrollment.student,
+                class_instance=enrollment.class_instance
+            ).first()
             if db_enrollment:
                 changed = False
                 if db_enrollment.observation is None and enrollment.observation is not None:
@@ -739,9 +775,13 @@ class Controller:
                     updated += 1
                     self.session.commit()
             else:
-                enrollment = Enrollment(student=enrollment.student, class_instance=enrollment.class_instance,
-                                        attempt=enrollment.attempt, student_year=enrollment.student_year,
-                                        statutes=enrollment.statutes, observation=enrollment.observation)
+                enrollment = models.Enrollment(
+                    student=enrollment.student,
+                    class_instance=enrollment.class_instance,
+                    attempt=enrollment.attempt,
+                    student_year=enrollment.student_year,
+                    statutes=enrollment.statutes,
+                    observation=enrollment.observation)
                 added += 1
                 self.session.add(enrollment)
                 self.session.commit()
@@ -749,7 +789,7 @@ class Controller:
         log.info("{} enrollments added and {} updated ({} ignored)!".format(
             added, updated, len(enrollments) - added - updated))
 
-    def add_room(self, room: RoomCandidate) -> Room:
+    def add_room(self, room: candidates.Room) -> models.Room:
         changed = False
         try:
             if self.__caching__:
@@ -758,16 +798,16 @@ class Controller:
                         and room.name in self.__rooms__[room.building][room.type]:
                     db_room = self.__rooms__[room.building][room.type][room.name]
                 else:
-                    db_room = Room(id=room.id, name=room.name, room_type=room.type, building=room.building)
+                    db_room = models.Room(id=room.id, name=room.name, room_type=room.type, building=room.building)
                     self.session.add(db_room)
                     self.session.commit()
                     changed = True
                 return db_room
             else:
-                db_room = self.session.query(Room).filter_by(
+                db_room = self.session.query(models.Room).filter_by(
                     name=room.name, room_type=room.type, building=room.building).first()
                 if db_room is None:
-                    db_room = Room(id=room.id, name=room.name, room_type=room.type, building=room.building)
+                    db_room = models.Room(id=room.id, name=room.name, room_type=room.type, building=room.building)
                     self.session.add(db_room)
                     self.session.commit()
                     changed = True
@@ -779,7 +819,7 @@ class Controller:
             if self.__caching__ and changed:
                 self.__load_rooms__()
 
-    def get_room(self, name: str, building: Building, room_type: RoomType = None) -> Room:
+    def get_room(self, name: str, building: models.Building, room_type: models.RoomType = None) -> models.Room:
         if self.__caching__:
             if building in self.__rooms__ and name in self.__rooms__[building]:
                 matches = []
@@ -792,20 +832,21 @@ class Controller:
                     raise Exception("Unable to determine which room is the correct one")
         else:
             if room_type:
-                return self.session.query(Room).filter_by(name=name, room_type=room_type, building=building).first()
+                return self.session.query(models.Room).filter_by(name=name, room_type=room_type,
+                                                                 building=building).first()
             else:
-                matches = self.session.query(Room).filter_by(name=name, building=building)
+                matches = self.session.query(models.Room).filter_by(name=name, building=building)
                 if len(matches) == 1:
                     return matches.first()
                 else:
                     raise Exception("Unable to determine which room is the correct one")
 
-    def add_building(self, building: BuildingCandidate) -> Building:
+    def add_building(self, building: candidates.Building) -> models.Building:
         if self.__caching__:
             if building.name in self.__buildings__:
                 return self.__buildings__[building.name]
             try:
-                building = Building(id=building.id, name=building.name)
+                building = models.Building(id=building.id, name=building.name)
                 self.session.add(building)
                 self.session.commit()
                 return building
@@ -816,34 +857,34 @@ class Controller:
                 if self.__caching__:
                     self.__load_buildings__()
         else:
-            db_building = self.session.query(Building).filter_by(name=building.name).first()
+            db_building = self.session.query(models.Building).filter_by(name=building.name).first()
             if db_building is None:
-                db_building = Building(id=building.id, name=building.name)
+                db_building = models.Building(id=building.id, name=building.name)
                 self.session.add(db_building)
                 self.session.commit()
             return db_building
 
-    def get_building(self, building: str) -> Building:
+    def get_building(self, building: str) -> models.Building:
         if self.__caching__:
             if building in self.__buildings__:
                 return self.__buildings__[building]
         else:
-            return self.session.query(Building).filter_by(name=building).first()
+            return self.session.query(models.Building).filter_by(name=building).first()
 
-    def fetch_class_instances(self, year_asc=True, year=None, period=None) -> [ClassInstance]:
-        order = asc(ClassInstance.year) if year_asc else desc(ClassInstance.year)
+    def fetch_class_instances(self, year_asc=True, year=None, period=None) -> [models.ClassInstance]:
+        order = sa.asc(models.ClassInstance.year) if year_asc else sa.desc(models.ClassInstance.year)
         if year is None:
             if period is not None:
                 log.warning("Period specified without an year")
             if year_asc:
-                instances = self.session.query(ClassInstance).order_by(order).all()
+                instances = self.session.query(models.ClassInstance).order_by(order).all()
             else:
-                instances = self.session.query(ClassInstance).order_by(order).all()
+                instances = self.session.query(models.ClassInstance).order_by(order).all()
         else:
             if period is None:
-                instances = self.session.query(ClassInstance).filter_by(year=year).order_by(order).all()
+                instances = self.session.query(models.ClassInstance).filter_by(year=year).order_by(order).all()
             else:
-                instances = self.session.query(ClassInstance). \
+                instances = self.session.query(models.ClassInstance). \
                     filter_by(year=year, period=period).order_by(order).all()
         return list(instances)
 
@@ -853,6 +894,9 @@ class Controller:
             query_string += (word + '%')
 
         if course is None:
-            return self.session.query(Student).filter(Student.name.ilike(query_string)).all()
+            return self.session.query(models.Student).filter(models.Student.name.ilike(query_string)).all()
         else:
-            return self.session.query(Student).filter(Student.name.ilike(query_string), course=course).all()
+            return self.session.query(models.Student).filter(
+                models.Student.name.ilike(query_string),
+                course=course
+            ).all()

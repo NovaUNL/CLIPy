@@ -1,5 +1,5 @@
-from datetime import datetime
 import os
+from datetime import datetime
 
 from . import database as db
 from .session import Session
@@ -31,31 +31,34 @@ class Clip:
     def __init__(self, cache: CacheStorage):
         self.cache: CacheStorage = cache
 
-    def find_student(self, name, course_filter=None):
-        return self.cache.controller.find_student(name, course=course_filter)
-
-    def find_course(self, abbreviation, year=datetime.now().year):
-        return self.cache.controller.get_course(abbreviation=abbreviation, year=year)
-
-    def reload_admissions(self, username, password):
-        populate.populate_nac_admissions(Session(username, password), self.cache.registry)
-
-    def reload_classes(self, username, password):
-        populate.populate_classes(Session(username, password), self.cache.registry)
-
-    def reload_class_instances(self, username, password, year, period_part, period_parts):
-        period = self.cache.controller.get_period(period_part, period_parts)
-        if period is None:
-            raise ValueError("Invalid period")
-        populate.populate_class_enrollments(Session(username, password), self.cache.registry, year=year, period=period)
-
-    def reload_turns(self, username, password, year, period_part, period_parts):
-        period = self.cache.controller.get_period(period_part, period_parts)
-        if period is None:
-            raise ValueError("Invalid period")
-        populate.populate_class_instances_turns(Session(username, password), self.cache.registry, year=year, period=period)
+    # TODO redo this code. It's causing a circular import or something silly somewhere.
+    # def find_student(self, name, course_filter=None):
+    #     return self.cache.controller.find_student(name, course=course_filter)
+    #
+    # def find_course(self, abbreviation, year=datetime.now().year):
+    #     return self.cache.controller.get_course(abbreviation=abbreviation, year=year)
+    #
+    # def update_admissions(self, username: str, password: str):
+    #     processors.institution_task(Session(username, password), self.cache.registry, crawler.crawl_admissions)
+    #
+    # def update_classes(self, username: str, password: str):
+    #     processors.department_task(Session(username, password), self.cache.registry, crawler.crawl_classes)
+    #
+    # def update_class_enrollments(self, username: str, password: str, year: int, period_part, period_parts):
+    #     period = self.cache.controller.get_period(period_part, period_parts)
+    #     if period is None:
+    #         raise ValueError("Invalid period")
+    #     processors.class_task(Session(username, password), self.cache.registry, crawler.crawl_class_info,
+    #                           year=year, period=period)
+    #
+    # def update_turns(self, username, password, year, period_part, period_parts):
+    #     period = self.cache.controller.get_period(period_part, period_parts)
+    #     if period is None:
+    #         raise ValueError("Invalid period")
+    #     processors.class_task(Session(username, password), self.cache.registry, crawler.crawl_class_turns,
+    #                           year=year, period=period)
 
     @staticmethod
-    def populate(username, password, storage: CacheStorage):
-        populate.bootstrap_database(Session(username, password), storage.registry)
+    def populate(username, password, storage: CacheStorage, year: int = None, period: int = None):
+        populate.bootstrap_database(Session(username, password), storage.registry, year, period)
         return Clip(storage)

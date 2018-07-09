@@ -1,7 +1,6 @@
 from datetime import datetime
 
-from .models import Turn, ClassInstance, Institution, Student, Course, Period, Class, Department, Building, TurnType, \
-    RoomType
+from . import models
 
 
 class TemporalEntity:
@@ -29,7 +28,7 @@ class TemporalEntity:
             self.first_year, self.last_year))
 
 
-class InstitutionCandidate(TemporalEntity):
+class Institution(TemporalEntity):
     def __init__(self, identifier: int, name: str, abbreviation: str, first_year=None, last_year=None):
         super().__init__(identifier, first_year=first_year, last_year=last_year)
         self.abbreviation = abbreviation
@@ -39,8 +38,8 @@ class InstitutionCandidate(TemporalEntity):
         return self.name
 
 
-class DepartmentCandidate(TemporalEntity):
-    def __init__(self, identifier: int, name: str, institution: Institution, first_year=None, last_year=None):
+class Department(TemporalEntity):
+    def __init__(self, identifier: int, name: str, institution: models.Institution, first_year=None, last_year=None):
         super().__init__(identifier, first_year=first_year, last_year=last_year)
         self.name = name
         self.institution = institution
@@ -49,7 +48,7 @@ class DepartmentCandidate(TemporalEntity):
         return self.name
 
 
-class DegreeCandidate:
+class Degree:
     def __init__(self, identifier, name):
         self.id = identifier
         self.name = name
@@ -58,8 +57,8 @@ class DegreeCandidate:
         return self.name
 
 
-class ClassCandidate:
-    def __init__(self, identifier: int, name: str, department: Department, abbreviation, ects):
+class Class:
+    def __init__(self, identifier: int, name: str, department: models.Department, abbreviation, ects):
         self.id = identifier
         self.name = name
         self.department = department
@@ -70,8 +69,8 @@ class ClassCandidate:
         return self.name
 
 
-class ClassInstanceCandidate:
-    def __init__(self, parent: Class, period: Period, year: int):
+class ClassInstance:
+    def __init__(self, parent: Class, period: models.Period, year: int):
         self.parent = parent
         self.period = period
         self.year = year
@@ -80,8 +79,8 @@ class ClassInstanceCandidate:
         return "{} on period {} of {}".format(self.parent, self.period, self.year)
 
 
-class CourseCandidate(TemporalEntity):
-    def __init__(self, identifier: int, name: str, institution: Institution,
+class Course(TemporalEntity):
+    def __init__(self, identifier: int, name: str, institution: models.Institution,
                  degree=None, abbreviation=None, first_year=None, last_year=None):
         super().__init__(identifier, first_year, last_year)
         self.name = name
@@ -93,8 +92,9 @@ class CourseCandidate(TemporalEntity):
         return "{} ({})".format(self.name, self.degree.name)
 
 
-class StudentCandidate:
-    def __init__(self, identifier, name: str, course: Course, institution: Institution, abbreviation=None):
+class Student:
+    def __init__(self, identifier, name: str, course: models.Course, institution: models.Institution,
+                 abbreviation=None):
         self.id = identifier
         self.name = name
         self.course = course
@@ -105,7 +105,7 @@ class StudentCandidate:
         return "{} ({}, {})".format(self.name, self.id, self.abbreviation)
 
 
-class TeacherCandidate:
+class Teacher:
     def __init__(self, identifier: int, name: str):
         self.id = identifier
         self.name = name
@@ -114,8 +114,8 @@ class TeacherCandidate:
         return f'{self.name} ({self.id})'
 
 
-class AdmissionCandidate:
-    def __init__(self, student, name: str, course: Course, phase: int, year: int, option: int, state,
+class Admission:
+    def __init__(self, student, name: str, course: models.Course, phase: int, year: int, option: int, state,
                  check_date=None):
         self.student = student
         self.name = name
@@ -132,8 +132,8 @@ class AdmissionCandidate:
             self.course.name, self.option, self.phase, self.year, self.state, self.check_date)
 
 
-class EnrollmentCandidate:
-    def __init__(self, student: Student, class_instance: ClassInstance, attempt: int, student_year: int,
+class Enrollment:
+    def __init__(self, student: models.Student, class_instance: models.ClassInstance, attempt: int, student_year: int,
                  statutes, observation):
         self.student = student
         self.class_instance = class_instance
@@ -147,7 +147,7 @@ class EnrollmentCandidate:
             self.student, self.class_instance, self.attempt, self.student_year, self.statutes, self.observation)
 
 
-class BuildingCandidate:
+class Building:
     def __init__(self, identifier: int, name: str):
         if name is None:
             raise ValueError("A building must have a name")
@@ -165,8 +165,8 @@ class BuildingCandidate:
             return self.id == other.id and self.name == other.name
 
 
-class RoomCandidate:
-    def __init__(self, identifier: int, name, room_type: RoomType, building: Building):
+class Room:
+    def __init__(self, identifier: int, name, room_type: models.RoomType, building: models.Building):
         if name is None:
             raise ValueError("A room must have a name")
         if building is None:
@@ -184,9 +184,9 @@ class RoomCandidate:
             return self.id == other.id and self.name == other.name and self.type == other.type
 
 
-class TurnCandidate:
-    def __init__(self, class_instance: ClassInstance, number: int, turn_type: TurnType, enrolled: int, capacity: int,
-                 minutes=None, routes=None, restrictions=None, state=None, teachers=list()):
+class Turn:
+    def __init__(self, class_instance: models.ClassInstance, number: int, turn_type: models.TurnType, enrolled: int,
+                 capacity: int, minutes=None, routes=None, restrictions=None, state=None, teachers=list()):
         self.class_instance = class_instance
         self.number = number
         self.type = turn_type
@@ -204,8 +204,8 @@ class TurnCandidate:
             self.minutes / 60, self.routes, self.state, len(self.teachers))
 
 
-class TurnInstanceCandidate:
-    def __init__(self, turn: Turn, start: int, end: int, weekday: int, room=None):
+class TurnInstance:
+    def __init__(self, turn: models.Turn, start: int, end: int, weekday: int, room=None):
         self.turn = turn
         self.start = start
         self.end = end

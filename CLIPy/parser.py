@@ -4,6 +4,7 @@ from datetime import datetime
 from unicodedata import normalize
 
 import htmlmin
+# noinspection PyProtectedMember
 from bs4 import NavigableString
 
 from CLIPy.database.models import RoomType
