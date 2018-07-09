@@ -427,27 +427,36 @@ class Controller:
             log.error("Failed to add the departments\n" + traceback.format_exc())
             self.session.rollback()
 
-    def add_class(self, class_candidate: candidates.Class):
+    def add_class(self, candidate: candidates.Class):
         db_class = self.session.query(models.Class).filter_by(
-            internal_id=class_candidate.id,
-            department=class_candidate.department
+            internal_id=candidate.id,
+            department=candidate.department
         ).first()
 
         if db_class is not None:  # Already stored
-            if db_class.name != class_candidate.name:
+            if db_class.name != candidate.name:
                 raise Exception("Class name change attempt. {} to {} (iid {})".format(
-                    db_class.name, class_candidate.name, class_candidate.id))
-            else:
-                log.debug("Already known: {}".format(class_candidate))
-                return db_class
+                    db_class.name, candidate.name, candidate.id))
 
-        log.info("Adding class {}".format(class_candidate))
+            if candidate.abbreviation is not None:
+                if db_class.abbreviation is None:
+                    db_class.abbreviation = candidate.abbreviation
+                    self.session.commit()
+                    return db_class
+
+                if db_class.abbreviation is not None and db_class.abbreviation != candidate.abbreviation:
+                    raise Exception("Class abbreviation change attempt. {} to {} (iid {})".format(
+                        db_class.abbreviation, candidate.abbreviation, candidate.id))
+
+            return db_class
+
+        log.info("Adding class {}".format(candidate))
         db_class = models.Class(
-            internal_id=class_candidate.id,
-            name=class_candidate.name,
-            department=class_candidate.department,
-            abbreviation=class_candidate.abbreviation,
-            ects=class_candidate.ects)
+            internal_id=candidate.id,
+            name=candidate.name,
+            department=candidate.department,
+            abbreviation=candidate.abbreviation,
+            ects=candidate.ects)
         self.session.add(db_class)
         self.session.commit()
         return db_class

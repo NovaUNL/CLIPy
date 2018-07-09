@@ -177,7 +177,7 @@ class Class(Base):
     #: Full name
     name = sa.Column(sa.String(100))
     #: Acconym-ish name given by someone over the rainbow (probably a nice madam @ divisão académica)
-    abbreviation = sa.Column(sa.String(15), default='???')
+    abbreviation = sa.Column(sa.String(15))
     #: Number of *half* credits (bologna) that this class takes.
     ects = sa.Column(sa.Integer, nullable=True)
     #: Parent department

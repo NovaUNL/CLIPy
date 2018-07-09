@@ -124,17 +124,17 @@ def crawl_classes(session: WebSession, database: db.Controller, department: db.m
     class_instances = []
 
     period_exp = re.compile('&tipo_de_per%EDodo_lectivo=(?P<type>\w)&per%EDodo_lectivo=(?P<stage>\d)$')
-    abbr_exp = re.compile('\(.+\) .* \((?P<abbr>[\S]+)\)')
+    abbr_exp = re.compile('\(.+\) .* \((?P<abbr>.+)\)')
     ects_exp = re.compile('(?P<ects>\d|\d.\d)\s?ECTS.*')
 
     # for each year this department operated
     for year in range(department.first_year, department.last_year + 1):
-        hierarchy = parse_clean_request(session.get(urls.DEPARTMENT_PERIODS.format(
+        page = parse_clean_request(session.get(urls.DEPARTMENT_PERIODS.format(
             institution=department.institution.id,
             department=department.id,
             year=year)))
 
-        period_links = hierarchy.find_all(href=period_exp)
+        period_links = page.find_all(href=period_exp)
 
         # for each period this department teaches
         for period_link in period_links:
@@ -156,14 +156,14 @@ def crawl_classes(session: WebSession, database: db.Controller, department: db.m
                 raise Exception("Unknown period")
 
             period = database.get_period(part, parts)
-            hierarchy = parse_clean_request(session.get(urls.DEPARTMENT_CLASSES.format(
+            page = parse_clean_request(session.get(urls.DEPARTMENT_CLASSES.format(
                 institution=department.institution.id,
                 department=department.id,
                 year=year,
                 period=part,
                 period_type=period_type)))
 
-            class_links = hierarchy.find_all(href=urls.CLASS_EXP)
+            class_links = page.find_all(href=urls.CLASS_EXP)
 
             # for each class in this period
             for class_link in class_links:
@@ -171,14 +171,14 @@ def crawl_classes(session: WebSession, database: db.Controller, department: db.m
                 class_name = class_link.contents[0].strip()
                 if class_id not in classes:
                     # Fetch abbreviation and number of ECTSs
-                    hierarchy = parse_clean_request(session.get(urls.CLASS.format(
+                    page = parse_clean_request(session.get(urls.CLASS.format(
                         institution=department.institution.id,
                         year=year,
                         department=department.id,
                         period=part,
                         period_type=period_type,
                         class_id=class_id)))
-                    elements = hierarchy.find_all('td', attrs={'class': 'subtitulo'})
+                    elements = page.find_all('td', attrs={'class': 'subtitulo'})
                     abbr = None
                     ects = None
                     try:
@@ -237,7 +237,7 @@ def crawl_admissions(session: WebSession, database: db.Controller, institution: 
     database.add_admissions(admissions)
 
 
-def crawl_class_info(session: WebSession, database: db.Controller, class_instance: db.models.ClassInstance):
+def crawl_class_enrollments(session: WebSession, database: db.Controller, class_instance: db.models.ClassInstance):
     log.info("Crawling class instance ID %s" % class_instance.id)
     class_instance = database.session.merge(class_instance)
     institution = class_instance.parent.department.institution
@@ -270,6 +270,11 @@ def crawl_class_info(session: WebSession, database: db.Controller, class_instanc
 
     database.add_enrollments(enrollments)
 
+
+def crawl_class_info(session: WebSession, database: db.Controller, class_instance: db.models.ClassInstance):
+    log.info("Crawling class instance ID %s" % class_instance.id)
+    class_instance = database.session.merge(class_instance)
+    institution = class_instance.parent.department.institution
     class_info = {}
     page = parse_clean_request(session.get(urls.CLASS_DESCRIPTION.format(
         institution=institution.id,
