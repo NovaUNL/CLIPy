@@ -254,25 +254,55 @@ class ClassInstance(Base):
     #: Year on which this instance happened
     year = sa.Column(sa.Integer)
     #: Description of what happens in this class
-    description = sa.Column(sa.Text, nullable=True)
+    description_pt = sa.Column(sa.Text, nullable=True)
+    description_en = sa.Column(sa.Text, nullable=True)
+    description_edited_datetime = sa.Column(sa.DateTime, nullable=True)
+    description_editor = sa.Column(sa.String(100), nullable=True)
     #: Planned student competence acquisition
-    objectives = sa.Column(sa.Text, nullable=True)
+    objectives_pt = sa.Column(sa.Text, nullable=True)
+    objectives_en = sa.Column(sa.Text, nullable=True)
+    objectives_edited_datetime = sa.Column(sa.DateTime, nullable=True)
+    objectives_editor = sa.Column(sa.String(100), nullable=True)
     #: Requirements to participate in this class
-    requirements = sa.Column(sa.Text, nullable=True)
+    requirements_pt = sa.Column(sa.Text, nullable=True)
+    requirements_en = sa.Column(sa.Text, nullable=True)
+    requirements_editor = sa.Column(sa.String(100), nullable=True)
+    requirements_edited_datetime = sa.Column(sa.DateTime, nullable=True)
     #: Class planned student competence acquisition
-    competences = sa.Column(sa.Text, nullable=True)
+    competences_pt = sa.Column(sa.Text, nullable=True)
+    competences_en = sa.Column(sa.Text, nullable=True)
+    competences_edited_datetime = sa.Column(sa.DateTime, nullable=True)
+    competences_editor = sa.Column(sa.String(100), nullable=True)
     #: Planned teachings
-    program = sa.Column(sa.Text, nullable=True)
+    program_pt = sa.Column(sa.Text, nullable=True)
+    program_en = sa.Column(sa.Text, nullable=True)
+    program_edited_datetime = sa.Column(sa.DateTime, nullable=True)
+    program_editor = sa.Column(sa.String(100), nullable=True)
     #: Teaching sources / bibliography
-    bibliography = sa.Column(sa.Text, nullable=True)
+    bibliography_pt = sa.Column(sa.Text, nullable=True)
+    bibliography_en = sa.Column(sa.Text, nullable=True)
+    bibliography_edited_datetime = sa.Column(sa.DateTime, nullable=True)
+    bibliography_editor = sa.Column(sa.String(100), nullable=True)
     #: Verbose schedules for individual teacher assistance
-    assistance = sa.Column(sa.Text, nullable=True)
+    assistance_pt = sa.Column(sa.Text, nullable=True)
+    assistance_en = sa.Column(sa.Text, nullable=True)
+    assistance_edited_datetime = sa.Column(sa.DateTime, nullable=True)
+    assistance_editor = sa.Column(sa.String(100), nullable=True)
     #: Teaching methods verbosely explained
-    teaching_methods = sa.Column(sa.Text, nullable=True)
+    teaching_methods_pt = sa.Column(sa.Text, nullable=True)
+    teaching_methods_en = sa.Column(sa.Text, nullable=True)
+    teaching_methods_edited_datetime = sa.Column(sa.DateTime, nullable=True)
+    teaching_methods_editor = sa.Column(sa.String(100), nullable=True)
     #: Evaluation methods verbosely explained
-    evaluation_methods = sa.Column(sa.Text, nullable=True)
+    evaluation_methods_pt = sa.Column(sa.Text, nullable=True)
+    evaluation_methods_en = sa.Column(sa.Text, nullable=True)
+    evaluation_methods_edited_datetime = sa.Column(sa.DateTime, nullable=True)
+    evaluation_methods_editor = sa.Column(sa.String(100), nullable=True)
     #: Additional information such as start date and moodle pages
-    extra_info = sa.Column(sa.Text, nullable=True)
+    extra_info_pt = sa.Column(sa.Text, nullable=True)
+    extra_info_en = sa.Column(sa.Text, nullable=True)
+    extra_info_edited_datetime = sa.Column(sa.DateTime, nullable=True)
+    extra_info_editor = sa.Column(sa.String(100), nullable=True)
     #: JSON encoded representation of the class working hours type of work
     working_hours = sa.Column(sa.Text, nullable=True)
 
@@ -356,7 +386,7 @@ turn_teachers = sa.Table(
 class Teacher(Base):
     __tablename__ = TABLE_PREFIX + 'teachers'
     #: CLIP assigned identifier
-    id = sa.Column(sa.Integer, sa.Sequence(TABLE_PREFIX + 'teacher_id_seq'), primary_key=True)
+    id = sa.Column(sa.Integer, primary_key=True)
     #: Full name
     name = sa.Column(sa.String)
     #: The grade the student obtained at his/her graduation (0-200)

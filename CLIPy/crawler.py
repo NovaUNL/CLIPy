@@ -283,7 +283,7 @@ def crawl_class_info(session: WebSession, database: db.Controller, class_instanc
         period=class_instance.period.part,
         period_type=class_instance.period.letter,
         class_id=class_instance.parent.internal_id)))
-    class_info['description'], _ = parser.get_bilingual_info(page)
+    class_info['description'] = parser.get_bilingual_info(page)
     page = parse_clean_request(session.get(urls.CLASS_OBJECTIVES.format(
         institution=institution.id,
         department=class_instance.parent.department.id,
@@ -291,7 +291,7 @@ def crawl_class_info(session: WebSession, database: db.Controller, class_instanc
         period=class_instance.period.part,
         period_type=class_instance.period.letter,
         class_id=class_instance.parent.internal_id)))
-    class_info['objectives'], _ = parser.get_bilingual_info(page)
+    class_info['objectives'] = parser.get_bilingual_info(page)
     page = parse_clean_request(session.get(urls.CLASS_REQUIREMENTS.format(
         institution=institution.id,
         department=class_instance.parent.department.id,
@@ -299,7 +299,7 @@ def crawl_class_info(session: WebSession, database: db.Controller, class_instanc
         period=class_instance.period.part,
         period_type=class_instance.period.letter,
         class_id=class_instance.parent.internal_id)))
-    class_info['requirements'], _ = parser.get_bilingual_info(page)
+    class_info['requirements'] = parser.get_bilingual_info(page)
     page = parse_clean_request(session.get(urls.CLASS_COMPETENCES.format(
         institution=institution.id,
         department=class_instance.parent.department.id,
@@ -307,7 +307,7 @@ def crawl_class_info(session: WebSession, database: db.Controller, class_instanc
         period=class_instance.period.part,
         period_type=class_instance.period.letter,
         class_id=class_instance.parent.internal_id)))
-    class_info['competences'], _ = parser.get_bilingual_info(page)
+    class_info['competences'] = parser.get_bilingual_info(page)
     page = parse_clean_request(session.get(urls.CLASS_PROGRAM.format(
         institution=institution.id,
         department=class_instance.parent.department.id,
@@ -315,7 +315,7 @@ def crawl_class_info(session: WebSession, database: db.Controller, class_instanc
         period=class_instance.period.part,
         period_type=class_instance.period.letter,
         class_id=class_instance.parent.internal_id)))
-    class_info['program'], _ = parser.get_bilingual_info(page)
+    class_info['program'] = parser.get_bilingual_info(page)
     page = parse_clean_request(session.get(urls.CLASS_BIBLIOGRAPHY.format(
         institution=institution.id,
         department=class_instance.parent.department.id,
@@ -323,7 +323,7 @@ def crawl_class_info(session: WebSession, database: db.Controller, class_instanc
         period=class_instance.period.part,
         period_type=class_instance.period.letter,
         class_id=class_instance.parent.internal_id)))
-    class_info['bibliography'], _ = parser.get_bilingual_info(page)
+    class_info['bibliography'] = parser.get_bilingual_info(page)
     page = parse_clean_request(session.get(urls.CLASS_ASSISTANCE.format(
         institution=institution.id,
         department=class_instance.parent.department.id,
@@ -331,7 +331,7 @@ def crawl_class_info(session: WebSession, database: db.Controller, class_instanc
         period=class_instance.period.part,
         period_type=class_instance.period.letter,
         class_id=class_instance.parent.internal_id)))
-    class_info['assistance'], _ = parser.get_bilingual_info(page)
+    class_info['assistance'] = parser.get_bilingual_info(page)
     page = parse_clean_request(session.get(urls.CLASS_TEACHING_METHODS.format(
         institution=institution.id,
         department=class_instance.parent.department.id,
@@ -339,7 +339,7 @@ def crawl_class_info(session: WebSession, database: db.Controller, class_instanc
         period=class_instance.period.part,
         period_type=class_instance.period.letter,
         class_id=class_instance.parent.internal_id)))
-    class_info['teaching_methods'], _ = parser.get_bilingual_info(page)
+    class_info['teaching_methods'] = parser.get_bilingual_info(page)
     page = parse_clean_request(session.get(urls.CLASS_EVALUATION_METHODS.format(
         institution=institution.id,
         department=class_instance.parent.department.id,
@@ -347,7 +347,7 @@ def crawl_class_info(session: WebSession, database: db.Controller, class_instanc
         period=class_instance.period.part,
         period_type=class_instance.period.letter,
         class_id=class_instance.parent.internal_id)))
-    class_info['evaluation_methods'], _ = parser.get_bilingual_info(page)
+    class_info['evaluation_methods'] = parser.get_bilingual_info(page)
     page = parse_clean_request(session.get(urls.CLASS_EXTRA.format(
         institution=institution.id,
         department=class_instance.parent.department.id,
@@ -355,7 +355,7 @@ def crawl_class_info(session: WebSession, database: db.Controller, class_instanc
         period=class_instance.period.part,
         period_type=class_instance.period.letter,
         class_id=class_instance.parent.internal_id)))
-    class_info['extra_info'], _ = parser.get_bilingual_info(page)
+    class_info['extra_info'] = parser.get_bilingual_info(page)
     database.update_class_instance_info(class_instance, class_info)
 
 

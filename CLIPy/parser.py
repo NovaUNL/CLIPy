@@ -303,7 +303,11 @@ def get_bilingual_info(page) -> (str, str, datetime, str):
     :return: A tuple with ``portuguese_text, english_text, edition_datetime, last_editor`` as its elements.
     """
     table_root = page.find('table', width="75%", cellspacing="2", cellpadding="2", border="0", bgcolor="#dddddd")
+    if table_root is None:
+        return None, None, None, None
     panes = table_root.find_all('td', valign="top", bgcolor="#ffffff")
+    if len(panes) != 2:
+        return None, None, None, None
     footer = table_root.find_all('small')
 
     portuguese = ''
