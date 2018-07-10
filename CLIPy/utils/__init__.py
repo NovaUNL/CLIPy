@@ -9,5 +9,5 @@ Utils auxiliary to the clip module
 
 """
 
-from .utils import parse_clean_request, weekday_to_id, get_month_periods
+from .utils import weekday_to_id, get_month_periods
 from . import populate

@@ -3,7 +3,6 @@ import re
 
 from .. import urls, database as db, parser, processors, crawler
 from ..session import Session
-from ..utils import parse_clean_request
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
@@ -29,7 +28,7 @@ def populate_institutions(session: Session, database: db.Controller):
              60005: "Instituto de Tecnologia Química e Biológica",
              97753: "Reitoria",
              113627: "Serviços de Ação Social"}
-    hierarchy = parse_clean_request(session.get(urls.INSTITUTIONS))
+    hierarchy = session.get_simplified_soup(urls.INSTITUTIONS)
     link_exp = re.compile('/?institui%E7%E3o=(\d+)$')
     for institution_link in hierarchy.find_all(href=link_exp):
         clip_id = int(link_exp.findall(institution_link.attrs['href'])[0])
@@ -39,7 +38,7 @@ def populate_institutions(session: Session, database: db.Controller):
         found.append(institution)
 
     for institution in found:
-        hierarchy = parse_clean_request(session.get(urls.INSTITUTION_YEARS.format(institution=institution.id)))
+        hierarchy = session.get_simplified_soup(urls.INSTITUTION_YEARS.format(institution=institution.id))
         year_exp = re.compile("\\b\d{4}\\b")
         institution_links = hierarchy.find_all(href=year_exp)
         for institution_link in institution_links:
@@ -67,8 +66,8 @@ def populate_departments(session: Session, database: db.Controller):
         # Find the departments which existed each year
         for year in range(institution.first_year, institution.last_year + 1):
             log.info("Crawling departments of institution {}. Year:{}".format(institution, year))
-            hierarchy = parse_clean_request(session.get(urls.DEPARTMENTS.format(
-                institution=institution.id, year=year)))
+            hierarchy = session.get_simplified_soup(urls.DEPARTMENTS.format(
+                institution=institution.id, year=year))
             for department_id, name in parser.get_departments(hierarchy):
                 if department_id in found:  # update creation year
                     department = found[department_id]
@@ -98,8 +97,8 @@ def populate_buildings(session: Session, database: db.Controller):
         for year in range(institution.first_year, institution.last_year + 1):
             for period in database.get_period_set():
                 log.info(f"Crawling buildings of institution {institution}. Year:{year}. Period: {period}")
-                page = parse_clean_request(session.get(urls.BUILDINGS.format(
-                    institution=institution.id, year=year, period=period.part, period_type=period.letter)))
+                page = session.get_simplified_soup(urls.BUILDINGS.format(
+                    institution=institution.id, year=year, period=period.part, period_type=period.letter))
                 page_buildings = parser.get_buildings(page)
                 for identifier, name in page_buildings:
                     candidate = db.candidates.Building(identifier=identifier, name=name)
@@ -125,19 +124,21 @@ def populate_courses(session: Session, database: db.Controller):
         courses = {}  # identifier -> Candidate pairs
 
         # Obtain course id-name pairs from the course list page
-        page = parse_clean_request(session.get(urls.COURSES.format(institution=institution.id)))
+        page = session.get_simplified_soup(urls.COURSES.format(institution=institution.id))
         for identifier, name in parser.get_course_names(page):
             # Fetch the course curricular plan to find the activity years
-            page = parse_clean_request(session.get(
-                urls.CURRICULAR_PLANS.format(institution=institution.id, course=identifier)))
+            page = session.get_simplified_soup(urls.CURRICULAR_PLANS.format(
+                institution=institution.id,
+                course=identifier))
             first, last = parser.get_course_activity_years(page)
             candidate = db.candidates.Course(identifier, name, institution, first_year=first, last_year=last)
             courses[identifier] = candidate
 
         # fetch course abbreviation from the statistics page
         for degree in database.get_degree_set():
-            page = parse_clean_request(session.get(urls.STATISTICS.format(
-                institution=institution.id, degree=degree.internal_id)))
+            page = session.get_simplified_soup(urls.STATISTICS.format(
+                institution=institution.id,
+                degree=degree.internal_id))
             for identifier, abbreviation in parser.get_course_abbreviations(page):
                 if identifier in courses:
                     courses[identifier].abbreviation = abbreviation
@@ -179,7 +180,7 @@ def bootstrap_database(session: Session, db_registry: db.SessionRegistry, year: 
     # Find teachers (depends on up-to-date departments). Takes 15 minutes
     processors.department_task(session, db_registry, crawler.crawl_teachers)
 
-    # Find classes (depends on up-to-date departments). Takes 15 minutes
+    # Find classes (depends on up-to-date departments). Takes 2 hours
     processors.department_task(session, db_registry, crawler.crawl_classes)
 
     # Find courses (depends on up-to-date institutions). Takes 5 minutes

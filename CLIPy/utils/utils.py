@@ -1,5 +1,3 @@
-from bs4 import BeautifulSoup
-
 from ..database import Controller
 
 weekdays = {'segunda': 0,
@@ -9,20 +7,6 @@ weekdays = {'segunda': 0,
             'sexta': 4,
             'sabado': 5,
             'domingo': 6}
-
-
-def parse_clean_request(request):
-    soup = BeautifulSoup(request.text, 'html.parser')
-    # Take useless stuff out of the way for better debugging.
-    for tag in soup.find_all('script'):
-        tag.decompose()
-    for tag in soup.find_all('head'):
-        tag.decompose()
-    for tag in soup.find_all('img'):
-        tag.decompose()
-    for tag in soup.find_all('meta'):
-        tag.decompose()
-    return soup
 
 
 def weekday_to_id(weekday: str):
