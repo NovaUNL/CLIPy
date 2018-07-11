@@ -389,15 +389,18 @@ class Teacher(Base):
     id = sa.Column(sa.Integer, primary_key=True)
     #: Full name
     name = sa.Column(sa.String)
-    #: The grade the student obtained at his/her graduation (0-200)
-    graduation_grade = sa.Column(sa.Integer, nullable=True, default=None)
+    department_id = sa.Column(sa.Integer, sa.ForeignKey(Department.id))
 
-    # Relation
+    # Relations
+    department = orm.relationship(Department, back_populates="teachers")
     turns = orm.relationship('Turn', secondary=turn_teachers, back_populates='teachers')
     class_messages = orm.relationship('ClassMessages')
 
     def __str__(self):
         return self.name
+
+
+Department.teachers = orm.relationship(Teacher, back_populates="department")
 
 
 class Student(Base):
@@ -421,6 +424,8 @@ class Student(Base):
     institution_id = sa.Column(sa.Integer, sa.ForeignKey(Institution.id), nullable=False)
     #: Student sexual gender (0 - boy, 1 - grill)
     gender = sa.Column(sa.Boolean, nullable=True, default=True)
+    #: The grade the student obtained at his/her graduation (0-200)
+    graduation_grade = sa.Column(sa.Integer, nullable=True, default=None)
 
     # Relations and constraints
     course = orm.relationship(Course, back_populates="students")

@@ -112,7 +112,10 @@ def crawl_teachers(session: WebSession, database: db.Controller, department: db.
                         raise Exception(f'Found two teachers with the same id ({identifier}).\n'
                                         f'\tT1:"{teachers[identifier].name}"\n\tT2:{name}')
                 else:
-                    teachers[identifier] = db.candidates.Teacher(identifier=identifier, name=name)
+                    teachers[identifier] = db.candidates.Teacher(
+                        identifier=identifier,
+                        name=name,
+                        department=department)
     for candidate in teachers.values():
         database.add_teacher(candidate)
 
@@ -367,7 +370,8 @@ def crawl_class_turns(session: WebSession, database: db.Controller, class_instan
     """
     log.info("Crawling class instance ID %s" % class_instance.id)
     class_instance = database.session.merge(class_instance)
-    institution = class_instance.parent.department.institution
+    department = class_instance.parent.department
+    institution = department.institution
 
     # --- Prepare the list of turns to crawl ---
     page = session.get_simplified_soup(urls.CLASS_TURNS.format(
@@ -426,11 +430,11 @@ def crawl_class_turns(session: WebSession, database: db.Controller, class_instan
         turn_type = database.get_turn_type(turn_type)
         teachers = []
         for name in teachers_names:
-            teacher = database.get_teacher(name)
+            teacher = database.get_teacher(name=name, department=department)
             if teacher is None:
                 log.warning(f'Unknown teacher {name}')
             else:
-                teachers.append(database.get_teacher(name))
+                teachers.append(teacher)
         turn = database.add_turn(
             db.candidates.Turn(
                 class_instance=class_instance,

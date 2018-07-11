@@ -106,9 +106,10 @@ class Student:
 
 
 class Teacher:
-    def __init__(self, identifier: int, name: str):
+    def __init__(self, identifier: int, name: str, department: Department):
         self.id = identifier
         self.name = name
+        self.department = department
 
     def __str__(self):
         return f'{self.name} ({self.id})'

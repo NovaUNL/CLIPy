@@ -295,12 +295,12 @@ class Controller:
         else:
             return self.session.query(models.TurnType).filter_by(abbreviation=abbreviation).first()
 
-    def get_teacher(self, name: str):
+    def get_teacher(self, name: str, department: models.Department):
         if self.__caching__:
             if name in self.__teachers__:
                 return self.__teachers__[name]
         else:
-            matches = self.session.query(models.Teacher).filter_by(name=name).all()
+            matches = self.session.query(models.Teacher).filter_by(name=name, department=department).all()
             if len(matches) == 1:
                 return matches[0]
             if len(matches) > 1:
@@ -646,17 +646,19 @@ class Controller:
             raise Exception("Duplicated students found:\n{}".format(students))
         return db_student
 
-    def add_teacher(self, teacher: candidates.Teacher) -> models.Teacher:
-        db_teacher = self.session.query(models.Teacher).filter_by(id=teacher.id, name=teacher.name).first()
+    def add_teacher(self, candidate: candidates.Teacher) -> models.Teacher:
+        teacher = self.session.query(models.Teacher).filter_by(id=candidate.id,
+                                                               name=candidate.name,
+                                                               department=candidate.department).first()
 
-        if db_teacher is None:
-            db_teacher = models.Teacher(id=teacher.id, name=teacher.name)
-            self.session.add(db_teacher)
+        if teacher is None:
+            teacher = models.Teacher(id=candidate.id, name=candidate.name, department=candidate.department)
+            self.session.add(teacher)
             self.session.commit()
             if self.__caching__:
                 self.__load_teachers__()
 
-        return db_teacher
+        return teacher
 
     def add_turn(self, turn: candidates.Turn) -> models.Turn:
         db_turn: models.Turn = self.session.query(models.Turn).filter_by(
