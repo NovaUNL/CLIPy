@@ -438,9 +438,11 @@ def get_places(page):
 
 
 #: The generic long room string looks something like `Laboratório de Ensino Ed xyz: Lab 123` most of the times
-LONG_ROOM_EXP = re.compile('(?P<room_type>Sala|Laboratório de Ensino|Anfiteatro|Hangar|Edifício|Auditório)'
-                           '( de (?P<room_subtype>Aula|Reunião|Mestrado|Computadores|Multimédia|Multiusos))?'
-                           '( Ed (?P<building>[\w ]+):)? (Lab[. ]? |Laboratório |H.|Ed: )?(?P<room_name>[\w .-]*)')
+LONG_ROOM_EXP = re.compile('(?P<room_type>Sala|Laboratório de Ensino|Anfiteatro|Hangar|Edifício|Auditório)(( de)? '
+                           '(?P<room_subtype>Aula|Reunião|Mestrado|Computadores|Multimédia|Multiusos))?'
+                           '( Ed (?P<building>[\w ]+):)? '
+                           '(?:Lab[. ]? (?:Computadores )?|Lab\.|Laboratório |H.|Ed: |Sala )?'
+                           '(?P<room_name>[\w .-]*)')
 
 
 def parse_place_str(place) -> (RoomType, str):

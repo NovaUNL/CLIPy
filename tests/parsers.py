@@ -245,6 +245,92 @@ class ParsingMethods(unittest.TestCase):
                                       (409, RoomType.masters, '105'),
                                       (1608, RoomType.meeting_room, '217-D')])
 
+    def test_place_str_parsing(self):
+        """
+        Similar to :py:func:`test_place_parsing`, but only tests the regex pattern, and a bit more extensively
+        """
+        places = """Sala de Reunião 217-D
+                    Sala de Mestrado Ed D: 105
+                    Sala de Computadores Ed D: 112
+                    Sala de Aula Ed D: 101
+                    Sala de Aula Ed D: 2.2
+                    Laboratório de Ensino Ed D: Lab Hidr.
+                    Laboratório de Ensino Ed D: Lab 127
+                    Laboratório de Ensino Lab. 048B
+                    Laboratório de Ensino Lab. 048
+                    Laboratório de Ensino Laboratório
+                    Laboratório de Ensino 334
+                    Anfiteatro Ed 2: 127
+                    Laboratório de Ensino Ed 2: Lab 101-E
+                    Laboratório de Ensino Laboratório DCM
+                    Sala de Aula Ed 2: 115
+                    Sala de Computadores Ed 2: Lab 110
+                    Sala de Aula Ed Hangar II: Desenho
+                    Laboratório de Ensino Ed Hangar III: Lab. Pedra
+                    Laboratório de Ensino Ed Hangar III: Lab. Vidro
+                    Anfiteatro 1.4
+                    Laboratório de Ensino 1
+                    Sala Multimédia 1.9
+                    Sala Multiusos Sala 1.1 
+                    Anfiteatro Biblioteca
+                    Laboratório de Ensino Ed 8: Lab Máquinas
+                    Laboratório de Ensino Ed 8: Lab Mec. Fluidos Termod. Aplicada
+                    Sala de Aula Ed 8: 3.3
+                    Sala de Computadores Ed 8: Lab Computadores 2.1
+                    Sala de Computadores Ed 8: Lab Polivalente
+                    Anfiteatro Ed 7: 1A
+                    Sala de Aula Sala Estudo DM
+                    Sala de Aula Sala Seminários DCSA 
+                    Laboratório de Ensino Ed 9: Lab 4.14
+                    Sala de Reunião 4.17
+                    Anfiteatro Ed 4: 201
+                    Laboratório de Ensino Lab.145
+                    Sala Multiusos Sala 1.1
+                    Laboratório de Ensino Ed 8: Lab Tecn. Industrial
+                    Sala de Computadores Ed 8: Lab Computadores 2.1""".split('\n')
+        result = []
+        for place in places:
+            result += parser.parse_place_str(place)
+        self.assertEqual(result, [RoomType.meeting_room, '217-D',
+                                  RoomType.masters, '105',
+                                  RoomType.computer, '112',
+                                  RoomType.classroom, '101',
+                                  RoomType.classroom, '2.2',
+                                  RoomType.laboratory, 'Hidr.',
+                                  RoomType.laboratory, '127',
+                                  RoomType.laboratory, '048B',
+                                  RoomType.laboratory, '048',
+                                  RoomType.laboratory, 'Laboratório',
+                                  RoomType.laboratory, '334',
+                                  RoomType.auditorium, '127',
+                                  RoomType.laboratory, '101-E',
+                                  RoomType.laboratory, 'DCM',
+                                  RoomType.classroom, '115',
+                                  RoomType.computer, '110',
+                                  RoomType.classroom, 'Desenho',
+                                  RoomType.laboratory, 'Pedra',
+                                  RoomType.laboratory, 'Vidro',
+                                  RoomType.auditorium, '1.4',
+                                  RoomType.laboratory, '1',
+                                  RoomType.masters, '1.9',
+                                  RoomType.generic, '1.1 ',
+                                  RoomType.auditorium, 'Biblioteca',
+                                  RoomType.laboratory, 'Máquinas',
+                                  RoomType.laboratory, 'Mec. Fluidos Termod. Aplicada',
+                                  RoomType.classroom, '3.3',
+                                  RoomType.computer, '2.1',
+                                  RoomType.computer, 'Polivalente',
+                                  RoomType.auditorium, '1A',
+                                  RoomType.classroom, 'Estudo DM',
+                                  RoomType.classroom, 'Seminários DCSA ',
+                                  RoomType.laboratory, '4.14',
+                                  RoomType.meeting_room, '4.17',
+                                  RoomType.auditorium, '201',
+                                  RoomType.laboratory, '145',
+                                  RoomType.generic, '1.1',
+                                  RoomType.laboratory, 'Tecn. Industrial',
+                                  RoomType.computer, '2.1'])
+
     def test_teacher_activity_parsing(self):
         """
         | Tests :py:func:`CLIPy.parser.get_places` against a :py:const:`CLIPy.urls.TEACHER_ACTIVITIES` page snapshot.
