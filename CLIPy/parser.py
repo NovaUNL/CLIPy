@@ -166,9 +166,8 @@ def get_enrollments(page):
 
 #: Generic turn scheduling string. Looks something like 'Segunda-Feira  XX:00 - YY:00  Ed Z: Lab 123 A/Ed.Z'
 TURN_SCHEDULING_EXP = re.compile(
-    '(?P<weekday>[\\w-]+) {2}'
-    '(?P<init_hour>\\d{2}):(?P<init_min>\\d{2}) - (?P<end_hour>\\d{2}):(?P<end_min>\\d{2})(?: {2})?'
-    '(?:Ed .*: (?P<room>[\\w\\b. ]+)/(?P<building>[\\w\\d. ]+))?')
+    '(?P<weekday>[\w-]+) {2}(?P<init_hour>\d{2}):(?P<init_min>\d{2}) - (?P<end_hour>\d{2}):(?P<end_min>\d{2})(?: {2})?'
+    '(?:Ed .*: (?P<lab>Lab )?(?P<room>[\w\b. ]+)\/(?P<building>[\w\d. ]+))?')
 
 
 def get_turn_info(page):
@@ -180,6 +179,7 @@ def get_turn_info(page):
              | ``instances, routes, teachers, restrictions, weekly_minutes, state, enrolled, capacity``
              | With instances, routes and teachers being lists
              | Instances has the following structure ``weekday, start, end, building, room``
+             | `room` is a tuple `name, type`, with `type` being `null` if unknown.
     """
 
     instances = []
@@ -219,15 +219,23 @@ def get_turn_info(page):
                 if information is None:
                     raise Exception("Bad schedule:" + str(information))
 
-                weekday = weekday_to_id(information.group('weekday'))
-                start = int(information.group('init_hour')) * 60 + int(information.group('init_min'))
-                end = int(information.group('end_hour')) * 60 + int(information.group('end_min'))
-                building = information.group('building')
-                if building:
-                    building = building.strip()
-                room = information.group('room')
-                if room:
-                    room = room.strip()
+                information = information.groupdict()
+
+                weekday = weekday_to_id(information['weekday'])
+                start = int(information['init_hour']) * 60 + int(information['init_min'])
+                end = int(information['end_hour']) * 60 + int(information['end_min'])
+                if 'building' in information and information['building'] is not None:
+                    building = information['building'].strip()
+                    if 'room' in information and information['room'] is not None:
+                        if 'lab' in information:
+                            room = (information['room'].strip(), RoomType.laboratory)
+                        else:
+                            room = (information['room'].strip(), None)
+                    else:
+                        room = None
+                else:
+                    building = None
+                    room = None
 
                 instances.append((weekday, start, end, building, room))
         elif field == "turno":

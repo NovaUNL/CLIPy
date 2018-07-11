@@ -451,7 +451,7 @@ def crawl_class_turns(session: WebSession, database: db.Controller, class_instan
             if building:
                 building = database.get_building(building)
                 if room:
-                    room = database.get_room(room, building)
+                    room = database.get_room(room[0], building, room_type=room[1])
             instances.append(db.candidates.TurnInstance(turn, start, end, weekday, room=room))
         del instances_aux
         database.add_turn_instances(instances)

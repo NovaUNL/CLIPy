@@ -120,7 +120,7 @@ class ParsingMethods(unittest.TestCase):
                      480,  # Start
                      660,  # End
                      'Ed.X',  # Building
-                     'Lab 2.2 A')  # Room
+                     ('2.2 A', RoomType.laboratory))  # Room
                 ],
                 ['Todos'],  # Routes TODO modify test to include routes
                 ['John Smith', 'Jane Doe'],  # Teachers
@@ -271,7 +271,7 @@ class ParsingMethods(unittest.TestCase):
                     Anfiteatro 1.4
                     Laboratório de Ensino 1
                     Sala Multimédia 1.9
-                    Sala Multiusos Sala 1.1 
+                    Sala Multiusos Sala 1.1
                     Anfiteatro Biblioteca
                     Laboratório de Ensino Ed 8: Lab Máquinas
                     Laboratório de Ensino Ed 8: Lab Mec. Fluidos Termod. Aplicada
@@ -280,7 +280,7 @@ class ParsingMethods(unittest.TestCase):
                     Sala de Computadores Ed 8: Lab Polivalente
                     Anfiteatro Ed 7: 1A
                     Sala de Aula Sala Estudo DM
-                    Sala de Aula Sala Seminários DCSA 
+                    Sala de Aula Sala Seminários DCSA
                     Laboratório de Ensino Ed 9: Lab 4.14
                     Sala de Reunião 4.17
                     Anfiteatro Ed 4: 201
@@ -313,7 +313,7 @@ class ParsingMethods(unittest.TestCase):
                                   RoomType.auditorium, '1.4',
                                   RoomType.laboratory, '1',
                                   RoomType.masters, '1.9',
-                                  RoomType.generic, '1.1 ',
+                                  RoomType.generic, '1.1',
                                   RoomType.auditorium, 'Biblioteca',
                                   RoomType.laboratory, 'Máquinas',
                                   RoomType.laboratory, 'Mec. Fluidos Termod. Aplicada',
@@ -322,7 +322,7 @@ class ParsingMethods(unittest.TestCase):
                                   RoomType.computer, 'Polivalente',
                                   RoomType.auditorium, '1A',
                                   RoomType.classroom, 'Estudo DM',
-                                  RoomType.classroom, 'Seminários DCSA ',
+                                  RoomType.classroom, 'Seminários DCSA',
                                   RoomType.laboratory, '4.14',
                                   RoomType.meeting_room, '4.17',
                                   RoomType.auditorium, '201',
