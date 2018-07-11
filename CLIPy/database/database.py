@@ -828,55 +828,67 @@ class Controller:
         log.info("{} enrollments added and {} updated ({} ignored)!".format(
             added, updated, len(enrollments) - added - updated))
 
-    def add_room(self, room: candidates.Room) -> models.Room:
-        changed = False
+    def add_room(self, candidate: candidates.Room) -> models.Room:
+        reload_cache = False
         try:
             if self.__caching__:
-                if room.building in self.__rooms__ \
-                        and room.type in self.__rooms__[room.building] \
-                        and room.name in self.__rooms__[room.building][room.type]:
-                    db_room = self.__rooms__[room.building][room.type][room.name]
+                if candidate.building in self.__rooms__ \
+                        and candidate.type in self.__rooms__[candidate.building] \
+                        and candidate.name in self.__rooms__[candidate.building][candidate.type]:
+                    room = self.__rooms__[candidate.building][candidate.type][candidate.name]
                 else:
-                    db_room = models.Room(id=room.id, name=room.name, room_type=room.type, building=room.building)
-                    self.session.add(db_room)
+                    room = models.Room(id=candidate.id,
+                                       name=candidate.name,
+                                       room_type=candidate.type,
+                                       building=candidate.building)
+                    self.session.add(room)
                     self.session.commit()
-                    changed = True
-                return db_room
+                    reload_cache = True
+                return room
             else:
-                db_room = self.session.query(models.Room).filter_by(
-                    name=room.name, room_type=room.type, building=room.building).first()
-                if db_room is None:
-                    db_room = models.Room(id=room.id, name=room.name, room_type=room.type, building=room.building)
-                    self.session.add(db_room)
+                room = self.session.query(models.Room).filter_by(
+                    name=candidate.name, room_type=candidate.type, building=candidate.building).first()
+                if room is None:
+                    room = models.Room(id=candidate.id,
+                                       name=candidate.name,
+                                       room_type=candidate.type,
+                                       building=candidate.building)
+                    self.session.add(room)
                     self.session.commit()
-                    changed = True
-                return db_room
+                return room
         except Exception:
             log.error("Failed to add the room\n%s" % traceback.format_exc())
             self.session.rollback()
         finally:
-            if self.__caching__ and changed:
+            if self.__caching__ and reload_cache:
                 self.__load_rooms__()
 
     def get_room(self, name: str, building: models.Building, room_type: models.RoomType = None) -> models.Room:
         if self.__caching__:
-            if building in self.__rooms__ and name in self.__rooms__[building]:
-                matches = []
-                for type in self.__rooms__[building]:
-                    if name in type:
-                        matches.append(type[name])
-                if len(matches) == 1:
-                    return matches[0]
-                if len(matches) > 1:
-                    raise Exception("Unable to determine which room is the correct one")
+            if room_type:
+                if building in self.__rooms__ and room_type in self.__rooms__[building] \
+                        and name in self.__rooms__[building][room_type]:
+                    return self.__rooms__[building][room_type][name]
+            else:
+                if building in self.__rooms__:
+                    matches = []
+                    for building_room_type in self.__rooms__[building]:
+                        if name in building_room_type:
+                            matches.append(building_room_type[name])
+                    if len(matches) == 1:
+                        return matches[0]
+                    if len(matches) > 1:
+                        raise Exception("Unable to determine which room is the correct one")
+                raise Exception('Unknown building')
         else:
             if room_type:
-                return self.session.query(models.Room).filter_by(name=name, room_type=room_type,
+                return self.session.query(models.Room).filter_by(name=name,
+                                                                 room_type=room_type,
                                                                  building=building).first()
             else:
-                matches = self.session.query(models.Room).filter_by(name=name, building=building)
+                matches = self.session.query(models.Room).filter_by(name=name, building=building).all()
                 if len(matches) == 1:
-                    return matches.first()
+                    return matches[0]
                 else:
                     raise Exception("Unable to determine which room is the correct one")
 
