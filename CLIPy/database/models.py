@@ -57,7 +57,7 @@ class Degree(Base):
     #: Identifier
     id = sa.Column(sa.Integer, sa.Sequence(TABLE_PREFIX + 'degree_id_seq'), primary_key=True)
     #: CLIP representation for this degree
-    internal_id = sa.Column(sa.String(5), nullable=False)
+    iid = sa.Column(sa.String(5), nullable=False)
     #: Verbose representation
     name = sa.Column(sa.String, nullable=False)
 
@@ -173,7 +173,7 @@ class Class(Base):
     id = sa.Column(sa.Integer, sa.Sequence(TABLE_PREFIX + 'class_id_seq'), primary_key=True)
     #: | CLIP assigned identifier (has collisions, apparently some time ago departments shared classes)
     #: | This could be fixed to become the only identifier, but it's probably not worth the normalization.
-    internal_id = sa.Column(sa.Integer)
+    iid = sa.Column(sa.Integer)
     #: Full name
     name = sa.Column(sa.String(100))
     #: Acconym-ish name given by someone over the rainbow (probably a nice madam @ divisão académica)
@@ -186,10 +186,10 @@ class Class(Base):
     # Relations and constraints
     department = orm.relationship(Department, back_populates="classes")
     curricular_plans = orm.relationship('CurricularPlan', secondary=curricular_plan_classes, back_populates='classes')
-    __table_args__ = (sa.UniqueConstraint('internal_id', 'department_id', name='un_' + TABLE_PREFIX + 'class_dept'),)
+    __table_args__ = (sa.UniqueConstraint('iid', 'department_id', name='un_' + TABLE_PREFIX + 'class_dept'),)
 
     def __str__(self):
-        return "{}(id:{}, dept:{})".format(self.name, self.internal_id, self.department)
+        return "{}(id:{}, dept:{})".format(self.name, self.iid, self.department)
 
 
 Department.classes = orm.relationship(
@@ -347,7 +347,7 @@ class Course(Base, TemporalEntity):
     #: Crawler generated identifier
     id = sa.Column(sa.Integer, sa.Sequence(TABLE_PREFIX + 'course_id_seq'), primary_key=True)
     #: CLIP internal identifier
-    internal_id = sa.Column(sa.Integer)
+    iid = sa.Column(sa.Integer)
     #: Full name
     name = sa.Column(sa.String(80))
     #: Course acronym
@@ -361,16 +361,16 @@ class Course(Base, TemporalEntity):
     degree = orm.relationship(Degree, back_populates="courses")
     institution = orm.relationship("Institution", back_populates="courses")
     __table_args__ = (
-        sa.UniqueConstraint('institution_id', 'internal_id', 'abbreviation', name='un_' + TABLE_PREFIX + 'course'),)
+        sa.UniqueConstraint('institution_id', 'iid', 'abbreviation', name='un_' + TABLE_PREFIX + 'course'),)
 
     def __str__(self):
         return ("{}(ID:{} Abbreviation:{}, Degree:{} Institution:{})".format(
-            self.name, self.internal_id, self.abbreviation, self.degree, self.institution)
+            self.name, self.iid, self.abbreviation, self.degree, self.institution)
                 + super().__str__())
 
 
-Degree.courses = orm.relationship("Course", order_by=Course.internal_id, back_populates="degree")
-Institution.courses = orm.relationship("Course", order_by=Course.internal_id, back_populates="institution")
+Degree.courses = orm.relationship("Course", order_by=Course.iid, back_populates="degree")
+Institution.courses = orm.relationship("Course", order_by=Course.iid, back_populates="institution")
 
 turn_students = sa.Table(
     TABLE_PREFIX + 'turn_students', Base.metadata,
@@ -410,14 +410,14 @@ Department.teachers = orm.relationship(Teacher, back_populates="department")
 class Student(Base, TemporalEntity):
     """
     | A CLIP user which is/was doing a course.
-    | When a student transfers to another course a new ``internal_id`` is assigned, so some persons have multiple
+    | When a student transfers to another course a new ``iid`` is assigned, so some persons have multiple
         student entries.
     """
     __tablename__ = TABLE_PREFIX + 'students'
     #: Crawler assigned ID
     id = sa.Column(sa.Integer, sa.Sequence(TABLE_PREFIX + 'student_id_seq'), primary_key=True)
     #: CLIP assigned ID
-    internal_id = sa.Column(sa.Integer)
+    iid = sa.Column(sa.Integer)
     #: Student full name
     name = sa.Column(sa.String(100))
     #: CLIP assigned auth abbreviation (eg: john.f)
@@ -436,14 +436,14 @@ class Student(Base, TemporalEntity):
     institution = orm.relationship("Institution", back_populates="students")
     turns = orm.relationship('Turn', secondary=turn_students, back_populates='students')
     __table_args__ = (
-        sa.UniqueConstraint('institution_id', 'internal_id', 'abbreviation', name='un_' + TABLE_PREFIX + 'student'),)
+        sa.UniqueConstraint('institution_id', 'iid', 'abbreviation', name='un_' + TABLE_PREFIX + 'student'),)
 
     def __str__(self):
-        return "{} ({}, {})".format(self.name, self.internal_id, self.abbreviation)
+        return "{} ({}, {})".format(self.name, self.iid, self.abbreviation)
 
 
-Course.students = orm.relationship(Student, order_by=Student.internal_id, back_populates="course")
-Institution.students = orm.relationship(Student, order_by=Student.internal_id, back_populates="institution")
+Course.students = orm.relationship(Student, order_by=Student.iid, back_populates="course")
+Institution.students = orm.relationship(Student, order_by=Student.iid, back_populates="institution")
 
 
 class ClassMessages(Base):

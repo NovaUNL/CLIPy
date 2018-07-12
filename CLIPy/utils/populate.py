@@ -138,7 +138,7 @@ def populate_courses(session: Session, database: db.Controller):
         for degree in database.get_degree_set():
             page = session.get_simplified_soup(urls.STATISTICS.format(
                 institution=institution.id,
-                degree=degree.internal_id))
+                degree=degree.iid))
             for identifier, abbreviation in parser.get_course_abbreviations(page):
                 if identifier in courses:
                     courses[identifier].abbreviation = abbreviation

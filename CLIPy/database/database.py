@@ -93,7 +93,7 @@ class Controller:
         for degree in self.session.query(models.Degree).all():
             if degree.id == 4:  # FIXME, skipping the Integrated Master to avoid having it replace the Master
                 continue
-            degrees[degree.internal_id] = degree
+            degrees[degree.iid] = degree
         self.__degrees__ = degrees
 
     def __load_periods__(self):
@@ -118,7 +118,7 @@ class Controller:
         courses = {}
         course_abbreviations = {}
         for course in self.session.query(models.Course).all():
-            courses[course.internal_id] = course
+            courses[course.iid] = course
 
             if course.abbreviation not in course_abbreviations:
                 course_abbreviations[course.abbreviation] = []
@@ -171,13 +171,13 @@ class Controller:
 
     def __insert_default_degrees__(self):
         self.session.add_all(
-            [models.Degree(id=1, internal_id='L', name="Licenciatura"),
-             models.Degree(id=2, internal_id='M', name="Mestrado"),
-             models.Degree(id=3, internal_id='D', name="Doutoramento"),
-             models.Degree(id=4, internal_id='M', name="Mestrado Integrado"),
-             models.Degree(id=5, internal_id='Pg', name="Pos-Graduação"),
-             models.Degree(id=6, internal_id='EA', name="Estudos Avançados"),
-             models.Degree(id=7, internal_id='pG', name="Pré-Graduação")])
+            [models.Degree(id=1, iid='L', name="Licenciatura"),
+             models.Degree(id=2, iid='M', name="Mestrado"),
+             models.Degree(id=3, iid='D', name="Doutoramento"),
+             models.Degree(id=4, iid='M', name="Mestrado Integrado"),
+             models.Degree(id=5, iid='Pg', name="Pos-Graduação"),
+             models.Degree(id=6, iid='EA', name="Estudos Avançados"),
+             models.Degree(id=7, iid='pG', name="Pré-Graduação")])
         self.session.commit()
 
     def __insert_default_turn_types__(self):
@@ -257,7 +257,7 @@ class Controller:
                 if identifier in self.__courses__:
                     return self.__courses__[identifier]
             else:
-                return self.session.query(models.Course).filter_by(internal_id=identifier).first()
+                return self.session.query(models.Course).filter_by(iid=identifier).first()
         elif abbreviation is not None:
             if self.__caching__:
                 if abbreviation not in self.__course_abbrs__:
@@ -275,7 +275,7 @@ class Controller:
                         if match.initial_year <= year <= match.last_year:
                             return match
             else:
-                matches = self.session.query(models.Course).filter_by(internal_id=identifier).all()
+                matches = self.session.query(models.Course).filter_by(iid=identifier).all()
                 if len(matches) == 0:
                     return None
                 elif len(matches) == 1:
@@ -306,8 +306,8 @@ class Controller:
             if len(matches) > 1:
                 raise Exception(f'Several teachers with the name {name}')
 
-    def get_class(self, internal_id: int):
-        return self.session.query(models.Class).filter_by(internal_id=internal_id).first()
+    def get_class(self, iid: int):
+        return self.session.query(models.Class).filter_by(iid=iid).first()
 
     def add_institutions(self, institutions: [candidates.Institution]):
         """
@@ -429,7 +429,7 @@ class Controller:
 
     def add_class(self, candidate: candidates.Class):
         db_class = self.session.query(models.Class).filter_by(
-            internal_id=candidate.id,
+            iid=candidate.id,
             department=candidate.department
         ).first()
 
@@ -452,7 +452,7 @@ class Controller:
 
         log.info("Adding class {}".format(candidate))
         db_class = models.Class(
-            internal_id=candidate.id,
+            iid=candidate.id,
             name=candidate.name,
             department=candidate.department,
             abbreviation=candidate.abbreviation,
@@ -542,13 +542,13 @@ class Controller:
         try:
             for course in courses:
                 db_course = self.session.query(models.Course).filter_by(
-                    internal_id=course.id,
+                    iid=course.id,
                     institution=course.institution
                 ).first()
 
                 if db_course is None:
                     self.session.add(models.Course(
-                        internal_id=course.id,
+                        iid=course.id,
                         name=course.name,
                         abbreviation=course.abbreviation,
                         first_year=course.first_year,
@@ -603,11 +603,11 @@ class Controller:
         else:
             raise Exception("Neither course nor institution provided")
 
-        students: List[models.Student] = self.session.query(models.Student).filter_by(internal_id=candidate.id).all()
+        students: List[models.Student] = self.session.query(models.Student).filter_by(iid=candidate.id).all()
 
         if len(students) == 0:  # new student, add him
             student = models.Student(
-                internal_id=candidate.id,
+                iid=candidate.id,
                 name=candidate.name,
                 abbreviation=candidate.abbreviation,
                 institution=institution,
@@ -641,7 +641,7 @@ class Controller:
 
             else:
                 student = models.Student(
-                    internal_id=candidate.id,
+                    iid=candidate.id,
                     name=candidate.name,
                     abbreviation=candidate.abbreviation,
                     institution=institution,
