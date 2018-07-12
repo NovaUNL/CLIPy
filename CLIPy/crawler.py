@@ -222,7 +222,10 @@ def crawl_admissions(session: WebSession, database: db.Controller, institution: 
             course_ids.add(course_id)
 
         for course_id in course_ids:
-            course = database.get_course(identifier=course_id)  # TODO ensure that doesn't end up as None
+            course = database.get_course(identifier=course_id, institution=institution)
+            if course is None:
+                log.error("Unable to fetch the course with the internal identifier {course_id}. Skipping.")
+                continue
             for phase in range(1, 4):  # For every of the three phases
                 page = session.get_simplified_soup(urls.ADMITTED.format(
                     institution=institution.id,
@@ -269,7 +272,7 @@ def crawl_class_enrollments(session: WebSession, database: db.Controller, class_
 
     enrollments = []
     for student_id, name, abbreviation, statutes, course_abbr, attempt, student_year in parser.get_enrollments(page):
-        course = database.get_course(abbreviation=course_abbr, year=class_instance.year)
+        course = database.get_course(abbreviation=course_abbr, year=class_instance.year, institution=institution)
 
         # TODO consider sub-courses EG: MIEA/[Something]
         observation = course_abbr if course is not None else (course_abbr + "(Unknown)")
@@ -482,7 +485,7 @@ def crawl_class_turns(session: WebSession, database: db.Controller, class_instan
         # Assign students to this turn
         students = []
         for name, student_id, abbreviation, course_abbreviation in parser.get_turn_students(page):
-            course = database.get_course(abbreviation=course_abbreviation, year=class_instance.year)
+            course = database.get_course(abbreviation=course_abbreviation, year=year, institution=institution)
             student = database.add_student(
                 db.candidates.Student(
                     identifier=student_id,

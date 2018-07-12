@@ -251,15 +251,13 @@ class Controller:
     def get_period_set(self):
         return set(self.session.query(models.Period).all())
 
-    def get_course(self, identifier=None, abbreviation=None, year=None):
-        if identifier is not None:
-            if self.__caching__:
+    def get_course(self, identifier: int = None, abbreviation: str = None, year: int = None,
+                   institution: models.Institution = None):
+        if self.__caching__:  # Fetch it from the caches
+            if identifier is not None:  # FIXME this does not consider entries with the same internal_id
                 if identifier in self.__courses__:
                     return self.__courses__[identifier]
-            else:
-                return self.session.query(models.Course).filter_by(iid=identifier).first()
-        elif abbreviation is not None:
-            if self.__caching__:
+            elif abbreviation is not None:
                 if abbreviation not in self.__course_abbrs__:
                     return None
                 matches = self.__course_abbrs__[abbreviation]
@@ -274,19 +272,37 @@ class Controller:
                     for match in matches:
                         if match.initial_year <= year <= match.last_year:
                             return match
+        else:  # Query it from the db (with the provided parameters)
+            if identifier is not None:
+                if institution is not None:
+                    matches = self.session.query(models.Course).filter_by(iid=identifier, institution=institution).all()
+                else:
+                    matches = self.session.query(models.Course).filter_by(iid=identifier).all()
+            elif abbreviation is not None:
+                if institution is not None:
+                    matches = self.session.query(models.Course) \
+                        .filter_by(abbreviation=abbreviation, institution=institution).all()
+                else:
+                    matches = self.session.query(models.Course).filter_by(abbreviation=abbreviation).all()
             else:
-                matches = self.session.query(models.Course).filter_by(iid=identifier).all()
-                if len(matches) == 0:
-                    return None
-                elif len(matches) == 1:
-                    return matches[0]
+                return None
 
+            if len(matches) == 1:
+                return matches[0]
+            if len(matches) > 1:
                 if year is None:
                     raise Exception("Multiple matches. Year unspecified")
 
-                for match in matches:
-                    if match.initial_year <= year <= match.last_year:
-                        return match
+                # Year filter
+                if year is not None:
+                    year_matches = []
+                    for course in matches:
+                        if course.contains(year):
+                            year_matches.append(course)
+                    if len(year_matches) == 1:
+                        return year_matches[0]
+                    elif len(matches) > 1:
+                        raise Exception("Multiple matches. Unable to determine the correct one.")
 
     def get_turn_type(self, abbreviation: str):
         if self.__caching__:

@@ -113,6 +113,9 @@ class TemporalEntity:
         elif self.last_year < year:
             self.last_year = year
 
+    def contains(self, year):
+        return year >= self.first_year and year <= self.first_year
+
     def __str__(self):
         return ('' if self.first_year is None or self.last_year is None else ' {} - {}'.format(
             self.first_year, self.last_year))
