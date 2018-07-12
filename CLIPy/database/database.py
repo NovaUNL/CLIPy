@@ -676,11 +676,11 @@ class Controller:
         return student
 
     def add_teacher(self, candidate: candidates.Teacher) -> models.Teacher:
-        teacher: models.Teacher = self.session.query(models.Teacher).filter_by(id=candidate.id).first()
+        teacher: models.Teacher = self.session.query(models.Teacher).filter_by(iid=candidate.id).first()
         changed = False
 
         if teacher:
-            if teacher.name != candidate.name or teacher.department != candidate.department:
+            if teacher.name != candidate.name:
                 raise Exception('Two diferent teachers with the same ID:\n'
                                 f'\t{teacher}\n'
                                 f'\t{candidate}')
@@ -689,7 +689,7 @@ class Controller:
                 teacher.add_year(candidate.last_year)
                 changed = True
         else:
-            teacher = models.Teacher(id=candidate.id,
+            teacher = models.Teacher(iid=candidate.id,
                                      name=candidate.name,
                                      department=candidate.department,
                                      first_year=candidate.first_year,

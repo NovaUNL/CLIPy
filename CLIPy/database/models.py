@@ -392,11 +392,11 @@ class Teacher(Base, TemporalEntity):
     #: Needed because iid is not unique (one teacher, multiple departments)
     id = sa.Column(sa.Integer, sa.Sequence(TABLE_PREFIX + 'course_id_seq'), primary_key=True)
     #: CLIP assigned identifier
-    iid = sa.Column(sa.Integer)
+    iid = sa.Column(sa.Integer, nullable=False)
     #: Full name
     name = sa.Column(sa.String)
     #: Belonging department
-    department_id = sa.Column(sa.Integer, sa.ForeignKey(Department.id), primary_key=True)
+    department_id = sa.Column(sa.Integer, sa.ForeignKey(Department.id))
 
     # Relations
     department = orm.relationship(Department, back_populates="teachers")
@@ -404,7 +404,7 @@ class Teacher(Base, TemporalEntity):
     class_messages = orm.relationship('ClassMessages')
 
     def __str__(self):
-        return self.name
+        return f'{self.name} ({self.iid}, {self.department.name})'
 
 
 Department.teachers = orm.relationship(Teacher, back_populates="department")
