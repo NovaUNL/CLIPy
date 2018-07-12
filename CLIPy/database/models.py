@@ -383,13 +383,17 @@ turn_teachers = sa.Table(
     sa.Column('teacher_id', sa.ForeignKey(TABLE_PREFIX + 'teachers.id'), primary_key=True))
 
 
-class Teacher(Base):
+class Teacher(Base, TemporalEntity):
     __tablename__ = TABLE_PREFIX + 'teachers'
+    #: Auto-generated identifier.
+    #: Needed because iid is not unique (one teacher, multiple departments)
+    id = sa.Column(sa.Integer, sa.Sequence(TABLE_PREFIX + 'course_id_seq'), primary_key=True)
     #: CLIP assigned identifier
-    id = sa.Column(sa.Integer, primary_key=True)
+    iid = sa.Column(sa.Integer)
     #: Full name
     name = sa.Column(sa.String)
-    department_id = sa.Column(sa.Integer, sa.ForeignKey(Department.id))
+    #: Belonging department
+    department_id = sa.Column(sa.Integer, sa.ForeignKey(Department.id), primary_key=True)
 
     # Relations
     department = orm.relationship(Department, back_populates="teachers")
@@ -403,7 +407,7 @@ class Teacher(Base):
 Department.teachers = orm.relationship(Teacher, back_populates="department")
 
 
-class Student(Base):
+class Student(Base, TemporalEntity):
     """
     | A CLIP user which is/was doing a course.
     | When a student transfers to another course a new ``internal_id`` is assigned, so some persons have multiple

@@ -92,10 +92,10 @@ class Course(TemporalEntity):
         return "{} ({})".format(self.name, self.degree.name)
 
 
-class Student:
+class Student(TemporalEntity):
     def __init__(self, identifier, name: str, course: models.Course, institution: models.Institution,
-                 abbreviation=None):
-        self.id = identifier
+                 abbreviation=None, first_year: int = None, last_year: int = None):
+        super().__init__(identifier, first_year, last_year)
         self.name = name
         self.course = course
         self.institution = institution
@@ -105,14 +105,15 @@ class Student:
         return "{} ({}, {})".format(self.name, self.id, self.abbreviation)
 
 
-class Teacher:
-    def __init__(self, identifier: int, name: str, department: Department):
-        self.id = identifier
+class Teacher(TemporalEntity):
+    def __init__(self, identifier: int, name: str, department: Department,
+                 first_year: int = None, last_year: int = None):
+        super().__init__(identifier, first_year, last_year)
         self.name = name
         self.department = department
 
     def __str__(self):
-        return f'{self.name} ({self.id})'
+        return f'{self.name} ({self.id}, {self.department.name})'
 
 
 class Admission:

@@ -588,72 +588,100 @@ class Controller:
             if self.__caching__:
                 self.__load_courses__()
 
-    def add_student(self, student: candidates.Student):
-        if student.name is None or student.name == '':  # TODO Move this out of here
+    def add_student(self, candidate: candidates.Student):
+        if candidate.name is None or candidate.name == '':
             raise Exception("Invalid name")
 
-        if student.id is None:
+        if candidate.id is None:
             raise Exception('No student ID provided')
 
-        if student.course is not None:
+        if candidate.course is not None:
             # Search for institution instead of course since a transfer could have happened
-            institution = student.course.institution
-        elif student.institution is not None:
-            institution = student.institution
+            institution = candidate.course.institution
+        elif candidate.institution is not None:
+            institution = candidate.institution
         else:
             raise Exception("Neither course nor institution provided")
 
-        db_students: List[models.Student] = self.session.query(models.Student).filter_by(internal_id=student.id).all()
+        students: List[models.Student] = self.session.query(models.Student).filter_by(internal_id=candidate.id).all()
 
-        if len(db_students) == 0:  # new student, add him
-            db_student = models.Student(
-                internal_id=student.id,
-                name=student.name,
-                abbreviation=student.abbreviation,
+        if len(students) == 0:  # new student, add him
+            student = models.Student(
+                internal_id=candidate.id,
+                name=candidate.name,
+                abbreviation=candidate.abbreviation,
                 institution=institution,
-                course=student.course)
-            self.session.add(db_student)
+                course=candidate.course,
+                first_year=candidate.first_year,
+                last_year=candidate.last_year)
+            self.session.add(student)
             self.session.commit()
-        elif len(db_students) == 1:
-            db_student = db_students[0]
-            if db_student.abbreviation == student.abbreviation or db_student.name == student.name:
-                if db_student.abbreviation is None:
-                    if student.abbreviation is not None:
-                        db_student.abbreviation = student.abbreviation
+        elif len(students) == 1:
+            student = students[0]
+            if student.abbreviation == candidate.abbreviation or student.name == candidate.name:
+                if student.abbreviation is None:
+                    if candidate.abbreviation is not None:
+                        student.abbreviation = candidate.abbreviation
                         self.session.commit()
-                elif student.abbreviation is not None and student.abbreviation != db_student.abbreviation:
+                elif candidate.abbreviation is not None and candidate.abbreviation != student.abbreviation:
                     raise Exception(
                         "Attempted to change the student abbreviation to another one\n"
                         "Student:{}\n"
-                        "Candidate{}".format(db_student, student))
+                        "Candidate{}".format(student, candidate))
 
-                if student.course is not None:
-                    db_student.course = student.course
+                if candidate.course is not None:
+                    student.course = candidate.course
                     self.session.commit()
+
+                if candidate.first_year or candidate.last_year:
+                    if student.first_year != candidate.first_year:
+                        student.add_year(candidate.first_year)
+                    if student.last_year != candidate.last_year:
+                        student.add_year(candidate.last_year)
+
             else:
-                db_student = models.Student(
-                    internal_id=student.id,
-                    name=student.name,
-                    abbreviation=student.abbreviation,
+                student = models.Student(
+                    internal_id=candidate.id,
+                    name=candidate.name,
+                    abbreviation=candidate.abbreviation,
                     institution=institution,
-                    course=student.course)
-                self.session.add(db_student)
+                    course=candidate.course,
+                    first_year=candidate.first_year,
+                    last_year=candidate.last_year)
+                self.session.add(student)
+                self.session.commit()
 
         else:  # database inconsistency
             students = ""
-            for student in db_students:
-                students += ("%s," % student)
+            for candidate in students:
+                students += ("%s," % candidate)
             raise Exception("Duplicated students found:\n{}".format(students))
-        return db_student
+
+        return student
 
     def add_teacher(self, candidate: candidates.Teacher) -> models.Teacher:
-        teacher = self.session.query(models.Teacher).filter_by(id=candidate.id,
-                                                               name=candidate.name,
-                                                               department=candidate.department).first()
+        teacher: models.Teacher = self.session.query(models.Teacher).filter_by(id=candidate.id).first()
+        changed = False
 
-        if teacher is None:
-            teacher = models.Teacher(id=candidate.id, name=candidate.name, department=candidate.department)
+        if teacher:
+            if teacher.name != candidate.name or teacher.department != candidate.department:
+                raise Exception('Two diferent teachers with the same ID:\n'
+                                f'\t{teacher}\n'
+                                f'\t{candidate}')
+            if teacher.first_year != candidate.first_year or teacher.last_year != candidate.last_year:
+                teacher.add_year(candidate.first_year)
+                teacher.add_year(candidate.last_year)
+                changed = True
+        else:
+            teacher = models.Teacher(id=candidate.id,
+                                     name=candidate.name,
+                                     department=candidate.department,
+                                     first_year=candidate.first_year,
+                                     last_year=candidate.last_year)
             self.session.add(teacher)
+            changed = True
+
+        if changed:
             self.session.commit()
             if self.__caching__:
                 self.__load_teachers__()

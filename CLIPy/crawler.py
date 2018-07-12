@@ -111,11 +111,14 @@ def crawl_teachers(session: WebSession, database: db.Controller, department: db.
                     if teachers[identifier].name != name:
                         raise Exception(f'Found two teachers with the same id ({identifier}).\n'
                                         f'\tT1:"{teachers[identifier].name}"\n\tT2:{name}')
+                    teachers[identifier].add_year(year)
                 else:
                     teachers[identifier] = db.candidates.Teacher(
                         identifier=identifier,
                         name=name,
-                        department=department)
+                        department=department,
+                        first_year=year,
+                        last_year=year)
     for candidate in teachers.values():
         database.add_teacher(candidate)
 
@@ -230,7 +233,14 @@ def crawl_admissions(session: WebSession, database: db.Controller, institution: 
                 for name, option, student_iid, state in candidates:
                     student = None
                     if student_iid:  # if the student has an id add him/her to the database
-                        student = database.add_student(db.candidates.Student(student_iid, name, course, institution))
+                        student = database.add_student(
+                            db.candidates.Student(
+                                identifier=student_iid,
+                                name=name,
+                                course=course,
+                                institution=institution,
+                                first_year=year,
+                                last_year=year))
 
                     name = name if student is None else None
                     admission = db.candidates.Admission(student, name, course, phase, year, option, state)
@@ -240,8 +250,9 @@ def crawl_admissions(session: WebSession, database: db.Controller, institution: 
 
 def crawl_class_enrollments(session: WebSession, database: db.Controller, class_instance: db.models.ClassInstance):
     log.info("Crawling class instance ID %s" % class_instance.id)
-    class_instance = database.session.merge(class_instance)
+    class_instance: db.models.ClassInstance = database.session.merge(class_instance)
     institution = class_instance.parent.department.institution
+    year = class_instance.year
 
     page = session.get_simplified_soup(urls.CLASS_ENROLLED.format(
         institution=institution.id,
@@ -263,8 +274,15 @@ def crawl_class_enrollments(session: WebSession, database: db.Controller, class_
         # TODO consider sub-courses EG: MIEA/[Something]
         observation = course_abbr if course is not None else (course_abbr + "(Unknown)")
         # update student info and take id
-        student = database.add_student(db.candidates.Student(
-            student_id, name, abbreviation=abbreviation, course=course, institution=institution))
+        student = database.add_student(
+            db.candidates.Student(
+                identifier=student_id,
+                name=name,
+                abbreviation=abbreviation,
+                course=course,
+                institution=institution,
+                first_year=year,
+                last_year=year))
 
         enrollment = db.candidates.Enrollment(student, class_instance, attempt, student_year, statutes, observation)
         enrollments.append(enrollment)
@@ -369,9 +387,10 @@ def crawl_class_turns(session: WebSession, database: db.Controller, class_instan
     :param class_instance: ClassInstance object to look after
     """
     log.info("Crawling class instance ID %s" % class_instance.id)
-    class_instance = database.session.merge(class_instance)
+    class_instance: db.models.ClassInstance = database.session.merge(class_instance)
     department = class_instance.parent.department
     institution = department.institution
+    year = class_instance.year
 
     # --- Prepare the list of turns to crawl ---
     page = session.get_simplified_soup(urls.CLASS_TURNS.format(
@@ -465,6 +484,13 @@ def crawl_class_turns(session: WebSession, database: db.Controller, class_instan
         for name, student_id, abbreviation, course_abbreviation in parser.get_turn_students(page):
             course = database.get_course(abbreviation=course_abbreviation, year=class_instance.year)
             student = database.add_student(
-                db.candidates.Student(student_id, name, course, institution, abbreviation=abbreviation))
+                db.candidates.Student(
+                    identifier=student_id,
+                    name=name,
+                    course=course,
+                    institution=institution,
+                    abbreviation=abbreviation,
+                    first_year=year,
+                    last_year=year))
             students.append(student)
         database.add_turn_students(turn, students)
