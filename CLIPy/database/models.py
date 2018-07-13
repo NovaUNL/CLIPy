@@ -238,6 +238,8 @@ class File(Base):
     uploader = sa.Column(sa.String(100))
     #: What this file represents or the category it got dumped into
     file_type = sa.Column(IntEnum(FileType))
+
+    # Relations
     class_instances = orm.relationship('ClassInstance', secondary=class_instance_files, back_populates='files')
 
 
@@ -256,55 +258,85 @@ class ClassInstance(Base):
     period_id = sa.Column(sa.Integer, sa.ForeignKey(Period.id), nullable=False)
     #: Year on which this instance happened
     year = sa.Column(sa.Integer)
-    #: Description of what happens in this class
+    #: Description of what happens in this class (portuguese)
     description_pt = sa.Column(sa.Text, nullable=True)
+    #: Description of what happens in this class (english)
     description_en = sa.Column(sa.Text, nullable=True)
+    #: Timestamp of the last description fields edition
     description_edited_datetime = sa.Column(sa.DateTime, nullable=True)
+    #: Verbose identifier of who last edited the description fields
     description_editor = sa.Column(sa.String(100), nullable=True)
-    #: Planned student competence acquisition
+    #: Planned student competence acquisition (portuguese)
     objectives_pt = sa.Column(sa.Text, nullable=True)
+    #: Planned student competence acquisition (english)
     objectives_en = sa.Column(sa.Text, nullable=True)
+    #: Timestamp of the last objectives fields edition
     objectives_edited_datetime = sa.Column(sa.DateTime, nullable=True)
+    #: Verbose identifier of who last edited the objectives fields
     objectives_editor = sa.Column(sa.String(100), nullable=True)
-    #: Requirements to participate in this class
+    #: Requirements to participate in this class (portuguese)
     requirements_pt = sa.Column(sa.Text, nullable=True)
+    #: Requirements to participate in this class (english)
     requirements_en = sa.Column(sa.Text, nullable=True)
-    requirements_editor = sa.Column(sa.String(100), nullable=True)
+    #: Timestamp of the last requirements fields edition
     requirements_edited_datetime = sa.Column(sa.DateTime, nullable=True)
-    #: Class planned student competence acquisition
+    #: Verbose identifier of who last edited the requirements fields
+    requirements_editor = sa.Column(sa.String(100), nullable=True)
+    #: Class planned student competence acquisition (portuguese)
     competences_pt = sa.Column(sa.Text, nullable=True)
+    #: Class planned student competence acquisition (english)
     competences_en = sa.Column(sa.Text, nullable=True)
+    #: Timestamp of the last competences fields edition
     competences_edited_datetime = sa.Column(sa.DateTime, nullable=True)
+    #: Verbose identifier of who last edited the competences fields
     competences_editor = sa.Column(sa.String(100), nullable=True)
-    #: Planned teachings
+    #: Planned teachings (portuguese)
     program_pt = sa.Column(sa.Text, nullable=True)
+    #: Planned teachings (english)
     program_en = sa.Column(sa.Text, nullable=True)
+    #: Timestamp of the last description fields edition
     program_edited_datetime = sa.Column(sa.DateTime, nullable=True)
+    #: Verbose identifier of who last edited the program fields
     program_editor = sa.Column(sa.String(100), nullable=True)
-    #: Teaching sources / bibliography
+    #: Teaching sources / bibliography (portuguese)
     bibliography_pt = sa.Column(sa.Text, nullable=True)
+    #: Teaching sources / bibliography (english)
     bibliography_en = sa.Column(sa.Text, nullable=True)
+    #: Timestamp of the last bibliography fields edition
     bibliography_edited_datetime = sa.Column(sa.DateTime, nullable=True)
+    #: Verbose identifier of who last edited the bibliography fields
     bibliography_editor = sa.Column(sa.String(100), nullable=True)
-    #: Verbose schedules for individual teacher assistance
+    #: Verbose schedules for individual teacher assistance (portuguese)
     assistance_pt = sa.Column(sa.Text, nullable=True)
+    #: Verbose schedules for individual teacher assistance (english)
     assistance_en = sa.Column(sa.Text, nullable=True)
+    #: Timestamp of the last assistance fields edition
     assistance_edited_datetime = sa.Column(sa.DateTime, nullable=True)
+    #: Verbose identifier of who last edited the assistance info fields
     assistance_editor = sa.Column(sa.String(100), nullable=True)
-    #: Teaching methods verbosely explained
+    #: Teaching methods verbosely explained (portuguese)
     teaching_methods_pt = sa.Column(sa.Text, nullable=True)
+    #: Teaching methods verbosely explained (english)
     teaching_methods_en = sa.Column(sa.Text, nullable=True)
+    #: Timestamp of the last teaching methods fields edition
     teaching_methods_edited_datetime = sa.Column(sa.DateTime, nullable=True)
+    #: Verbose identifier of who last edited the teaching methods fields
     teaching_methods_editor = sa.Column(sa.String(100), nullable=True)
-    #: Evaluation methods verbosely explained
+    #: Evaluation methods verbosely explained (portuguese)
     evaluation_methods_pt = sa.Column(sa.Text, nullable=True)
+    #: Evaluation methods verbosely explained (english)
     evaluation_methods_en = sa.Column(sa.Text, nullable=True)
+    #: Timestamp of the last evaluation methods fields edition
     evaluation_methods_edited_datetime = sa.Column(sa.DateTime, nullable=True)
+    #: Verbose identifier of who last edited the evaluation methods fields
     evaluation_methods_editor = sa.Column(sa.String(100), nullable=True)
-    #: Additional information such as start date and moodle pages
+    #: Additional information such as start date and moodle pages (portuguese)
     extra_info_pt = sa.Column(sa.Text, nullable=True)
+    #: Additional information such as start date and moodle pages (english)
     extra_info_en = sa.Column(sa.Text, nullable=True)
+    #: Timestamp of the extra info edition
     extra_info_edited_datetime = sa.Column(sa.DateTime, nullable=True)
+    #: Verbose identifier of who last edited the extra info fields
     extra_info_editor = sa.Column(sa.String(100), nullable=True)
     #: JSON encoded representation of the class working hours type of work
     working_hours = sa.Column(sa.Text, nullable=True)
@@ -398,10 +430,11 @@ class Teacher(Base, TemporalEntity):
     #: Belonging department
     department_id = sa.Column(sa.Integer, sa.ForeignKey(Department.id))
 
-    # Relations
+    # Relations and contraints
     department = orm.relationship(Department, back_populates="teachers")
     turns = orm.relationship('Turn', secondary=turn_teachers, back_populates='teachers')
     class_messages = orm.relationship('ClassMessages')
+    __table_args__ = (sa.UniqueConstraint('iid', 'department_id', name='un_' + TABLE_PREFIX + 'teacher'),)
 
     def __str__(self):
         return f'{self.name} ({self.iid}, {self.department.name})'
@@ -451,16 +484,23 @@ Institution.students = orm.relationship(Student, order_by=Student.iid, back_popu
 
 class ClassMessages(Base):
     __tablename__ = TABLE_PREFIX + 'class_instance_messages'
+    #: Generated identifier
     id = sa.Column(sa.Integer, sa.Sequence(TABLE_PREFIX + 'class_instance_message_id_seq'), primary_key=True)
+    #: Class intance for which the message was broadcasted
     class_instance_id = sa.Column(sa.Integer, sa.ForeignKey(ClassInstance.id))
+    #: Teacher who sent the message
     teacher_id = sa.Column(sa.Integer, sa.ForeignKey(Teacher.id))
+    #: Message title
     title = sa.Column(sa.String(200), nullable=False)
+    #: Message content
     message = sa.Column(sa.Text, nullable=False)
+    #: Timestamp of the message broadcast
     datetime = sa.Column(sa.DateTime, nullable=False)
 
     # Relations and constraints
     teacher = orm.relationship(Teacher, back_populates="class_messages")
     class_instance = orm.relationship(ClassInstance, back_populates="messages")
+    __table_args__ = (sa.UniqueConstraint('class_instance_id', 'datetime', name='un_' + TABLE_PREFIX + 'message'),)
 
 
 ClassInstance.messages = orm.relationship(ClassMessages,
