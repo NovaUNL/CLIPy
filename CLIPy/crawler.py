@@ -129,7 +129,7 @@ def crawl_classes(session: WebSession, database: db.Controller, department: db.m
     class_instances = []
 
     period_exp = re.compile('&tipo_de_per%EDodo_lectivo=(?P<type>\w)&per%EDodo_lectivo=(?P<stage>\d)$')
-    abbr_exp = re.compile('\(.+\) .* \((?P<abbr>.+)\)')
+    abbr_exp = re.compile('\(.+\) .* \((?P<abbr>.+)\)$')
     ects_exp = re.compile('(?P<ects>\d|\d.\d)\s?ECTS.*')
 
     # for each year this department operated
@@ -201,7 +201,12 @@ def crawl_classes(session: WebSession, database: db.Controller, department: db.m
                         log.warning(f'Class {class_name}({class_id}) has no ECTS information')
 
                     classes[class_id] = database.add_class(
-                        db.candidates.Class(class_id, class_name, department, abbr, ects))
+                        db.candidates.Class(
+                            identifier=class_id,
+                            name=class_name,
+                            department=department,
+                            abbreviation=abbr,
+                            ects=ects))
 
                 if classes[class_id] is None:
                     raise Exception("Null class")

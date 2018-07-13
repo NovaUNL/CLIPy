@@ -192,7 +192,7 @@ class Class(Base):
     __table_args__ = (sa.UniqueConstraint('iid', 'department_id', name='un_' + TABLE_PREFIX + 'class_dept'),)
 
     def __str__(self):
-        return "{}(id:{}, dept:{})".format(self.name, self.iid, self.department)
+        return f'{self.name} ({self.id}, {self.department})'
 
 
 Department.classes = orm.relationship(

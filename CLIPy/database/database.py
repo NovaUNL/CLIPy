@@ -451,18 +451,18 @@ class Controller:
 
         if db_class is not None:  # Already stored
             if db_class.name != candidate.name:
-                raise Exception("Class name change attempt. {} to {} (iid {})".format(
-                    db_class.name, candidate.name, candidate.id))
+                log.warning("Class name change:\n"
+                                f"\t{db_class}\t to \t{candidate})")
 
             if candidate.abbreviation is not None:
-                if db_class.abbreviation is None:
+                if db_class.abbreviation is None or db_class.abbreviation == '???':
                     db_class.abbreviation = candidate.abbreviation
                     self.session.commit()
                     return db_class
 
                 if db_class.abbreviation is not None and db_class.abbreviation != candidate.abbreviation:
-                    raise Exception("Class abbreviation change attempt. {} to {} (iid {})".format(
-                        db_class.abbreviation, candidate.abbreviation, candidate.id))
+                    raise Exception("Class abbreviation change attempt."
+                                    f"{db_class.abbreviation} to {candidate.abbreviation} (iid {candidate.id})")
 
             return db_class
 

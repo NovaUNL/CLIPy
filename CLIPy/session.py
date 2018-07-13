@@ -18,7 +18,7 @@ class Session:
     """
 
     def __init__(self, username, password, cookies=os.getcwd() + '/cookies'):
-        log.info('Creating clip session (Cookie file:{})'.format(cookies))
+        log.debug('Creating clip session (Cookie file:{})'.format(cookies))
         self.__cookie_file__ = cookies
         self.authenticated = False
         self.__requests_session__ = requests.Session()
@@ -31,7 +31,7 @@ class Session:
 
         if not os.path.exists(cookies):
             self.save()
-            log.info('Created empty cookie file')
+            log.debug('Created empty cookie file')
         __active_sessions__.append(self)
         self.authenticate()
 

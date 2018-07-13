@@ -66,7 +66,7 @@ class Class:
         self.ects = ects
 
     def __str__(self):
-        return self.name
+        return f'{self.name} ({self.id}, {self.department})'
 
 
 class ClassInstance:
