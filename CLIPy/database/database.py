@@ -2,7 +2,7 @@ import json
 import logging
 import os
 import traceback
-from typing import List
+from typing import List, Optional
 
 import sqlalchemy as sa
 import sqlalchemy.orm as orm
@@ -189,7 +189,7 @@ class Controller:
              models.TurnType(id=5, name="Tutorial Orientation", abbreviation="ot")])
         self.session.commit()
 
-    def get_institution(self, identifier: int):
+    def get_institution(self, identifier: int) -> Optional[models.Institution]:
         if self.__caching__:
             if identifier not in self.__institutions__:
                 return None
@@ -197,7 +197,7 @@ class Controller:
         else:
             return self.session.query(models.Institution).filter_by(id=identifier).first()
 
-    def get_department(self, identifier: int):
+    def get_department(self, identifier: int) -> Optional[models.Department]:
         if self.__caching__:
             if identifier not in self.__departments__:
                 return None
@@ -205,7 +205,7 @@ class Controller:
         else:
             return self.session.query(models.Department).filter_by(id=identifier).first()
 
-    def get_degree(self, abbreviation: str):
+    def get_degree(self, abbreviation: str) -> Optional[models.Degree]:
         if self.__caching__:
             if abbreviation not in self.__degrees__:
                 return None
@@ -213,7 +213,7 @@ class Controller:
         else:
             return self.session.query(models.Degree).filter_by(id=abbreviation).first()
 
-    def get_period(self, part: int, parts: int):
+    def get_period(self, part: int, parts: int) -> Optional[models.Period]:
         if self.__caching__:
             if parts not in self.__periods__ or part > parts:
                 return None
@@ -224,35 +224,35 @@ class Controller:
         else:
             return self.session.query(models.Period).filter_by(part=part, parts=parts).first()
 
-    def get_institution_set(self):
+    def get_institution_set(self) -> {models.Institution}:
         if self.__caching__:
             return set(self.__institutions__.values())
         else:
             return set(self.session.query(models.Institution).all())
 
-    def get_building_set(self):
+    def get_building_set(self) -> {models.Building}:
         if self.__caching__:
             return set(self.__buildings__.values())
         else:
             return set(self.session.query(models.Building).all())
 
-    def get_department_set(self):
+    def get_department_set(self) -> {models.Department}:
         if self.__caching__:
             return set(self.__departments__.values())
         else:
             return set(self.session.query(models.Department).all())
 
-    def get_degree_set(self):
+    def get_degree_set(self) -> {models.Degree}:
         if self.__caching__:
             return set(self.__degrees__.values())
         else:
             return set(self.session.query(models.Degree).all())
 
-    def get_period_set(self):
+    def get_period_set(self) -> {models.Period}:
         return set(self.session.query(models.Period).all())
 
     def get_course(self, identifier: int = None, abbreviation: str = None, year: int = None,
-                   institution: models.Institution = None):
+                   institution: models.Institution = None) -> Optional[models.Course]:
         if self.__caching__:  # Fetch it from the caches
             if identifier is not None:  # FIXME this does not consider entries with the same internal_id
                 if identifier in self.__courses__:
@@ -304,14 +304,14 @@ class Controller:
                     elif len(matches) > 1:
                         raise Exception("Multiple matches. Unable to determine the correct one.")
 
-    def get_turn_type(self, abbreviation: str):
+    def get_turn_type(self, abbreviation: str) -> Optional[models.TurnType]:
         if self.__caching__:
             if abbreviation in self.__turn_types__:
                 return self.__turn_types__[abbreviation]
         else:
             return self.session.query(models.TurnType).filter_by(abbreviation=abbreviation).first()
 
-    def get_teacher(self, name: str, department: models.Department):
+    def get_teacher(self, name: str, department: models.Department) -> Optional[models.Teacher]:
         if self.__caching__:
             if name in self.__teachers__:
                 return self.__teachers__[name]
@@ -322,8 +322,8 @@ class Controller:
             if len(matches) > 1:
                 raise Exception(f'Several teachers with the name {name}')
 
-    def get_class(self, iid: int):
-        return self.session.query(models.Class).filter_by(iid=iid).first()
+    def get_class(self, iid: int) -> Optional[models.Class]:
+        return self.session.query(models.Class).filter_by(iid=iid).first()  # FIXME a bit on the oversimplistic side
 
     def add_institutions(self, institutions: [candidates.Institution]):
         """
@@ -443,7 +443,7 @@ class Controller:
             log.error("Failed to add the departments\n" + traceback.format_exc())
             self.session.rollback()
 
-    def add_class(self, candidate: candidates.Class):
+    def add_class(self, candidate: candidates.Class) -> models.Class:
         db_class = self.session.query(models.Class).filter_by(
             iid=candidate.id,
             department=candidate.department
@@ -452,7 +452,7 @@ class Controller:
         if db_class is not None:  # Already stored
             if db_class.name != candidate.name:
                 log.warning("Class name change:\n"
-                                f"\t{db_class}\t to \t{candidate})")
+                            f"\t{db_class}\t to \t{candidate})")
 
             if candidate.abbreviation is not None:
                 if db_class.abbreviation is None or db_class.abbreviation == '???':
@@ -604,7 +604,7 @@ class Controller:
             if self.__caching__:
                 self.__load_courses__()
 
-    def add_student(self, candidate: candidates.Student):
+    def add_student(self, candidate: candidates.Student) -> models.Student:
         if candidate.name is None or candidate.name == '':
             raise Exception("Invalid name")
 
@@ -668,10 +668,10 @@ class Controller:
                 self.session.commit()
 
         else:  # database inconsistency
-            students = ""
+            students_str = ""
             for candidate in students:
-                students += ("%s," % candidate)
-            raise Exception("Duplicated students found:\n{}".format(students))
+                students_str += ("%s," % candidate)
+            raise Exception(f"Duplicated students found:\n{students_str}")
 
         return student
 
@@ -813,10 +813,11 @@ class Controller:
                         weekday=instance.weekday))
 
     def add_turn_students(self, turn: models.Turn, students: [candidates.Student]):
-        [turn.students.append(student) for student in students]
-        if len(students) > 0:
+        count = len(students)
+        if count > 0:
+            [turn.students.append(student) for student in students]
             self.session.commit()
-            log.info("{} students added successfully to the turn {}!".format(len(students), turn))
+            log.info(f"{count} students added successfully to the turn {turn}!")
 
     def add_admissions(self, admissions: [candidates.Admission]):
         admissions = list(map(lambda admission: models.Admission(
@@ -832,7 +833,7 @@ class Controller:
 
         if len(admissions) > 0:
             self.session.commit()
-            log.info("{} admissions added successfully!".format(len(admissions)))
+            log.info(f"{len(admissions)} admission records added successfully!")
 
     def add_enrollments(self, enrollments: [candidates.Enrollment]):
         added = 0
@@ -909,7 +910,8 @@ class Controller:
             if self.__caching__ and reload_cache:
                 self.__load_rooms__()
 
-    def get_room(self, name: str, building: models.Building, room_type: models.RoomType = None) -> models.Room:
+    def get_room(self, name: str, building: models.Building,
+                 room_type: models.RoomType = None) -> Optional[models.Room]:
         if self.__caching__:
             if room_type:
                 if building in self.__rooms__ and room_type in self.__rooms__[building] \
@@ -985,7 +987,7 @@ class Controller:
                     filter_by(year=year, period=period).order_by(order).all()
         return list(instances)
 
-    def find_student(self, name: str, course=None):
+    def find_student(self, name: str, course=None) -> [models.Student]:
         query_string = '%'
         for word in name.split():
             query_string += (word + '%')
