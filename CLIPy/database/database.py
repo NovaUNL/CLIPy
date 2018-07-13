@@ -322,8 +322,14 @@ class Controller:
             if len(matches) > 1:
                 raise Exception(f'Several teachers with the name {name}')
 
-    def get_class(self, iid: int) -> Optional[models.Class]:
-        return self.session.query(models.Class).filter_by(iid=iid).first()  # FIXME a bit on the oversimplistic side
+    def get_class(self, iid: int, department: models.Department) -> Optional[models.Class]:
+        matches = self.session.query(models.Class).filter_by(iid=iid, department=department).all()
+        count = len(matches)
+        if count == 1:
+            return matches[0]
+        elif count > 1:
+            raise Exception(f"Multiple classes the internal id {iid} found in the department {department}")
+
 
     def add_institutions(self, institutions: [candidates.Institution]):
         """
