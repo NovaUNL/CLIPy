@@ -217,8 +217,9 @@ def crawl_classes(session: WebSession, database: db.Controller, department: db.m
 def crawl_admissions(session: WebSession, database: db.Controller, institution: db.models.Institution):
     institution = database.session.merge(institution)
     admissions = []
-    years = range(institution.first_year, institution.last_year + 1)
+    years = range(max(institution.first_year, 2006), institution.last_year + 1)  # TODO put that magic number in a conf
     for year in years:
+        log.info(f"Crawling {institution} admissions for the year {year}")
         course_ids = set()  # Courses found in this year's page
         page = session.get_simplified_soup(urls.ADMISSIONS.format(institution=institution.id, year=year))
         course_links = page.find_all(href=urls.COURSE_EXP)
