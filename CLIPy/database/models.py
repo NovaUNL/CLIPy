@@ -419,6 +419,15 @@ turn_teachers = sa.Table(
 
 
 class Teacher(Base, TemporalEntity):
+    """
+    | Represents a teacher (or part of one...)
+    | This model is NOT normalized to attempt to solve the issue pointed by
+        :py:const:`CLIPy.database.Controller.get_teacher`.
+        That's the reason for information redundancy instead of an M2M relationship.
+        In theory the same could be done with an M2M, but it would become noticeably worse on performance, and since
+        this isn't a huge table some redundancy can be tolerated.
+    | TODO In case there's a day I'm feeling specially worthless, benchmark this as a M2M and port if it isn't that bad
+    """
     __tablename__ = TABLE_PREFIX + 'teachers'
     #: Auto-generated identifier.
     #: Needed because iid is not unique (one teacher, multiple departments)

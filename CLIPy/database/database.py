@@ -312,15 +312,66 @@ class Controller:
             return self.session.query(models.TurnType).filter_by(abbreviation=abbreviation).first()
 
     def get_teacher(self, name: str, department: models.Department) -> Optional[models.Teacher]:
-        if self.__caching__:
+        """
+        | Fetches a teacher object.
+        | THIS METHOD IS FLAWED but I'm afraid it cannot be improved without using shenanigans.
+        | The problem is that teacher names are displayed all over CLIP, but there's only one page with their ID's.
+            With that in mind teacher queries have to be performed with their names and the department which 'owns'
+            the page being seen.
+        | The current procedure is to query by name first.
+        | If there's only one match, then that's the one to be returned.
+        | If there are multiple matches they could either be the same teacher in different departments or different
+            teachers which happen to have the same name. In that scenario the next step is to filter by department,
+            and hopefully there's only one match left. If there isn't check if non-department-filtered results are
+            the same teacher and return one of them.
+        | Albeit unlikely, the two possible issues with this method are:
+        | - A teacher is lecturing a class given by another department (CTCT please...) and there's a name collision
+        | - There are two different teachers with the same name in the same department.
+        | TODO A workaround which is ridiculously CPU/time intensive unless implemented properly is to use
+            :py:const:`CLIPy.urls.TEACHER_SCHEDULE` to check if results match.
+            That can easily become an O(n^2) if not properly implemented.
+        | An idea is to ignore unmatched teachers (leave turns without the teacher) and then crawl
+            :py:const:`CLIPy.urls.TEACHER_SCHEDULE` once and fill the gaps. This idea is an O(n).
+        | TODO 2 Add `year` to the equation in hope to better guess which `teacher` is the correct in the
+            `multiple but all the same` scenario.
+        | TODO 3 Find some alcohol and forget this
+
+        :param name: Teacher name
+        :param department: Teacher department
+        :return: Matching teacher
+        """
+        if self.__caching__:  # FIXME this isn't going to work. Fix the cache code.
             if name in self.__teachers__:
                 return self.__teachers__[name]
         else:
-            matches = self.session.query(models.Teacher).filter_by(name=name, department=department).all()
+            matches = self.session.query(models.Teacher).filter_by(name=name).all()
             if len(matches) == 1:
                 return matches[0]
-            if len(matches) > 1:
-                raise Exception(f'Several teachers with the name {name}')
+            if len(matches) == 0:
+                return None
+
+            filtered_matches = self.session.query(models.Teacher).filter_by(name=name, department=department).all()
+            if len(filtered_matches) == 1:
+                return matches[0]
+
+            # Desperation intensifies:
+            # Check if the unfiltered matches are all the same teacher:
+            same_teacher = True
+            teacher_iid = None
+            for match in matches:
+                if teacher_iid is None:
+                    teacher_iid = match.iid
+                    continue
+
+                if match.iid != teacher_iid:
+                    same_teacher = False
+                    break
+
+            if same_teacher:
+                return matches[0]  # Any of them will do
+
+            log.error(f'Several teachers with the name {name}')  # TODO to exception
+            return None
 
     def get_class(self, iid: int, department: models.Department) -> Optional[models.Class]:
         matches = self.session.query(models.Class).filter_by(iid=iid, department=department).all()
@@ -329,7 +380,6 @@ class Controller:
             return matches[0]
         elif count > 1:
             raise Exception(f"Multiple classes the internal id {iid} found in the department {department}")
-
 
     def add_institutions(self, institutions: [candidates.Institution]):
         """
@@ -682,19 +732,19 @@ class Controller:
         return student
 
     def add_teacher(self, candidate: candidates.Teacher) -> models.Teacher:
-        teacher: models.Teacher = self.session.query(models.Teacher).filter_by(iid=candidate.id).first()
-        changed = False
+        teacher_matches: [models.Teacher] = self.session.query(models.Teacher).filter_by(iid=candidate.id).all()
+        count = len(teacher_matches)
+        changed = False  # DB changed, reload flag
 
-        if teacher:
+        # Ensure that the candidate matches existing id matches
+        for teacher in teacher_matches:
             if teacher.name != candidate.name:
                 raise Exception('Two diferent teachers with the same ID:\n'
                                 f'\t{teacher}\n'
                                 f'\t{candidate}')
-            if teacher.first_year != candidate.first_year or teacher.last_year != candidate.last_year:
-                teacher.add_year(candidate.first_year)
-                teacher.add_year(candidate.last_year)
-                changed = True
-        else:
+            break  # Just needs to run once, but none if there are no matches
+
+        if count == 0:  # No teacher, add him/her
             teacher = models.Teacher(iid=candidate.id,
                                      name=candidate.name,
                                      department=candidate.department,
@@ -702,6 +752,30 @@ class Controller:
                                      last_year=candidate.last_year)
             self.session.add(teacher)
             changed = True
+        else:  # There are records of that teacher
+            teacher = None  # A record matches if it shares the iid and department
+            if count == 1:
+                if teacher_matches[0].department == candidate.department:
+                    teacher = teacher_matches[0]
+            else:
+                for match in teacher_matches:
+                    teacher: models.Teacher
+                    if match.department == candidate.department:
+                        teacher = match
+                        break
+
+            if teacher is None:
+                teacher = models.Teacher(iid=candidate.id,
+                                         name=candidate.name,
+                                         department=candidate.department,
+                                         first_year=candidate.first_year,
+                                         last_year=candidate.last_year)
+                self.session.add(teacher)
+                changed = True
+            elif teacher.first_year != candidate.first_year or teacher.last_year != candidate.last_year:
+                teacher.add_year(candidate.first_year)
+                teacher.add_year(candidate.last_year)
+                changed = True
 
         if changed:
             self.session.commit()
