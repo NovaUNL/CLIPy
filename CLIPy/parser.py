@@ -332,11 +332,16 @@ def get_bilingual_info(page) -> (str, str, datetime, str):
         english += str(content).strip()
     english = htmlmin.minify(english, remove_empty_space=True)
 
-    last_editor = footer[0].text.split(':')[1].strip()
-    if last_editor == 'Agente de sistema':
-        last_editor = None
-    edition_datetime = footer[1].text.strip()
-    edition_datetime = datetime.strptime(edition_datetime, "Em: %Y-%m-%d %H:%M")
+    edition_datetime, last_editor = None, None
+    if len(footer) >= 2:
+        try:
+            last_editor = footer[-2].text.split(':')[1].strip()
+            if last_editor == 'Agente de sistema':
+                last_editor = None
+
+            edition_datetime = datetime.strptime(footer[-1].text.strip(), "Em: %Y-%m-%d %H:%M")
+        except IndexError:
+            log.warning(f"Could not parse a footer with the contents: {footer}")
 
     return portuguese, english, edition_datetime, last_editor
 
