@@ -269,13 +269,15 @@ class File(Base):
     hash = sa.Column(sa.CHAR(40), nullable=True)
     #: File storage location
     location = sa.Column(sa.String(256), nullable=True)
+    #: Mime type
+    mime = sa.Column(sa.String(100), nullable=True)
 
     # Relations
     class_instance_relations = orm.relationship("ClassFile", back_populates="file")
     class_instances = association_proxy('class_instance_relations', 'class_instance')
 
     def downloaded(self) -> bool:
-        return self.location is None
+        return self.location is not None
 
     def __str__(self):
         return f"{self.name} ({self.id}, {self.size/1024}KB)"

@@ -198,3 +198,6 @@ def bootstrap_database(session: Session, db_registry: db.SessionRegistry, year: 
 
     # Finds uploaded file listings for every class
     processors.class_task(session, db_registry, crawler.crawl_files, year=year, period=period)
+
+    # Downloads known files
+    processors.class_task(session, db_registry, crawler.download_files, year=year, period=period)

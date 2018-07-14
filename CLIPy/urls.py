@@ -3,6 +3,9 @@ import re
 
 ROOT = 'https://clip.unl.pt'
 
+#: File download link
+FILE_URL = ROOT + "/objecto?oid={file_identifier}"
+
 #: List of institutions registered
 INSTITUTIONS = ROOT + "/utente/institui%E7%E3o_sede/unidade_organica"
 

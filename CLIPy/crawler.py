@@ -1,4 +1,6 @@
+import hashlib
 import logging
+import os
 import traceback
 from queue import Queue
 from threading import Thread, Lock
@@ -561,3 +563,47 @@ def crawl_files(session: WebSession, database: db.Controller, class_instance: db
                     uploader=uploader,
                     file_type=file_type)
                 database.add_class_file(candidate=candidate, class_instance=class_instance)
+
+
+def download_files(session: WebSession, database: db.Controller, class_instance: db.models.ClassInstance):
+    class_instance: db.models.ClassInstance = database.session.merge(class_instance)
+    department = class_instance.parent.department
+    institution = department.institution
+    files = class_instance.files
+    poked_file_types = set()
+
+    for file in files:
+        if not file.downloaded():
+            file_type = file.file_type
+            if file_type not in poked_file_types:
+                poked_file_types.add(file_type)
+
+                # poke the page, this is required to download, for some reason...
+                session.get_simplified_soup(urls.CLASS_FILES.format(
+                    institution=institution.id,
+                    year=class_instance.year,
+                    department=class_instance.parent.department.id,
+                    class_id=class_instance.parent.iid,
+                    period=class_instance.period.part,
+                    period_type=class_instance.period.letter,
+                    file_type=file.file_type.to_url_argument()))
+
+            response = session.get_file(urls.FILE_URL.format(file_identifier=file.id))
+            if response is None:
+                raise Exception("Unable to download file")
+            content, mime = response
+            hasher = hashlib.sha1()
+            hasher.update(content)
+            sha1 = hasher.hexdigest()
+            file: db.models.File
+
+            path = './files/' + sha1
+
+            if os.path.isfile(path):
+                log.info(f"{file} was already saved ({sha1})")
+            else:
+                log.info(f"Saving {file} as {sha1}")
+                with open(path, 'wb') as fd:
+                    fd.write(content)
+
+            database.update_downloaded_file(file=file, hash=sha1, path=path, mime=mime)

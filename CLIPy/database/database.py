@@ -1081,6 +1081,12 @@ class Controller:
                 self.session.commit()
         return file
 
+    def update_downloaded_file(self, file: models.File, mime: str, path: str, hash: str):
+        file.mime = mime
+        file.hash = hash
+        file.location = path
+        self.session.commit()
+
     def fetch_class_instances(self, year_asc=True, year=None, period=None) -> [models.ClassInstance]:
         order = sa.asc(models.ClassInstance.year) if year_asc else sa.desc(models.ClassInstance.year)
         if year is None:

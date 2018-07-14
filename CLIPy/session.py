@@ -85,6 +85,18 @@ class Session:
         """
         return read_and_clean_broken_response(self.get(url))
 
+    def get_file(self, url: str) -> (bytes, str):
+        """
+        Fetches a file from a remote URL using an HTTP GET method using the current session attributes
+        :param url: URL to fetch
+        :return: ``file_bytes, mimetype`` tuple
+        """
+        response = self.get(url)
+        if 'content-type' not in response.headers:
+            return None
+
+        return response.content, response.headers['content-type']
+
     def __exit__(self, exc_type, exc_val, exc_tb):
         __active_sessions__.remove(self)
 
