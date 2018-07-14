@@ -1050,6 +1050,37 @@ class Controller:
         else:
             return self.session.query(models.Building).filter_by(name=building).first()
 
+    def add_class_file(self, candidate: candidates.File, class_instance: models.ClassInstance) -> models.File:
+        file = self.session.query(models.File).filter_by(id=candidate.id).first()
+
+        if file is None:
+            file = models.File(
+                id=candidate.id,
+                name=candidate.name,
+                file_type=candidate.file_type,
+                size=candidate.size,
+                hash=candidate.hash,
+                location=candidate.location)
+            log.info(f"Adding file {file}")
+            self.session.add(file)
+            class_file = models.ClassFile(
+                uploader=candidate.uploader,
+                upload_datetime=candidate.upload_datetime,
+                file=file,
+                class_instance=class_instance)
+            self.session.add(class_file)
+            self.session.commit()
+        else:
+            if file not in class_instance.files:
+                class_file = models.ClassFile(
+                    uploader=candidate.uploader,
+                    upload_datetime=candidate.upload_datetime,
+                    file=file,
+                    class_instance=class_instance)
+                self.session.add(class_file)
+                self.session.commit()
+        return file
+
     def fetch_class_instances(self, year_asc=True, year=None, period=None) -> [models.ClassInstance]:
         order = sa.asc(models.ClassInstance.year) if year_asc else sa.desc(models.ClassInstance.year)
         if year is None:

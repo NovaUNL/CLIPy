@@ -195,3 +195,6 @@ def bootstrap_database(session: Session, db_registry: db.SessionRegistry, year: 
 
     # Finds class instance turns and updates their data if needed. Takes ~16 Hours
     processors.class_task(session, db_registry, crawler.crawl_class_turns, year=year, period=period)
+
+    # Finds uploaded file listings for every class
+    processors.class_task(session, db_registry, crawler.crawl_files, year=year, period=period)

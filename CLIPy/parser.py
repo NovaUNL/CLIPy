@@ -2,12 +2,13 @@ import logging
 import re
 from datetime import datetime
 from unicodedata import normalize
+from urllib.parse import unquote
 
 import htmlmin
 # noinspection PyProtectedMember
 from bs4 import NavigableString
 
-from CLIPy.database.models import RoomType
+from .database import models
 from . import urls
 from .utils import weekday_to_id
 
@@ -228,7 +229,7 @@ def get_turn_info(page):
                     building = information['building'].strip()
                     if 'room' in information and information['room'] is not None:
                         if 'lab' in information:
-                            room = (information['room'].strip(), RoomType.laboratory)
+                            room = (information['room'].strip(), models.RoomType.laboratory)
                         else:
                             room = (information['room'].strip(), None)
                     else:
@@ -458,7 +459,7 @@ LONG_ROOM_EXP = re.compile('(?P<room_type>Sala|Laboratório de Ensino|Anfiteatro
                            '(?P<room_name>[\w .-]*)')
 
 
-def parse_place_str(place) -> (RoomType, str):
+def parse_place_str(place) -> (models.RoomType, str):
     """
     Parses room types and names from raw strings
 
@@ -588,3 +589,52 @@ def parse_teacher_str(teacher: str) -> (str, str, str):
     if None in result:
         raise ValueError(f'Incorrect source string :\n{teacher}')
     return result
+
+
+FILE_TYPE_EXP = re.compile('\((?P<count>\d+)\)$')
+
+
+def get_file_types(page):
+    """
+    Parses class files types pages looking for the counts for each type of file
+
+    :param page: A page fetched from :py:const:`CLIPy.urls.CLASS_FILE_TYPES`
+    :return: List of ``(type, count)`` tuples for every type with non-zero file count
+    """
+    file_type_links = page.find_all(href=urls.FILE_TYPE_EXP)
+    if len(file_type_links) != 8:
+        raise Exception("Incorrect page")
+    results = []
+    for link in file_type_links:
+        file_type = models.FileType.from_url_argument(urls.FILE_TYPE_EXP.findall(link.attrs['href'])[0].strip())
+        count = int(FILE_TYPE_EXP.findall(link.text.strip())[0])
+        if count > 0:
+            results.append((file_type, count))
+    return results
+
+
+def get_files(page):
+    """
+    Parses class files pages
+
+    :param page: A page fetched from :py:const:`CLIPy.urls.CLASS_FILES`
+    :return: List of ``(file_id, name, size, upload_date, uploader)`` tuples
+    """
+    files = []
+    for file_link in page.find_all(href=urls.FILE_URL_EXP):
+        link_match = urls.FILE_URL_EXP.search(file_link.attrs['href'])
+        file_id = int(link_match.group('id'))
+        table_row_children = list(file_link.parent.parent.children)
+        file_name = table_row_children[1].text.strip()
+        file_upload_date = table_row_children[5].text.strip()
+        file_upload_date = datetime.strptime(file_upload_date, "%Y-%m-%d %H:%M")
+        file_size = int(table_row_children[7].text.strip().rstrip('Kb')) << 10
+        file_uploader_name = table_row_children[9].text.strip()
+        file_name_alt = unquote(link_match.group('name'), encoding='iso8859-1')
+
+        if file_name != file_name_alt:
+            log.warning("Something silly happened parsing the file name.\t"
+                        f"Row: {file_name}\t URL: {file_name_alt}\t"
+                        "Proceeding with the first name")
+        files.append((file_id, file_name, file_size, file_upload_date, file_uploader_name))
+    return files

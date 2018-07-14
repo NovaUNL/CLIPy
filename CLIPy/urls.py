@@ -111,7 +111,7 @@ CLASS_FILES = ROOT + \
               "/utente/institui%E7%E3o_sede/unidade_organica/ensino/sector/ano_lectivo/unidade_curricular/actividade/documentos?" \
               "tipo_de_per%EDodo_lectivo={period_type}&sector={department}&ano_lectivo={year}" \
               "&per%EDodo_lectivo={period}&institui%E7%E3o={institution}&unidade_curricular={class_id}" \
-              "&tipo_de_documento_de_unidade={document_type}"
+              "&tipo_de_documento_de_unidade={file_type}"
 
 #: Continuous evaluation moments. Can use to extract test enrollment lists, courses, sometimes grades.
 CLASS_CONTINUOUS_EVALUATION = ROOT + \
@@ -285,3 +285,5 @@ DEPARTMENT_EXP = re.compile('\\bsector=(\d+)\\b')
 TEACHER_EXP = re.compile('\\bdocente=(\d+)\\b')
 BUILDING_EXP = re.compile('\\bedif%EDcio=(\d+)\\b')
 PLACE_EXP = re.compile('\\bespa%E7o=(\d+)\\b')
+FILE_TYPE_EXP = re.compile('\\btipo_de_documento_de_unidade=(\w+)\\b')
+FILE_URL_EXP = re.compile('oid=(?P<id>\d+)&oin=(?P<name>.+)')

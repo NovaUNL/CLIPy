@@ -503,3 +503,61 @@ def crawl_class_turns(session: WebSession, database: db.Controller, class_instan
                     last_year=year))
             students.append(student)
         database.add_turn_students(turn, students)
+
+
+def crawl_files(session: WebSession, database: db.Controller, class_instance: db.models.ClassInstance):
+    """
+    Finds files uploaded to a class instance.
+    :param session: Browsing session
+    :param database: Database controller
+    :param class_instance: ClassInstance object to look after
+    """
+    log.info("Crawling class instance ID %s files" % class_instance.id)
+    class_instance: db.models.ClassInstance = database.session.merge(class_instance)
+    department = class_instance.parent.department
+    institution = department.institution
+    known_file_count = 0
+    known_file_ids = []
+
+    for file in class_instance.files:
+        known_file_ids.append(file.id)
+        known_file_count += 1
+
+    page = session.get_simplified_soup(urls.CLASS_FILE_TYPES.format(
+        institution=institution.id,
+        year=class_instance.year,
+        department=class_instance.parent.department.id,
+        class_id=class_instance.parent.iid,
+        period=class_instance.period.part,
+        period_type=class_instance.period.letter))
+
+    file_types = parser.get_file_types(page)
+
+    current_file_count = 0
+    for _, count in file_types:
+        current_file_count += count
+
+    if known_file_count == current_file_count != 0:
+        log.info("Le moi thinks that every file is known (unless sneaky sneaky teachers deleted stuff and re-added)")
+        return
+
+    for file_type, _ in file_types:
+        page = session.get_simplified_soup(urls.CLASS_FILES.format(
+            institution=institution.id,
+            year=class_instance.year,
+            department=class_instance.parent.department.id,
+            class_id=class_instance.parent.iid,
+            period=class_instance.period.part,
+            period_type=class_instance.period.letter,
+            file_type=file_type.to_url_argument()))
+        files = parser.get_files(page)
+        for identifier, name, size, upload_datetime, uploader in files:
+            if identifier not in known_file_ids:
+                candidate = db.candidates.File(
+                    identifier=identifier,
+                    name=name,
+                    size=size,
+                    upload_datetime=upload_datetime,
+                    uploader=uploader,
+                    file_type=file_type)
+                database.add_class_file(candidate=candidate, class_instance=class_instance)

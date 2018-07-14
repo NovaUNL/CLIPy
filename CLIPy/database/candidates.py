@@ -221,3 +221,16 @@ class TurnInstance:
     def __str__(self):
         return "{} to {}, day:{}, turn{}".format(
             self.time_str(self.start), self.time_str(self.end), self.weekday, self.turn)
+
+
+class File:
+    def __init__(self, identifier: int, name: str, upload_datetime: datetime, uploader: str, file_type: models.FileType,
+                 size: int, file_hash: str = None, location: str = None):
+        self.id = identifier
+        self.name = name
+        self.upload_datetime = upload_datetime
+        self.uploader = uploader
+        self.file_type = file_type
+        self.size = size
+        self.hash = file_hash
+        self.location = location

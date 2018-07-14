@@ -3,9 +3,10 @@ from enum import Enum
 
 import sqlalchemy as sa
 import sqlalchemy.orm as orm
+from sqlalchemy.ext.associationproxy import association_proxy
 from sqlalchemy.ext.declarative import declarative_base
 
-from .types import IntEnum
+from .types import IntEnum, TupleEnum
 
 TABLE_PREFIX = 'clip_'
 Base = declarative_base()
@@ -35,15 +36,34 @@ class RoomType(Enum):
 
 class FileType(Enum):
     #: A room without a specific purpose
-    image = 1
+    image = (1, None)
     #: AKA "acetatos"
-    slides = 2
-    protocols = 3
-    seminar = 4
-    exams = 5
-    tests = 6
-    support = 7
-    others = 8
+    slides = (2, '0ac')
+    problems = (3, '1e')
+    protocols = (4, '2tr')
+    seminar = (5, '3sm')
+    exams = (6, 'ex')
+    tests = (7, 't')
+    support = (8, 'ta')
+    others = (9, 'xot')
+
+    def to_url_argument(self):
+        return self.value[1]
+
+    @staticmethod
+    def from_id(identifier):
+        for type in FileType:
+            if type.value[0] == identifier:
+                return type
+
+    @staticmethod
+    def from_url_argument(arg):
+        for type in FileType:
+            if type.value[1] == arg:
+                return type
+
+    def __str__(self):
+        return self.name
 
 
 class EvaluationType(Enum):
@@ -220,10 +240,19 @@ class Room(Base):
 
 Building.rooms = orm.relationship(Room, order_by=Room.name, back_populates="building")
 
-class_instance_files = sa.Table(
-    TABLE_PREFIX + 'class_instance_files', Base.metadata,
-    sa.Column('class_instance_id', sa.ForeignKey(TABLE_PREFIX + 'class_instances.id'), primary_key=True),
-    sa.Column('file_id', sa.ForeignKey(TABLE_PREFIX + 'files.id'), primary_key=True))
+
+class ClassFile(Base):
+    __tablename__ = TABLE_PREFIX + 'class_instance_files'
+    class_instance_id = sa.Column(sa.ForeignKey(TABLE_PREFIX + 'class_instances.id'), primary_key=True)
+    file_id = sa.Column(sa.ForeignKey(TABLE_PREFIX + 'files.id'), primary_key=True)
+    #: Time at which the file was uploaded
+    upload_datetime = sa.Column(sa.DateTime, primary_key=True)
+    #: Uploader TODO check if this can be anyone beside teachers and adapt the field
+    uploader = sa.Column(sa.String(100))
+
+    # Relations
+    class_instance = orm.relationship("ClassInstance", back_populates="file_relations")
+    file = orm.relationship("File", back_populates="class_instance_relations")
 
 
 class File(Base):
@@ -232,15 +261,24 @@ class File(Base):
     id = sa.Column(sa.Integer, primary_key=True)
     #: File name (some places don't tell the file name)
     name = sa.Column(sa.String(256), nullable=True)
-    #: Time at which the file was uploaded
-    upload_datetime = sa.Column(sa.DateTime)
-    #: Uploader TODO check if this can be anyone beside teachers and adapt the field
-    uploader = sa.Column(sa.String(100))
     #: What this file represents or the category it got dumped into
-    file_type = sa.Column(IntEnum(FileType))
+    file_type = sa.Column(TupleEnum(FileType))
+    #: Approximate size reported by CLIP (used as a download consistency check)
+    size = sa.Column(sa.Integer)
+    #: File hash (sha1)
+    hash = sa.Column(sa.CHAR(40), nullable=True)
+    #: File storage location
+    location = sa.Column(sa.String(256), nullable=True)
 
     # Relations
-    class_instances = orm.relationship('ClassInstance', secondary=class_instance_files, back_populates='files')
+    class_instance_relations = orm.relationship("ClassFile", back_populates="file")
+    class_instances = association_proxy('class_instance_relations', 'class_instance')
+
+    def downloaded(self) -> bool:
+        return self.location is None
+
+    def __str__(self):
+        return f"{self.name} ({self.id}, {self.size/1024}KB)"
 
 
 class ClassInstance(Base):
@@ -344,7 +382,8 @@ class ClassInstance(Base):
     # Relations and constraints
     parent = orm.relationship(Class, back_populates="instances")
     period = orm.relationship(Period, back_populates="class_instances")
-    files = orm.relationship(File, secondary=class_instance_files, back_populates='class_instances')
+    file_relations = orm.relationship(ClassFile, back_populates="class_instance")
+    files = association_proxy('file_relations', 'file')
     __table_args__ = (
         sa.UniqueConstraint('class_id', 'year', 'period_id', name='un_' + TABLE_PREFIX + 'class_instance'),)
 
