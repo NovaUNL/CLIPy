@@ -512,7 +512,7 @@ class Student(Base, TemporalEntity):
     course_id = sa.Column(sa.Integer, sa.ForeignKey(Course.id))
     #: (kinda redudant) student institution
     institution_id = sa.Column(sa.Integer, sa.ForeignKey(Institution.id), nullable=False)
-    #: Student sexual gender (0 - boy, 1 - grill)
+    #: Student sexual gender (0 - grill, 1 - boy)
     gender = sa.Column(sa.Boolean, nullable=True, default=True)
     #: The grade the student obtained at his/her graduation (0-200)
     graduation_grade = sa.Column(sa.Integer, nullable=True, default=None)
@@ -522,7 +522,9 @@ class Student(Base, TemporalEntity):
     institution = orm.relationship("Institution", back_populates="students")
     turns = orm.relationship('Turn', secondary=turn_students, back_populates='students')
     __table_args__ = (
-        sa.UniqueConstraint('institution_id', 'iid', 'abbreviation', name='un_' + TABLE_PREFIX + 'student'),)
+        sa.UniqueConstraint('institution_id', 'iid', name='un_' + TABLE_PREFIX + 'student_id_institution'),
+        sa.UniqueConstraint('iid', 'name', name='un_' + TABLE_PREFIX + 'student_id_name'),
+        sa.UniqueConstraint('iid', 'abbreviation', name='un_' + TABLE_PREFIX + 'student_id_abbr'),)
 
     def __str__(self):
         return "{} ({}, {})".format(self.name, self.iid, self.abbreviation)
