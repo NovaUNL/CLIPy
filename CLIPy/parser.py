@@ -468,32 +468,32 @@ def parse_place_str(place) -> (models.RoomType, str):
     """
     match = LONG_ROOM_EXP.search(place)
     if match is None:
-        return RoomType.generic, place
+        return models.RoomType.generic, place
     room_name = match.group('room_name')
     room_type = match.group('room_type')
     subtype = match.group('room_subtype')
     if subtype:
         if subtype == 'Aula':
-            room_type = RoomType.classroom
+            room_type = models.RoomType.classroom
         elif subtype == 'Computadores':
-            room_type = RoomType.computer
+            room_type = models.RoomType.computer
         elif subtype == 'Reunião':
-            room_type = RoomType.meeting_room
+            room_type = models.RoomType.meeting_room
         elif subtype == 'Mestrado':
-            room_type = RoomType.masters
+            room_type = models.RoomType.masters
         elif subtype == 'Multimédia':
-            room_type = RoomType.masters
+            room_type = models.RoomType.masters
         elif subtype == 'Multiusos':
-            room_type = RoomType.generic
+            room_type = models.RoomType.generic
     else:
         if room_type == 'Sala':
-            room_type = RoomType.generic
+            room_type = models.RoomType.generic
         elif room_type.startswith('Lab'):
-            room_type = RoomType.laboratory
+            room_type = models.RoomType.laboratory
         elif room_type.startswith('Anf'):
-            room_type = RoomType.auditorium
+            room_type = models.RoomType.auditorium
         else:
-            room_type = RoomType.generic
+            room_type = models.RoomType.generic
 
     return room_type, room_name
 
@@ -638,3 +638,92 @@ def get_files(page):
                         "Proceeding with the first name")
         files.append((file_id, file_name, file_size, file_upload_date, file_uploader_name))
     return files
+
+
+def get_results(page):
+    """
+    Parses class grades tables
+
+    :param page: A page fetched from :py:const:`CLIPy.urls.CLASS_RESULTS`
+    :return: | List of ``(student, results)`` tuples for every student row
+             | Every ``student`` is a ``(id, name, gender)`` tuple
+             | Every result is a tuple on which every element is an evaluation with an evaluation being
+                 a ``(result, date)`` tuple
+
+    """
+    results = []
+    entries = list(page.find_all('tr', bgcolor='#ffffff', align='left'))
+    entries.extend(page.find_all('tr', bgcolor='#f8f8f8', align='left'))
+    for entry in entries:
+        columns = list(entry.children)
+        col_count = len(columns)
+        if col_count == 0:
+            log.warning("No grade table")
+            return
+        if col_count not in (10, 14, 18, 22):
+            log.warning(f"Found a strange row. It has {col_count} columns:\n{columns}")
+            break
+
+        student_number = int(columns[1].text.strip())
+        student_name = columns[3].text.strip()
+        normal_result = columns[5].text.strip()
+        normal_date = columns[7].text.strip()
+        if normal_result in ('', '?'):
+            normal_result = None
+            normal_date = None
+        else:
+            try:
+                normal_result = int(normal_result)
+            except ValueError:
+                normal_result = 0
+            normal_date = datetime.strptime(normal_date, "%Y-%m-%d").date()
+
+        if col_count >= 14:
+            recourse_result = columns[9].text.strip()
+            recourse_date = columns[11].text.strip()
+            if recourse_result in ('', '?'):
+                recourse_result = None
+                recourse_date = None
+            else:
+                try:
+                    recourse_result = int(recourse_result)
+                except ValueError:
+                    recourse_result = 0
+                recourse_date = datetime.strptime(recourse_date, "%Y-%m-%d").date()
+        else:
+            recourse_result, recourse_date = None, None  # Not needed, just to avoid having the linter complain
+
+        if col_count == 10:
+            final_result = columns[9].text.strip()
+            result = ((normal_result, normal_date),)
+        elif col_count == 14:
+            final_result = columns[13].text.strip()
+            result = ((normal_result, normal_date),
+                      (recourse_result, recourse_date))
+        else:  # col_count == 16 or 22
+            special_result = columns[13].text.strip()
+            special_date = columns[15].text.strip()
+            if special_result in ('', '?'):
+                special_result = None
+                special_date = None
+            else:
+                try:
+                    special_result = int(special_result)
+                except ValueError:
+                    special_result = 0
+                    special_date = datetime.strptime(special_date, "%Y-%m-%d").date()
+            final_result = columns[17].text.strip()
+            result = ((normal_result, normal_date),
+                      (recourse_result, recourse_date),
+                      (special_result, special_date))
+
+        gender = None
+        if final_result in ('Aprovado', 'Não avaliado', 'Reprovado'):
+            gender = 'm'
+        if final_result in ('Aprovada', 'Não avaliada', 'Reprovada'):
+            gender = 'f'
+
+        student = (student_number, student_name, gender)
+        results.append((student, result))
+
+    return results

@@ -204,3 +204,6 @@ def bootstrap_database(session: Session, db_registry: db.SessionRegistry, year: 
 
     # Downloads known files
     processors.class_task(session, db_registry, crawler.download_files, year=year, period=period)
+
+    # Finds class instance grades
+    processors.class_task(session, db_registry, crawler.crawl_grades, year=year, period=period)

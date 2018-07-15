@@ -638,6 +638,10 @@ class Enrollment(Base):
     exam_grade = sa.Column(sa.SmallInteger, default=0)
     #: Date on which the continuous grade was published
     exam_grade_date = sa.Column(sa.Date, nullable=True, default=None)
+    #: Special period grade that the student obtained
+    special_grade = sa.Column(sa.SmallInteger, default=0)
+    #: Date on which the special period grade was published
+    special_grade_date = sa.Column(sa.Date, nullable=True, default=None)
     #: Whether the final result was an approval
     approved = sa.Column(sa.Boolean, nullable=True, default=None)
 

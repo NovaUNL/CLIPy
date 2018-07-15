@@ -731,6 +731,24 @@ class Controller:
 
         return student
 
+    def get_student(self, identifier: int, name: str = None) -> Optional[models.Student]:
+        matches = self.session.query(models.Student).filter_by(iid=identifier).all()
+        if len(matches) == 1:
+            return matches[0]
+        elif len(matches) > 1:
+            if name is not None:
+                log.warning(f"Multiple matches for the IID {identifier}\n{matches}\nTrying to guess.")
+                for match in matches:
+                    if match.name == name:
+                        return match
+            raise Exception("Multiple students with this ID")
+
+    def update_student_gender(self, student: models.Student, gender: int):
+        if gender not in (0, 1):
+            raise Exception("Non-binary genders forbidden")
+        student.gender = gender
+        self.session.commit()
+
     def add_teacher(self, candidate: candidates.Teacher) -> models.Teacher:
         teacher_matches: [models.Teacher] = self.session.query(models.Teacher).filter_by(iid=candidate.id).all()
         count = len(teacher_matches)
@@ -954,6 +972,48 @@ class Controller:
 
         log.info("{} enrollments added and {} updated ({} ignored)!".format(
             added, updated, len(enrollments) - added - updated))
+
+    def update_enrollment_results(self, student: models.Student, class_instance: models.ClassInstance, results):
+        enrollment: models.Enrollment = self.session.query(models.Enrollment) \
+            .filter_by(student=student, class_instance=class_instance).first()
+
+
+        result_count = len(results)
+        if result_count < 1 or result_count > 3:
+            raise Exception("Invalid result format")
+        for result in results:
+            if len(result) < 2:
+                raise Exception("Invalid result format")
+
+        continuous_grade, continuous_date = results[0]
+        if isinstance(continuous_grade, int):
+            enrollment.continuous_grade = continuous_grade
+        else:
+            enrollment.continuous_grade = 0
+        enrollment.continuous_grade_date = continuous_date
+
+        if result_count > 1:
+            exam_grade, exam_date = results[1]
+            if isinstance(exam_grade, int):
+                enrollment.exam_grade = exam_grade
+            else:
+                enrollment.exam_grade = 0
+            enrollment.continuous_grade_date = exam_date
+
+        if result_count == 3:
+            special_grade, special_date = results[2]
+            if isinstance(special_grade, int):
+                enrollment.special_grade = special_grade
+            else:
+                enrollment.special_grade = 0
+            enrollment.special_grade_date = special_date
+
+        if enrollment.continuous_grade >= 10 or enrollment.exam_grade >= 10 or enrollment.special_grade >= 10:
+            enrollment.approved = True
+        else:
+            enrollment.approved = False
+
+        self.session.commit()
 
     def add_room(self, candidate: candidates.Room) -> models.Room:
         reload_cache = False
