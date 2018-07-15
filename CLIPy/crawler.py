@@ -8,6 +8,8 @@ from time import sleep
 
 import re
 
+from sqlalchemy.exc import IntegrityError
+
 from . import parser
 from . import database as db
 from .session import Session as WebSession
@@ -285,15 +287,20 @@ def crawl_class_enrollments(session: WebSession, database: db.Controller, class_
         # TODO consider sub-courses EG: MIEA/[Something]
         observation = course_abbr if course is not None else (course_abbr + "(Unknown)")
         # update student info and take id
-        student = database.add_student(
-            db.candidates.Student(
-                identifier=student_id,
-                name=name,
-                abbreviation=abbreviation,
-                course=course,
-                institution=institution,
-                first_year=year,
-                last_year=year))
+        student_candidate = db.candidates.Student(
+            identifier=student_id,
+            name=name,
+            abbreviation=abbreviation,
+            course=course,
+            institution=institution,
+            first_year=year,
+            last_year=year)
+        try:
+            student = database.add_student(student_candidate)
+        except IntegrityError:
+            # Quite likely that multiple threads found the student at the same time. Give it another chance
+            sleep(3)
+            student = database.add_student(student_candidate)
 
         enrollment = db.candidates.Enrollment(student, class_instance, attempt, student_year, statutes, observation)
         enrollments.append(enrollment)
