@@ -191,6 +191,9 @@ def bootstrap_database(session: Session, db_registry: db.SessionRegistry, year: 
     processors.institution_task(session, db_registry, crawler.crawl_admissions)
 
     # Finds student enrollments to class instances.
+    processors.class_task(session, db_registry, crawler.crawl_class_enrollments, year=year, period=period)
+
+    # Find class information such as objectives and such
     processors.class_task(session, db_registry, crawler.crawl_class_info, year=year, period=period)
 
     # Finds class instance turns and updates their data if needed. Takes ~16 Hours
