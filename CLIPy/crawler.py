@@ -51,7 +51,8 @@ class PageCrawler(Thread):
                                   f'Retrying in {5 + min(exception_count, 55)} seconds...')
 
                     if exception_count > 10:
-                        raise Exception("Thread {} failed for more than 10 times.")
+                        log.critical("Thread {} failed for more than 10 times. Skipping work unit " + work_unit)
+                        break
                     sleep(5 + min(exception_count, 55))
             else:
                 self.queue_lock.release()
