@@ -34,7 +34,7 @@ def task_queue_processor(session: Session, db_registry: db.SessionRegistry, task
         thread.join()
 
 
-def institution_task(session: Session, db_registry: db.SessionRegistry, task: Callable, ):
+def institution_task(session: Session, db_registry: db.SessionRegistry, task: Callable):
     database = db.Controller(db_registry)
     institution_queue = Queue()
     for institution in database.get_institution_set():
@@ -44,15 +44,14 @@ def institution_task(session: Session, db_registry: db.SessionRegistry, task: Ca
     task_queue_processor(session, db_registry, task, institution_queue)
 
 
-def department_task(session: Session, db_registry: db.SessionRegistry, task: Callable, ):
+def department_task(session: Session, db_registry: db.SessionRegistry, task: Callable):
     database = db.Controller(db_registry)
     department_queue = Queue()
     [department_queue.put(department) for department in database.get_department_set()]
     task_queue_processor(session, db_registry, task, department_queue)
 
 
-def class_task(session: Session, db_registry: db.SessionRegistry, task: Callable,
-               year=None, period=None):
+def class_task(session: Session, db_registry: db.SessionRegistry, task: Callable, year=None, period=None):
     database = db.Controller(db_registry)
     class_instance_queue = Queue()
     if year is None:
