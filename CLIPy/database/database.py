@@ -1,3 +1,4 @@
+import datetime
 import json
 import logging
 import os
@@ -977,7 +978,6 @@ class Controller:
         enrollment: models.Enrollment = self.session.query(models.Enrollment) \
             .filter_by(student=student, class_instance=class_instance).first()
 
-
         result_count = len(results)
         if result_count < 1 or result_count > 3:
             raise Exception("Invalid result format")
@@ -1012,6 +1012,33 @@ class Controller:
             enrollment.approved = True
         else:
             enrollment.approved = False
+
+        self.session.commit()
+
+    def update_enrollment_attendance(self, student: models.Student, class_instance: models.ClassInstance,
+                                     attendance: bool, date: datetime.date):
+        enrollment: models.Enrollment = self.session.query(models.Enrollment) \
+            .filter_by(student=student, class_instance=class_instance).first()
+
+        log.debug(f'Adding student {student} data to {class_instance}\n'
+                  f'\tAttendance:{attendance} As of:{date}')
+
+        enrollment.attendance = attendance
+        enrollment.attendance_date = date
+
+        self.session.commit()
+
+    def update_enrollment_improvement(self, student: models.Student, class_instance: models.ClassInstance,
+                                      improved: bool, grade: int, date: datetime.date):
+        enrollment: models.Enrollment = self.session.query(models.Enrollment) \
+            .filter_by(student=student, class_instance=class_instance).first()
+
+        log.debug(f'Adding student {student} data to {class_instance}\n'
+                  f'\tImproved:{improved}, Grade:{grade} As of:{date}')
+
+        enrollment.improved = improved
+        enrollment.improvement_grade = grade
+        enrollment.improvement_date = date
 
         self.session.commit()
 

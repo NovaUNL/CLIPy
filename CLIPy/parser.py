@@ -720,10 +720,103 @@ def get_results(page):
         gender = None
         if final_result in ('Aprovado', 'Não avaliado', 'Reprovado'):
             gender = 'm'
-        if final_result in ('Aprovada', 'Não avaliada', 'Reprovada'):
+        elif final_result in ('Aprovada', 'Não avaliada', 'Reprovada'):
             gender = 'f'
 
         student = (student_number, student_name, gender)
         results.append((student, result))
+
+    return results
+
+
+def get_attendance(page) -> ((int, str, str), bool, datetime.date):
+    """
+    Parses class attendance tables
+
+    :param page: A page fetched from :py:const:`CLIPy.urls.CLASS_ATTENDANCE`
+    :return: | List of ``(student, admitted, date)`` tuples for every student row
+             | Every ``student`` is a ``(id, name, gender)`` tuple
+             | ``admitted`` is a boolean and ``date`` the moment of admission validation
+
+    """
+    results = []
+    entries = list(page.find_all('tr', bgcolor='#ffffff', align='left'))
+    entries.extend(page.find_all('tr', bgcolor='#f8f8f8', align='left'))
+    for entry in entries:
+        columns = list(entry.children)
+        col_count = len(columns)
+        if col_count == 0:
+            log.warning("No admission table")
+            return
+        if col_count != 10:
+            log.warning(f"Found a strange row. It has {col_count} columns:\n{columns}")
+            break
+
+        student_number = int(columns[1].text.strip())
+        student_name = columns[3].text.strip()
+        admission = columns[5].text.strip()
+        admission_date = columns[7].text.strip()
+        if admission in ('', '?'):
+            admission = None
+            admission_date = None
+        else:
+            admission = admission in ('S', 'Disp')
+            admission_date = datetime.strptime(admission_date, "%Y-%m-%d").date()
+
+        final_result = columns[9].text.strip()
+        gender = None
+        if final_result == 'Admitido':
+            gender = 'm'
+        elif final_result == 'Admitida':
+            gender = 'f'
+
+        student = (student_number, student_name, gender)
+        results.append((student, admission, admission_date))
+
+    return results
+
+
+def get_improvements(page) -> ((int, str, str), bool, int, datetime.date):
+    """
+    Parses class improvements tables
+
+    :param page: A page fetched from :py:const:`CLIPy.urls.CLASS_ATTENDANCE`
+    :return: | List of ``(student, improved, grade, date)`` tuples for every student row
+             | Every ``student`` is a ``(id, name)`` tuple
+             | ``admitted`` is a boolean and ``date`` the moment of improvement issuance
+
+    """
+    results = []
+    entries = list(page.find_all('tr', bgcolor='#ffffff', align='left'))
+    entries.extend(page.find_all('tr', bgcolor='#f8f8f8', align='left'))
+    for entry in entries:
+        columns = list(entry.children)
+        col_count = len(columns)
+        if col_count == 0:
+            log.warning("No admission table")
+            return
+        if col_count != 10:
+            log.warning(f"Found a strange row. It has {col_count} columns:\n{columns}")
+            break
+
+        student_number = int(columns[1].text.strip())
+        student_name = columns[3].text.strip()
+        grade = columns[5].text.strip()
+        improvement_date = columns[7].text.strip()
+        if grade in ('', '?'):
+            grade = None
+            improvement_date = None
+        else:
+            try:
+                grade = int(grade)
+            except ValueError:
+                grade = 0
+            improvement_date = datetime.strptime(improvement_date, "%Y-%m-%d").date()
+
+        final_result = columns[9].text.strip()
+        improved = final_result == 'Melhorou'
+
+        student = (student_number, student_name)
+        results.append((student, improved, grade, improvement_date))
 
     return results

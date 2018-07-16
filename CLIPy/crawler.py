@@ -625,6 +625,7 @@ def crawl_grades(session: WebSession, database: db.Controller, class_instance: d
     if len(class_instance.enrollments) == 0:
         return  # Class has no one enrolled, nothing to see here...
 
+    # Grades
     page = session.get_simplified_soup(urls.CLASS_RESULTS.format(
         institution=institution.id,
         year=class_instance.year,
@@ -654,3 +655,51 @@ def crawl_grades(session: WebSession, database: db.Controller, class_instance: d
                     raise Exception("A new gender appeared in the pokédex")
                 database.update_student_gender(student=db_student, gender=gender)
             database.update_enrollment_results(student=db_student, class_instance=class_instance, results=evaluations)
+
+    # Attendance
+    page = session.get_simplified_soup(urls.CLASS_ATTENDANCE.format(
+        institution=institution.id,
+        year=class_instance.year,
+        department=class_instance.parent.department.id,
+        class_id=class_instance.parent.iid,
+        period=class_instance.period.part,
+        period_type=class_instance.period.letter))
+    course_links = page.find_all(href=urls.COURSE_EXP)
+
+    for link in course_links:
+        page = session.get_simplified_soup(urls.ROOT + link.attrs['href'])
+        for student, attendance, date in parser.get_attendance(page):
+            db_student = database.get_student(student[0], student[1])
+            if db_student is None:
+                raise Exception("Student dodged the enrollment search.\n" + student)
+            database.update_enrollment_attendance(
+                student=db_student,
+                class_instance=class_instance,
+                attendance=attendance,
+                date=date)
+
+    # Improvements
+    page = session.get_simplified_soup(urls.CLASS_IMPROVEMENTS.format(
+        institution=institution.id,
+        year=class_instance.year,
+        department=class_instance.parent.department.id,
+        class_id=class_instance.parent.iid,
+        period=class_instance.period.part,
+        period_type=class_instance.period.letter))
+    course_links = page.find_all(href=urls.COURSE_EXP)
+
+    for link in course_links:
+        page = session.get_simplified_soup(urls.ROOT + link.attrs['href'])
+        for student, improved, grade, date in parser.get_improvements(page):
+            db_student = database.get_student(student[0], student[1])
+            if db_student is None:
+                raise Exception("Student dodged the enrollment search.\n" + student)
+            try:
+                database.update_enrollment_improvement(
+                    student=db_student,
+                    class_instance=class_instance,
+                    improved=improved,
+                    grade=grade,
+                    date=date)
+            except AttributeError:
+                pass  # TODO students who were approved in previous enrollments
