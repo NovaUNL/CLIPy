@@ -31,13 +31,14 @@ class Clip:
     def __init__(self, cache: CacheStorage):
         self.cache: CacheStorage = cache
 
+    def find_student(self, name, course_filter=None):
+        return self.cache.controller.find_student(name, course=course_filter)
+
+    def find_course(self, abbreviation, year=datetime.now().year):
+        return self.cache.controller.get_course(abbreviation=abbreviation, year=year)
+
+
     # TODO redo this code. It's causing a circular import or something silly somewhere.
-    # def find_student(self, name, course_filter=None):
-    #     return self.cache.controller.find_student(name, course=course_filter)
-    #
-    # def find_course(self, abbreviation, year=datetime.now().year):
-    #     return self.cache.controller.get_course(abbreviation=abbreviation, year=year)
-    #
     # def update_admissions(self, username: str, password: str):
     #     processors.institution_task(Session(username, password), self.cache.registry, crawler.crawl_admissions)
     #
