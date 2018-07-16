@@ -16,3 +16,17 @@ Avoid doing so during times that might disturb other students access to CLIP. Th
 
 
 `Repository <https://gitlab.com/claudiop/CLIPy>`_
+
+Stuff that this is able to retrieve
+-----------------------------------
+
+Right now, most of CLIP data.
+
+- Students
+- Teachers
+- Classes (most of their information, student grades, turns, teachers)
+- Departments
+- Courses
+- Files (with deduplication :) )
+- Physical entities (buildings, classrooms, auditoriums, laboratories, ...)
+- National access contest admissions

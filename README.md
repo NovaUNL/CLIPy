@@ -24,6 +24,23 @@ Avoid doing so during times that might disturb other students access to CLIP. Th
     clip = Clip(storage)
     [print(student) for student in clip.find_student("John Smith")]
 
+### Stuff that this is able to retrieve
+Right now, most of CLIP data.
+- Students
+- Teachers
+- Classes (most of their information, student grades, turns, teachers)
+- Departments
+- Courses
+- Files (with deduplication :) )
+- Physical entities (buildings, classrooms, auditoriums, laboratories, ...)
+- National access contest admissions
+
 ### TODO
-- Crawl grades
 - Timespan filters (eg: crawl *[thing]* from 2015 to 2017)
+- Improvements done in periods other than the enrollment one
+- Evaluation dates
+- Class summaries
+- Course curricular plans
+- Better student course tagging
+- PhD's don't have grades and the parser thinks they reprove when they're approved
+- Library occupied/spare rooms
