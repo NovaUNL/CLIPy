@@ -168,7 +168,7 @@ def get_enrollments(page):
 #: Generic turn scheduling string. Looks something like 'Segunda-Feira  XX:00 - YY:00  Ed Z: Lab 123 A/Ed.Z'
 TURN_SCHEDULING_EXP = re.compile(
     '(?P<weekday>[\w-]+) {2}(?P<init_hour>\d{2}):(?P<init_min>\d{2}) - (?P<end_hour>\d{2}):(?P<end_min>\d{2})(?: {2})?'
-    '(?:Ed .*: (?P<lab>Lab )?(?P<room>[\w\b. ]+)\/(?P<building>[\w\d. ]+))?')
+    '(?:Ed .*: (?P<computer_lab>Lab Computadores )?(?P<lab>Lab )?(?P<room>[\w\b. ]+)/(?P<building>[\w\d. ]+))?')
 
 
 def get_turn_info(page):
@@ -228,7 +228,9 @@ def get_turn_info(page):
                 if 'building' in information and information['building'] is not None:
                     building = information['building'].strip()
                     if 'room' in information and information['room'] is not None:
-                        if 'lab' in information:
+                        if 'computer_lab' in information:
+                            room = (information['room'].strip(), models.RoomType.computer)
+                        elif 'lab' in information:
                             room = (information['room'].strip(), models.RoomType.laboratory)
                         else:
                             room = (information['room'].strip(), None)
