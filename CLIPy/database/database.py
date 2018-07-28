@@ -1082,12 +1082,29 @@ class Controller:
         enrollment: models.Enrollment = self.session.query(models.Enrollment) \
             .filter_by(student=student, class_instance=class_instance).first()
 
-        log.debug(f'Adding student {student} data to {class_instance}\n'
-                  f'\tImproved:{improved}, Grade:{grade} As of:{date}')
+        if enrollment:
+            log.debug(f'Adding student {student} data to {class_instance}\n'
+                      f'\tImproved:{improved}, Grade:{grade} As of:{date}')
+            enrollment.improved = improved
+            enrollment.improvement_grade = grade
+            enrollment.improvement_grade_date = date
+        else:
+            enrollment: [models.Enrollment] = self.session.query(models.Enrollment) \
+                .filter_by(student=student, approved=True) \
+                .join(models.ClassInstance) \
+                .filter(models.ClassInstance.parent == class_instance.parent) \
+                .all()
+            count = len(enrollment)
+            if count == 1:
+                enrollment.improved = improved
+                enrollment.improvement_grade = grade
+                enrollment.improvement_grade_date = date
+            elif count > 1:
+                log.error("Consistency issues. A student was approved several times.\n"
+                          f"Student:{student}, Instance:{class_instance}")
 
-        enrollment.improved = improved
-        enrollment.improvement_grade = grade
-        enrollment.improvement_grade_date = date
+            else:
+                log.error("No approved enrollement. Enrollment search was not performed in chronological order.")
 
         self.session.commit()
 

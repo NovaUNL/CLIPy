@@ -494,6 +494,8 @@ def crawl_class_turns(session: WebSession, database: db.Controller, class_instan
                 building = database.get_building(building)
                 if room:
                     room = database.get_room(room[0], building, room_type=room[1])
+                    if room is None:
+                        log.warning(f"{turn_type}{turn_number} of {class_instance} couldn't be matched against a room.")
             instances.append(db.candidates.TurnInstance(turn, start, end, weekday, room=room))
         del instances_aux
         database.add_turn_instances(instances)
@@ -693,13 +695,11 @@ def crawl_grades(session: WebSession, database: db.Controller, class_instance: d
         for student, improved, grade, date in parser.get_improvements(page):
             db_student = database.get_student(student[0], student[1])
             if db_student is None:
-                raise Exception("Student dodged the enrollment search.\n" + student)
-            try:
-                database.update_enrollment_improvement(
-                    student=db_student,
-                    class_instance=class_instance,
-                    improved=improved,
-                    grade=grade,
-                    date=date)
-            except AttributeError:
-                pass  # TODO students who were approved in previous enrollments
+                log.error("Student dodged the enrollment search.\n" + student)
+
+            database.update_enrollment_improvement(
+                student=db_student,
+                class_instance=class_instance,
+                improved=improved,
+                grade=grade,
+                date=date)
