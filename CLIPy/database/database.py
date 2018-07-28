@@ -684,15 +684,16 @@ class Controller:
         else:
             raise Exception("Neither course nor institution provided")
 
-        students: List[models.Student] = self.session.query(models.Student).filter_by(iid=candidate.id).all()
+        students: List[models.Student] = self.session.query(models.Student) \
+            .filter_by(iid=candidate.id, institution=institution).all()
+        count = len(students)
 
-        if len(students) == 0:  # new student, add him
+        if count == 0:  # new student, add him
             student = models.Student(
                 iid=candidate.id,
                 name=candidate.name,
                 abbreviation=candidate.abbreviation,
                 institution=institution,
-                course=candidate.course,
                 first_year=candidate.first_year,
                 last_year=candidate.last_year)
             self.session.add(student)
@@ -704,9 +705,19 @@ class Controller:
                     sleep(3)
                     self.session.rollback()
                     self.add_student_course(student=student, course=candidate.course, year=year)
-        elif len(students) == 1:
+        elif count == 1:  # that student is present in the db
             student = students[0]
-            if student.abbreviation == candidate.abbreviation or student.name == candidate.name:
+
+            if student.name != candidate.name:
+                if student.name.lower() != candidate.name.lower():  # Same as previous if, but more CPU expensive
+                    if student.abbreviation == candidate.abbreviation:
+                        if len(student.name) < len(candidate.name):
+                            student.name = candidate.name
+                            self.session.commit()
+                    else:
+                        raise Exception("Students having an ID collision")
+
+            if student.abbreviation != candidate.abbreviation:
                 if student.abbreviation is None:
                     if candidate.abbreviation is not None:
                         student.abbreviation = candidate.abbreviation
@@ -717,46 +728,20 @@ class Controller:
                         "Student:{}\n"
                         "Candidate{}".format(student, candidate))
 
-                if candidate.course is not None and student.course != candidate.course:  # TODO remove, check next if
-                    if student.course is not None:
-                        log.warning(f"{student} changing course from {student.course} to {candidate.course}")
+            if candidate.course is not None:
+                try:  # Hackish race condition prevention. Not pretty but works (most of the time)
+                    self.add_student_course(student=student, course=candidate.course, year=year)
+                except IntegrityError:
+                    sleep(3)
+                    self.session.rollback()
+                    self.add_student_course(student=student, course=candidate.course, year=year)
 
-                    student.course = candidate.course
-                    self.session.commit()
-
-                if candidate.course is not None:
-                    try:  # Hackish race condition prevention. Not pretty but works (most of the time)
-                        self.add_student_course(student=student, course=candidate.course, year=year)
-                    except IntegrityError:
-                        sleep(3)
-                        self.session.rollback()
-                        self.add_student_course(student=student, course=candidate.course, year=year)
-
-                if candidate.first_year:
-                    if student.first_year != candidate.first_year:
-                        student.add_year(candidate.first_year)
-                if candidate.last_year:
-                    if student.last_year != candidate.last_year:
-                        student.add_year(candidate.last_year)
-
-            else:
-                student = models.Student(
-                    iid=candidate.id,
-                    name=candidate.name,
-                    abbreviation=candidate.abbreviation,
-                    institution=institution,
-                    course=candidate.course,  # TODO remove
-                    first_year=candidate.first_year,
-                    last_year=candidate.last_year)
-                self.session.add(student)
-                self.session.commit()
-                if candidate.course is not None:
-                    try:  # Hackish race condition prevention. Not pretty but works (most of the time)
-                        self.add_student_course(student=student, course=candidate.course, year=year)
-                    except IntegrityError:
-                        sleep(3)
-                        self.session.rollback()
-                        self.add_student_course(student=student, course=candidate.course, year=year)
+            if candidate.first_year:
+                if student.first_year != candidate.first_year:
+                    student.add_year(candidate.first_year)
+            if candidate.last_year:
+                if student.last_year != candidate.last_year:
+                    student.add_year(candidate.last_year)
 
         else:  # database inconsistency
             students_str = ""
