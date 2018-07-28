@@ -418,6 +418,17 @@ ClassInstance.evaluations = orm.relationship(ClassEvaluations,
                                              order_by=ClassEvaluations.datetime, back_populates="class_instance")
 
 
+class StudentCourse(Base, TemporalEntity):
+    __tablename__ = TABLE_PREFIX + 'student_courses'
+    id = sa.Column(sa.Integer, sa.Sequence(TABLE_PREFIX + 'student_course_id_seq'), primary_key=True)
+    student_id = sa.Column(sa.ForeignKey(TABLE_PREFIX + 'students.id'))
+    course_id = sa.Column(sa.ForeignKey(TABLE_PREFIX + 'courses.id'))
+    # Relations
+    student = orm.relationship("Student", back_populates="course_relations")
+    course = orm.relationship("Course", back_populates="student_relations")
+    __table_args__ = (sa.UniqueConstraint('student_id', 'course_id', name='un_' + TABLE_PREFIX + 'student_course'),)
+
+
 class Course(Base, TemporalEntity):
     __tablename__ = TABLE_PREFIX + 'courses'
     #: Crawler generated identifier
@@ -436,6 +447,8 @@ class Course(Base, TemporalEntity):
     # Relations and constraints
     degree = orm.relationship(Degree, back_populates="courses")
     institution = orm.relationship("Institution", back_populates="courses")
+    student_relations = orm.relationship(StudentCourse, back_populates="course")
+    students = association_proxy('student_relations', 'student')
     __table_args__ = (
         sa.UniqueConstraint('institution_id', 'iid', 'abbreviation', name='un_' + TABLE_PREFIX + 'course'),)
 
@@ -480,7 +493,7 @@ class Teacher(Base, TemporalEntity):
     #: Belonging department
     department_id = sa.Column(sa.Integer, sa.ForeignKey(Department.id))
 
-    # Relations and contraints
+    # Relations and constraints
     department = orm.relationship(Department, back_populates="teachers")
     turns = orm.relationship('Turn', secondary=turn_teachers, back_populates='teachers')
     class_messages = orm.relationship('ClassMessages')
@@ -509,7 +522,7 @@ class Student(Base, TemporalEntity):
     #: CLIP assigned auth abbreviation (eg: john.f)
     abbreviation = sa.Column(sa.String(30), nullable=True)
     #: Student course
-    course_id = sa.Column(sa.Integer, sa.ForeignKey(Course.id))
+    course_id = sa.Column(sa.Integer, sa.ForeignKey(Course.id))  # TODO remove
     #: (kinda redudant) student institution
     institution_id = sa.Column(sa.Integer, sa.ForeignKey(Institution.id), nullable=False)
     #: Student sexual gender (0 - grill, 1 - boy)
@@ -518,9 +531,11 @@ class Student(Base, TemporalEntity):
     graduation_grade = sa.Column(sa.Integer, nullable=True, default=None)
 
     # Relations and constraints
-    course = orm.relationship(Course, back_populates="students")
+    course = orm.relationship(Course, back_populates="students")  # TODO remove
     institution = orm.relationship("Institution", back_populates="students")
     turns = orm.relationship('Turn', secondary=turn_students, back_populates='students')
+    course_relations = orm.relationship(StudentCourse, back_populates="student")
+    courses = association_proxy('course_relations', 'course')
     __table_args__ = (
         sa.UniqueConstraint('institution_id', 'iid', name='un_' + TABLE_PREFIX + 'student_id_institution'),
         sa.UniqueConstraint('iid', 'name', name='un_' + TABLE_PREFIX + 'student_id_name'),

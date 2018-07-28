@@ -3,10 +3,12 @@ import json
 import logging
 import os
 import traceback
+from time import sleep
 from typing import List, Optional
 
 import sqlalchemy as sa
 import sqlalchemy.orm as orm
+from sqlalchemy.exc import IntegrityError
 
 from . import models, candidates
 
@@ -286,11 +288,12 @@ class Controller:
                 else:
                     matches = self.session.query(models.Course).filter_by(abbreviation=abbreviation).all()
             else:
+                log.warning(f"Unable to determine course with id {identifier}, abbr {abbreviation} on year {year}")
                 return None
 
             if len(matches) == 1:
                 return matches[0]
-            if len(matches) > 1:
+            elif len(matches) > 1:
                 if year is None:
                     raise Exception("Multiple matches. Year unspecified")
 
@@ -668,6 +671,11 @@ class Controller:
         if candidate.id is None:
             raise Exception('No student ID provided')
 
+        if candidate.last_year is None:
+            raise Exception("Year not provided")
+
+        year = candidate.last_year
+
         if candidate.course is not None:
             # Search for institution instead of course since a transfer could have happened
             institution = candidate.course.institution
@@ -689,6 +697,13 @@ class Controller:
                 last_year=candidate.last_year)
             self.session.add(student)
             self.session.commit()
+            if candidate.course is not None:
+                try:  # Hackish race condition prevention. Not pretty but works (most of the time)
+                    self.add_student_course(student=student, course=candidate.course, year=year)
+                except IntegrityError:
+                    sleep(3)
+                    self.session.rollback()
+                    self.add_student_course(student=student, course=candidate.course, year=year)
         elif len(students) == 1:
             student = students[0]
             if student.abbreviation == candidate.abbreviation or student.name == candidate.name:
@@ -702,13 +717,25 @@ class Controller:
                         "Student:{}\n"
                         "Candidate{}".format(student, candidate))
 
-                if candidate.course is not None:
+                if candidate.course is not None and student.course != candidate.course:  # TODO remove, check next if
+                    if student.course is not None:
+                        log.warning(f"{student} changing course from {student.course} to {candidate.course}")
+
                     student.course = candidate.course
                     self.session.commit()
 
-                if candidate.first_year or candidate.last_year:
+                if candidate.course is not None:
+                    try:  # Hackish race condition prevention. Not pretty but works (most of the time)
+                        self.add_student_course(student=student, course=candidate.course, year=year)
+                    except IntegrityError:
+                        sleep(3)
+                        self.session.rollback()
+                        self.add_student_course(student=student, course=candidate.course, year=year)
+
+                if candidate.first_year:
                     if student.first_year != candidate.first_year:
                         student.add_year(candidate.first_year)
+                if candidate.last_year:
                     if student.last_year != candidate.last_year:
                         student.add_year(candidate.last_year)
 
@@ -718,11 +745,18 @@ class Controller:
                     name=candidate.name,
                     abbreviation=candidate.abbreviation,
                     institution=institution,
-                    course=candidate.course,
+                    course=candidate.course,  # TODO remove
                     first_year=candidate.first_year,
                     last_year=candidate.last_year)
                 self.session.add(student)
                 self.session.commit()
+                if candidate.course is not None:
+                    try:  # Hackish race condition prevention. Not pretty but works (most of the time)
+                        self.add_student_course(student=student, course=candidate.course, year=year)
+                    except IntegrityError:
+                        sleep(3)
+                        self.session.rollback()
+                        self.add_student_course(student=student, course=candidate.course, year=year)
 
         else:  # database inconsistency
             students_str = ""
@@ -743,6 +777,20 @@ class Controller:
                     if match.name == name:
                         return match
             raise Exception("Multiple students with this ID")
+
+    def add_student_course(self, student: models.Student, course: models.Course, year: int):
+        if student is None or course is None or year is None:
+            raise Exception("Missing details on a student's course assignment.")
+
+        match: models.StudentCourse = self.session.query(models.StudentCourse) \
+            .filter_by(student=student, course=course).first()
+
+        if match is None:
+            self.session.add(models.StudentCourse(student=student, course=course, first_year=year, last_year=year))
+        else:
+            match.add_year(year)
+
+        self.session.commit()
 
     def update_student_gender(self, student: models.Student, gender: int):
         if gender not in (0, 1):
