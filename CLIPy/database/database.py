@@ -894,8 +894,8 @@ class Controller:
                             db_turn_instance.weekday == instance.weekday:
                         matched = True
                         if db_turn_instance.room != instance.room:  # Update the room
-                            log.info(f'An instance of {turn} changed the room from '
-                                     f'{db_turn_instance.room} to {instance.room}')
+                            log.warning(f'An instance of {turn} changed the room from '
+                                        f'{db_turn_instance.room} to {instance.room}')
                             db_turn_instance.room = instance.room
                         instances.remove(instance)
                         break
@@ -910,6 +910,7 @@ class Controller:
                         end=instance.end,
                         room=instance.room,
                         weekday=instance.weekday))
+            self.session.commit()
 
     def add_turn_students(self, turn: models.Turn, students: [candidates.Student]):
         count = len(students)
@@ -1096,16 +1097,31 @@ class Controller:
                         raise Exception("Unable to determine which room is the correct one")
                 raise Exception('Unknown building')
         else:
-            if room_type:
-                return self.session.query(models.Room).filter_by(name=name,
-                                                                 room_type=room_type,
-                                                                 building=building).first()
-            else:
-                matches = self.session.query(models.Room).filter_by(name=name, building=building).all()
-                if len(matches) == 1:
-                    return matches[0]
-                else:
-                    raise Exception("Unable to determine which room is the correct one")
+            matches = self.session.query(models.Room).filter_by(name=name, building=building).all()
+            if len(matches) == 1:
+                return matches[0]
+            else:  # Proceed to guess
+                if room_type:  # We have a type hint (which can be inaccurate, eg. computer labs marked as regular labs)
+                    if room_type == models.RoomType.laboratory:  # If this is a lab hint
+                        labs = []  # Group up labs and computer labs
+                        for room in matches:
+                            if room.room_type in (models.RoomType.laboratory, models.RoomType.computer):
+                                labs.append(room)
+                        if len(labs) == 1:  # If there is only one then that's the one
+                            return labs[0]
+                    else:  # Quite a specific hint, look it up directly, should be no problem
+                        return self.session.query(models.Room).filter_by(
+                            name=name,
+                            room_type=room_type,
+                            building=building
+                        ).first()
+                else:  # regular rooms have no type hint. Assume that if there's no type hint then we want a regular one
+                    regular_rooms = []
+                    for room in matches:
+                        if room.room_type not in (models.RoomType.laboratory, models.RoomType.computer):
+                            regular_rooms.append(room)
+                    if len(regular_rooms) == 1:
+                        return regular_rooms[0]
 
     def add_building(self, building: candidates.Building) -> models.Building:
         if self.__caching__:
