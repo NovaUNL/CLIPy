@@ -513,7 +513,7 @@ class Student(Base, TemporalEntity):
     #: (kinda redudant) student institution
     institution_id = sa.Column(sa.Integer, sa.ForeignKey(Institution.id), nullable=False)
     #: Student sexual gender (0 - grill, 1 - boy)
-    gender = sa.Column(sa.Boolean, nullable=True, default=True)
+    gender = sa.Column(sa.Boolean, nullable=True, default=None)
     #: The grade the student obtained at his/her graduation (0-200)
     graduation_grade = sa.Column(sa.Integer, nullable=True, default=None)
 
