@@ -37,10 +37,8 @@ Right now, most of CLIP data.
 
 ### TODO
 - Timespan filters (eg: crawl *[thing]* from 2015 to 2017)
-- Improvements done in periods other than the enrollment one
 - Evaluation dates
 - Class summaries
 - Course curricular plans
 - Better student course tagging
-- PhD's don't have grades and the parser thinks they reprove when they're approved
 - Library occupied/spare rooms
