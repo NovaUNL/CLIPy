@@ -629,7 +629,7 @@ class Enrollment(Base):
     #: Grade the student obtained
     improvement_grade = sa.Column(sa.SmallInteger, default=0)
     #: Date on which the improvement was published
-    improvement_date = sa.Column(sa.Date, nullable=True, default=None)
+    improvement_grade_date = sa.Column(sa.Date, nullable=True, default=None)
     #: Continuous grade that the student obtained
     continuous_grade = sa.Column(sa.SmallInteger, default=0)
     #: Date on which the continuous grade was published

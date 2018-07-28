@@ -1039,7 +1039,7 @@ class Controller:
 
         enrollment.improved = improved
         enrollment.improvement_grade = grade
-        enrollment.improvement_date = date
+        enrollment.improvement_grade_date = date
 
         self.session.commit()
 
