@@ -642,7 +642,7 @@ def crawl_grades(session: WebSession, database: db.Controller, class_instance: d
         page = session.get_simplified_soup(urls.ROOT + link.attrs['href'])
         results = parser.get_results(page)
 
-        for student, evaluations in results:
+        for student, evaluations, approved in results:
             db_student = database.get_student(identifier=student[0], name=student[1])
 
             if db_student is None:
@@ -656,7 +656,11 @@ def crawl_grades(session: WebSession, database: db.Controller, class_instance: d
                 else:
                     raise Exception("A new gender appeared in the pokédex")
                 database.update_student_gender(student=db_student, gender=gender)
-            database.update_enrollment_results(student=db_student, class_instance=class_instance, results=evaluations)
+            database.update_enrollment_results(
+                student=db_student,
+                class_instance=class_instance,
+                results=evaluations,
+                approved=approved)
 
     # Attendance
     page = session.get_simplified_soup(urls.CLASS_ATTENDANCE.format(

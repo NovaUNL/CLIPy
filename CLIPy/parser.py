@@ -647,7 +647,7 @@ def get_results(page):
     Parses class grades tables
 
     :param page: A page fetched from :py:const:`CLIPy.urls.CLASS_RESULTS`
-    :return: | List of ``(student, results)`` tuples for every student row
+    :return: | List of ``(student, results, approved)`` tuples for every student row
              | Every ``student`` is a ``(id, name, gender)`` tuple
              | Every result is a tuple on which every element is an evaluation with an evaluation being
                  a ``(result, date)`` tuple
@@ -715,6 +715,8 @@ def get_results(page):
                     special_result = 0
                     special_date = datetime.strptime(special_date, "%Y-%m-%d").date()
             final_result = columns[17].text.strip()
+            approved = 'Aprovad' in final_result
+
             result = ((normal_result, normal_date),
                       (recourse_result, recourse_date),
                       (special_result, special_date))
@@ -726,7 +728,7 @@ def get_results(page):
             gender = 'f'
 
         student = (student_number, student_name, gender)
-        results.append((student, result))
+        results.append((student, result, approved))
 
     return results
 

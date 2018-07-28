@@ -1023,7 +1023,8 @@ class Controller:
         log.info("{} enrollments added and {} updated ({} ignored)!".format(
             added, updated, len(enrollments) - added - updated))
 
-    def update_enrollment_results(self, student: models.Student, class_instance: models.ClassInstance, results):
+    def update_enrollment_results(self, student: models.Student, class_instance: models.ClassInstance, results,
+                                  approved: bool):
         enrollment: models.Enrollment = self.session.query(models.Enrollment) \
             .filter_by(student=student, class_instance=class_instance).first()
 
@@ -1057,10 +1058,7 @@ class Controller:
                 enrollment.special_grade = 0
             enrollment.special_grade_date = special_date
 
-        if enrollment.continuous_grade >= 10 or enrollment.exam_grade >= 10 or enrollment.special_grade >= 10:
-            enrollment.approved = True
-        else:
-            enrollment.approved = False
+        enrollment.approved = approved
 
         self.session.commit()
 
