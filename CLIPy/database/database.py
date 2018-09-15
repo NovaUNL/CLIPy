@@ -189,7 +189,8 @@ class Controller:
              models.TurnType(id=2, name="Practical", abbreviation="p"),
              models.TurnType(id=3, name="Practical-Theoretical", abbreviation="tp"),
              models.TurnType(id=4, name="Seminar", abbreviation="s"),
-             models.TurnType(id=5, name="Tutorial Orientation", abbreviation="ot")])
+             models.TurnType(id=5, name="Tutorial Orientation", abbreviation="ot"),
+             models.TurnType(id=6, name="Field Work", abbreviation="tc")])
         self.session.commit()
 
     def get_institution(self, identifier: int) -> Optional[models.Institution]:

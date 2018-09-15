@@ -8,7 +8,7 @@ def read(fname):
 
 setup(
     name="CLIP-Crawler",
-    version="0.6",
+    version="0.6.1",
     author="Cláudio Pereira",
     author_email="development@claudiop.com",
     description=(
