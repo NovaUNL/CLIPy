@@ -838,6 +838,9 @@ class Controller:
         return teacher
 
     def add_turn(self, turn: candidates.Turn) -> models.Turn:
+        if turn.type is None:
+            raise Exception("Typeless turn found")
+
         db_turn: models.Turn = self.session.query(models.Turn).filter_by(
             number=turn.number,
             class_instance=turn.class_instance,

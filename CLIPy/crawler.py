@@ -466,6 +466,10 @@ def crawl_class_turns(session: WebSession, database: db.Controller, class_instan
                 routes_str += (';' + route)
 
         turn_type = database.get_turn_type(turn_type)
+        if turn_type is None:
+            log.error(f"Unable to resolve turn type {turn_pages[1]}.\n\tWas crawling {class_instance}, skipping!")
+            continue
+
         teachers = []
         for name in teachers_names:
             teacher = database.get_teacher(name=name, department=department)
