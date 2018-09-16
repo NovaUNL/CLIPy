@@ -61,7 +61,7 @@ class Session:
         :param url: URL to fetch
         :return: Request response
         """
-        log.info('Fetching:' + url)
+        log.debug('Fetching:' + url)
         return self.__requests_session__.get(url, headers=http_headers)
 
     def get_simplified_soup(self, url: str) -> BeautifulSoup:
