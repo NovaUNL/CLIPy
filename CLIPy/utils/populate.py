@@ -188,7 +188,7 @@ def bootstrap_database(session: Session, db_registry: db.SessionRegistry, year: 
 
     # Looks up the national access contest admission tables looking for students current statuses.
     # Depends on up-to-date institutions. Takes 30 minutes
-    processors.institution_task(session, db_registry, crawler.crawl_admissions)
+    processors.institution_task(session, db_registry, crawler.crawl_admissions, restriction=97747)
 
     # Finds student enrollments to class instances.
     processors.class_task(session, db_registry, crawler.crawl_class_enrollments, year=year, period=period)

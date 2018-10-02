@@ -34,13 +34,16 @@ def task_queue_processor(session: Session, db_registry: db.SessionRegistry, task
         thread.join()
 
 
-def institution_task(session: Session, db_registry: db.SessionRegistry, task: Callable):
+def institution_task(session: Session, db_registry: db.SessionRegistry, task: Callable, restriction: int = None):
     database = db.Controller(db_registry)
     institution_queue = Queue()
-    for institution in database.get_institution_set():
-        if not institution.has_time_range():  # if it has no time range to iterate through
-            continue
-        institution_queue.put(institution)
+    if restriction is None:
+        for institution in database.get_institution_set():
+            if not institution.has_time_range():  # if it has no time range to iterate through
+                continue
+            institution_queue.put(institution)
+    else:
+        institution_queue.put(database.get_institution(restriction))
     task_queue_processor(session, db_registry, task, institution_queue)
 
 
