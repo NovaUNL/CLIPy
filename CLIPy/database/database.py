@@ -9,6 +9,7 @@ from typing import List, Optional
 import sqlalchemy as sa
 import sqlalchemy.orm as orm
 from sqlalchemy.exc import IntegrityError
+from unidecode import unidecode
 
 from . import models, candidates
 
@@ -710,13 +711,20 @@ class Controller:
             student = students[0]
 
             if student.name != candidate.name:
-                if student.name.lower() != candidate.name.lower():  # Same as previous if, but more CPU expensive
+                if unidecode(student.name.lower()) == unidecode(candidate.name.lower()):
+                    if unidecode(candidate.name.lower()) == student.name.lower():
+                        student.name = candidate.name
+                        self.session.commit()
+                else:
                     if student.abbreviation == candidate.abbreviation:
                         if len(student.name) < len(candidate.name):
                             student.name = candidate.name
                             self.session.commit()
                     else:
-                        raise Exception("Students having an ID collision")
+                        raise Exception(
+                            "Students having an ID collision\n"
+                            "Student:{}\n"
+                            "Candidate{}".format(student, candidate))
 
             if student.abbreviation != candidate.abbreviation:
                 if student.abbreviation is None:
