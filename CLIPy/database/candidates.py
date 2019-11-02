@@ -96,7 +96,7 @@ class Student(TemporalEntity):
     def __init__(self, identifier, name: str, course: models.Course, institution: models.Institution,
                  abbreviation=None, first_year: int = None, last_year: int = None):
         super().__init__(identifier, first_year, last_year)
-        self.name = name
+        self.name = ' '.join(name.split())
         self.course = course
         self.institution = institution
         self.abbreviation = abbreviation

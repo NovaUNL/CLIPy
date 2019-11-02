@@ -520,7 +520,7 @@ class Student(Base, TemporalEntity):
     #: Student full name
     name = sa.Column(sa.String(100))
     #: CLIP assigned auth abbreviation (eg: john.f)
-    abbreviation = sa.Column(sa.String(30), nullable=True)
+    abbreviation = sa.Column(sa.String(100), nullable=True)
     #: Student course
     course_id = sa.Column(sa.Integer, sa.ForeignKey(Course.id))  # TODO remove
     #: (kinda redudant) student institution

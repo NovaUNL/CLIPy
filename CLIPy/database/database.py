@@ -10,6 +10,7 @@ import sqlalchemy as sa
 import sqlalchemy.orm as orm
 from sqlalchemy.exc import IntegrityError
 from unidecode import unidecode
+from difflib import SequenceMatcher
 
 from . import models, candidates
 
@@ -512,19 +513,29 @@ class Controller:
         ).first()
 
         if db_class is not None:  # Already stored
+            changed = False
             if db_class.name != candidate.name:
                 log.warning("Class name change:\n"
                             f"\t{db_class}\t to \t{candidate})")
+                db_class.name = candidate.name
+                changed = True
 
             if candidate.abbreviation is not None:
                 if db_class.abbreviation is None or db_class.abbreviation == '???':
                     db_class.abbreviation = candidate.abbreviation
-                    self.session.commit()
-                    return db_class
+                    changed = True
 
-                if db_class.abbreviation is not None and db_class.abbreviation != candidate.abbreviation:
-                    raise Exception("Class abbreviation change attempt."
-                                    f"{db_class.abbreviation} to {candidate.abbreviation} (iid {candidate.id})")
+                elif db_class.abbreviation != candidate.abbreviation:
+                    if SequenceMatcher(None, db_class.abbreviation, candidate.abbreviation).ratio() < 0.3:
+                        raise Exception("Class abbreviation change attempt."
+                                        f"{db_class.abbreviation} to {candidate.abbreviation} (iid {candidate.id})")
+                    else:
+                        log.warn("Class abbreviation change."
+                                 f"{db_class.abbreviation} to {candidate.abbreviation} (iid {candidate.id})")
+                        db_class.abbreviation = candidate.abbreviation
+                        changed = True
+            if changed:
+                self.session.commit()
 
             return db_class
 
@@ -635,7 +646,6 @@ class Controller:
                         institution=course.institution))
                     self.session.commit()
                 else:
-                    updated += 1
                     changed = False
                     if course.name is not None and course.name != db_course.name:
                         raise Exception("Attempted to change a course name")
@@ -646,15 +656,16 @@ class Controller:
                     if course.degree is not None:
                         db_course.degree = course.degree
                         changed = True
-                    if db_course.first_year is None \
-                            or course.first_year is not None and course.first_year < db_course.first_year:
+                    if db_course.first_year is None or course.first_year is not None \
+                            and course.first_year < db_course.first_year:
                         db_course.first_year = course.first_year
                         changed = True
-                    if db_course.last_year is None \
-                            or course.last_year is not None and course.last_year < db_course.last_year:
+                    if db_course.last_year is None or course.last_year is not None \
+                            and course.last_year > db_course.last_year:
                         db_course.last_year = course.last_year
                         changed = True
                     if changed:
+                        updated += 1
                         self.session.commit()
 
             if len(courses) > 0:
@@ -720,6 +731,9 @@ class Controller:
                         if len(student.name) < len(candidate.name):
                             student.name = candidate.name
                             self.session.commit()
+                    elif SequenceMatcher(None, student.name, candidate.name).ratio() > 0.8:
+                        student.name = candidate.name
+                        self.session.commit()
                     else:
                         raise Exception(
                             "Students having an ID collision\n"
@@ -799,7 +813,7 @@ class Controller:
 
         # Ensure that the candidate matches existing id matches
         for teacher in teacher_matches:
-            if teacher.name != candidate.name:
+            if SequenceMatcher(None, teacher.name, candidate.name).ratio() < 0.5:
                 raise Exception('Two diferent teachers with the same ID:\n'
                                 f'\t{teacher}\n'
                                 f'\t{candidate}')
@@ -833,10 +847,16 @@ class Controller:
                                          last_year=candidate.last_year)
                 self.session.add(teacher)
                 changed = True
-            elif teacher.first_year != candidate.first_year or teacher.last_year != candidate.last_year:
-                teacher.add_year(candidate.first_year)
-                teacher.add_year(candidate.last_year)
-                changed = True
+            else:
+                if teacher.first_year != candidate.first_year or teacher.last_year != candidate.last_year:
+                    teacher.add_year(candidate.first_year)
+                    teacher.add_year(candidate.last_year)
+                    changed = True
+
+                if teacher.name != candidate.name:
+                    log.warn(f"Changing teacher {teacher.name} to {candidate.name}")
+                    teacher.name = candidate.name
+                    changed = True
 
         if changed:
             self.session.commit()
