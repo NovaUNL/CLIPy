@@ -168,7 +168,7 @@ def get_enrollments(page):
 #: Generic turn scheduling string. Looks something like 'Segunda-Feira  XX:00 - YY:00  Ed Z: Lab 123 A/Ed.Z'
 TURN_SCHEDULING_EXP = re.compile(
     '(?P<weekday>[\w-]+) {2}(?P<init_hour>\d{2}):(?P<init_min>\d{2}) - (?P<end_hour>\d{2}):(?P<end_min>\d{2})(?: {2})?'
-    '(?:Ed .*: (?P<computer_lab>Lab Computadores )?(?P<lab>Lab[.]? )?(?P<room>[\w\b. ]+)/(?P<building>[\w\d. ]+))?')
+    '(?:E[dD] .*: (?P<computer_lab>Lab Computadores )?(?P<lab>Lab[.]? )?(?P<room>[\w\b. ]+)/(?P<building>[\w\d. ]+))?')
 
 
 def get_turn_info(page):
@@ -365,7 +365,7 @@ def get_teachers(page):
     return teacher
 
 
-building_exp = re.compile('(?:Ed .*: (?P<room>[\\w\\b. ]+)/(?P<building>[\\w\\d. ]+))?')
+building_exp = re.compile('(?:E[dD] .*: (?P<room>[\\w\\b. ]+)/(?P<building>[\\w\\d. ]+))?')
 
 
 def get_class_summaries(page):
@@ -456,7 +456,7 @@ def get_places(page):
 #: The generic long room string looks something like `Laboratório de Ensino Ed xyz: Lab 123` most of the times
 LONG_ROOM_EXP = re.compile('(?P<room_type>Sala|Laboratório de Ensino|Anfiteatro|Hangar|Edifício|Auditório)(( de)? '
                            '(?P<room_subtype>Aula|Reunião|Mestrado|Computadores|Multimédia|Multiusos))?'
-                           '( Ed (?P<building>[\w ]+):)? '
+                           '( E[Dd] (?P<building>[\w ]+):)? '
                            '(?:Lab[. ]? (?:Computadores )?|Lab\.|Laboratório |H.|Ed: |Sala )?'
                            '(?P<room_name>[\w .-]*)')
 
