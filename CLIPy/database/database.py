@@ -979,10 +979,12 @@ class Controller:
 
     def add_turn_students(self, turn: models.Turn, students: [candidates.Student]):
         count = len(students)
+        old_count = len(turn.students)
         if count > 0:
             [turn.students.append(student) for student in students]
             self.session.commit()
-            log.info(f"{count} students added successfully to the turn {turn}!")
+            if count - old_count > 0:
+                log.info(f"{count - old_count} students added successfully to the turn {turn}!")
 
     def add_admissions(self, admissions: [candidates.Admission]):
         admissions = list(map(lambda admission: models.Admission(
@@ -1125,6 +1127,8 @@ class Controller:
 
     def add_room(self, candidate: candidates.Room) -> models.Room:
         reload_cache = False
+        if candidate.name is None:
+            raise Exception()
         try:
             if self.__caching__:
                 if candidate.building in self.__rooms__ \
@@ -1141,8 +1145,12 @@ class Controller:
                     reload_cache = True
                 return room
             else:
-                room = self.session.query(models.Room).filter_by(
-                    name=candidate.name, room_type=candidate.type, building=candidate.building).first()
+                room = self.session \
+                    .query(models.Room) \
+                    .filter_by(id=candidate.id,
+                               room_type=candidate.type,
+                               building=candidate.building) \
+                    .first()
                 if room is None:
                     room = models.Room(id=candidate.id,
                                        name=candidate.name,
