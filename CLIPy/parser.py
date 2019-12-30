@@ -824,3 +824,97 @@ def get_improvements(page) -> ((int, str, str), bool, int, datetime.date):
         results.append((student, improved, grade, improvement_date))
 
     return results
+
+
+def get_library_room_availability(page) -> {str: (bool, bool, bool)}:
+    results = {}
+    entries = list(page.find_all('th', bgcolor='#95AEA8', colspan='3', class_='center', text="Escolhas"))
+    if len(entries) == 0:
+        raise Exception("No room table")
+    elif len(entries) > 1:
+        raise Exception("Error parsing the library room page. Too many tables found.")
+
+    tbody = entries[0].parent.parent
+
+    time_slot = None
+    for tr_tag in tbody.find_all('tr')[2:]:
+        tds = tr_tag.find_all('td')
+        if len(tds) == 3:
+            text = tds[0].text
+            if text == '09:00 - 13:00':
+                time_slot = 0
+            elif text == '13:00 - 17:00':
+                time_slot = 1
+            elif text == '17:00 - 20:00':
+                time_slot = 2
+            else:
+                raise Exception("Unknown time slot %s" % text)
+            tds = tds[1:]
+
+        if len(tds) == 2:
+            room = tds[0].text.split(":")[-1].strip()
+            occupation_str = tds[1].attrs['title']
+            if occupation_str == 'Livre':
+                occupied = True
+            elif occupation_str == 'Ocupada':
+                occupied = False
+            else:
+                raise Exception("Unknown status")
+
+            if time_slot == 0:
+                results[room] = [occupied, False, False]
+            else:
+                results[room][time_slot] = occupied
+
+        else:
+            raise Exception("Invalid number of columns")
+
+    return results
+
+
+def get_library_group_room_availability(page) -> {str: (bool, bool, bool, bool)}:
+    results = {}
+    entries = list(page.find_all('th', bgcolor='#95AEA8', colspan='3', class_='center', text="Escolhas"))
+    if len(entries) == 0:
+        raise Exception("No room table")
+    elif len(entries) > 1:
+        raise Exception("Error parsing the library room page. Too many tables found.")
+
+    tbody = entries[0].parent.parent
+
+    time_slot = None
+    for tr_tag in tbody.find_all('tr')[2:]:
+        tds = tr_tag.find_all('td')
+        if len(tds) == 3:
+            text = tds[0].text
+            if text == '09:00 - 12:00':
+                time_slot = 0
+            elif text == '12:00 - 14:00':
+                time_slot = 1
+            elif text == '14:00 - 17:00':
+                time_slot = 2
+            elif text == '17:00 - 20:00':
+                time_slot = 3
+            else:
+                raise Exception("Unknown time slot %s" % text)
+            tds = tds[1:]
+
+        if len(tds) == 2:
+            room = tds[0].text.split(":")[-1].strip()
+            occupation_str = tds[1].attrs['title']
+            if occupation_str == 'Livre':
+                occupied = True
+            elif occupation_str == 'Ocupada':
+                occupied = False
+            else:
+                raise Exception("Unknown status")
+
+            if time_slot == 0:
+                results[room] = [occupied, False, False, False]
+            else:
+                results[room][time_slot] = occupied
+
+        else:
+            raise Exception("Invalid number of columns")
+
+    return results

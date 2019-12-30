@@ -366,6 +366,33 @@ class ParsingMethods(unittest.TestCase):
                  (2.0, 3.0, 0, 2.0, 7.0))
             ])
 
+    def test_library_room_occupation_parsing(self):
+        with open("snapshots/library_individual_rooms_availability.html", mode='r') as page:
+            page = BeautifulSoup(page, 'html.parser')
+            room_availability = parser.get_library_room_availability(page)
+            self.assertEqual(
+                room_availability,
+                {'3.01': [True, True, True],
+                 '3.02': [False, True, True],
+                 '3.10': [False, True, False],
+                 '3.20': [True, True, True],
+                 '3.39': [False, False, True]})
+
+    def test_library_group_room_occupation_parsing(self):
+        with open("snapshots/library_group_rooms_availability.html", mode='r') as page:
+            page = BeautifulSoup(page, 'lxml')
+            room_availability = parser.get_library_group_room_availability(page)
+            self.assertEqual(
+                room_availability,
+                {'1.1': [False, False, False, True],
+                 '1.2': [False, True, True, True],
+                 '1.3': [True, True, True, True],
+                 '1.4': [False, False, False, True],
+                 '2.5': [False, False, False, False],
+                 '2.6': [False, True, False, True],
+                 '2.7': [False, False, False, False],
+                 '2.8': [True, True, True, True]})
+
 
 if __name__ == '__main__':
     unittest.main()
