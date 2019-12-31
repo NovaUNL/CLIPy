@@ -1,7 +1,7 @@
 import os
 from datetime import datetime
 
-from . import database as db
+from . import database as db, processors, crawler
 from .session import Session
 from .utils import populate
 
@@ -28,8 +28,11 @@ class CacheStorage:
 
 
 class Clip:
-    def __init__(self, cache: CacheStorage):
+    def __init__(self, cache: CacheStorage, username, password):
         self.cache: CacheStorage = cache
+        self.username = username
+        self.password = password
+        self.session = Session(username, password)
 
     def find_student(self, name, course_filter=None):
         return self.cache.controller.find_student(name, course=course_filter)
@@ -37,29 +40,41 @@ class Clip:
     def find_course(self, abbreviation, year=datetime.now().year):
         return self.cache.controller.get_course(abbreviation=abbreviation, year=year)
 
+    def update_admissions(self):
+        processors.institution_task(self.session, self.cache.registry, crawler.crawl_admissions)
 
-    # TODO redo this code. It's causing a circular import or something silly somewhere.
-    # def update_admissions(self, username: str, password: str):
-    #     processors.institution_task(Session(username, password), self.cache.registry, crawler.crawl_admissions)
-    #
-    # def update_classes(self, username: str, password: str):
-    #     processors.department_task(Session(username, password), self.cache.registry, crawler.crawl_classes)
-    #
-    # def update_class_enrollments(self, username: str, password: str, year: int, period_part, period_parts):
-    #     period = self.cache.controller.get_period(period_part, period_parts)
-    #     if period is None:
-    #         raise ValueError("Invalid period")
-    #     processors.class_task(Session(username, password), self.cache.registry, crawler.crawl_class_info,
-    #                           year=year, period=period)
-    #
-    # def update_turns(self, username, password, year, period_part, period_parts):
-    #     period = self.cache.controller.get_period(period_part, period_parts)
-    #     if period is None:
-    #         raise ValueError("Invalid period")
-    #     processors.class_task(Session(username, password), self.cache.registry, crawler.crawl_class_turns,
-    #                           year=year, period=period)
+    def update_teachers(self):
+        processors.department_task(self.session, self.cache.registry, crawler.crawl_teachers)
+
+    def update_classes(self):
+        processors.department_task(self.session, self.cache.registry, crawler.crawl_classes)
+
+    def update_class_info(self, year: int, period_part, period_parts):
+        period = self.cache.controller.get_period(period_part, period_parts)
+        if period is None:
+            raise ValueError("Invalid period")
+        processors.class_task(self.session, self.cache.registry, crawler.crawl_class_info, year=year, period=period)
+
+    def update_class_enrollments(self, year: int, period_part, period_parts):
+        period = self.cache.controller.get_period(period_part, period_parts)
+        if period is None:
+            raise ValueError("Invalid period")
+        processors.class_task(self.session, self.cache.registry, crawler.crawl_class_info, year=year, period=period)
+
+    def update_turns(self, year, period_part, period_parts):
+        period = self.cache.controller.get_period(period_part, period_parts)
+        if period is None:
+            raise ValueError("Invalid period")
+        processors.class_task(self.session, self.cache.registry, crawler.crawl_class_turns, year=year, period=period)
+
+    def update_class_files(self, year, period_part, period_parts):
+        period = self.cache.controller.get_period(period_part, period_parts)
+        if period is None:
+            raise ValueError("Invalid period")
+        processors.class_task(self.session, self.cache.registry, crawler.crawl_files, year=year, period=period)
+        processors.class_task(self.session, self.cache.registry, crawler.download_files, year=year, period=period)
 
     @staticmethod
     def populate(username, password, storage: CacheStorage, year: int = None, period: int = None):
         populate.bootstrap_database(Session(username, password), storage.registry, year, period)
-        return Clip(storage)
+        return Clip(storage, username, password)
