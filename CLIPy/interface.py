@@ -40,6 +40,12 @@ class Clip:
     def find_course(self, abbreviation, year=datetime.now().year):
         return self.cache.controller.get_course(abbreviation=abbreviation, year=year)
 
+    def fetch_library_individual_room_availability(self, date: datetime.date = datetime.now().date()):
+        return crawler.crawl_library_individual_room_availability(self.session, date)
+
+    def fetch_library_group_room_availability(self, date: datetime.date = datetime.now().date()):
+        return crawler.crawl_library_group_room_availability(self.session, date)
+
     def update_admissions(self):
         processors.institution_task(self.session, self.cache.registry, crawler.crawl_admissions)
 

@@ -830,7 +830,10 @@ def get_library_room_availability(page) -> {str: (bool, bool, bool)}:
     results = {}
     entries = list(page.find_all('th', bgcolor='#95AEA8', colspan='3', class_='center', text="Escolhas"))
     if len(entries) == 0:
-        raise Exception("No room table")
+        unavailable_tag = page.find('div', text="Não há disponibilidade neste dia!", align="center")
+        if unavailable_tag is None:
+            raise Exception("No room table")
+        return None
     elif len(entries) > 1:
         raise Exception("Error parsing the library room page. Too many tables found.")
 
@@ -876,7 +879,10 @@ def get_library_group_room_availability(page) -> {str: (bool, bool, bool, bool)}
     results = {}
     entries = list(page.find_all('th', bgcolor='#95AEA8', colspan='3', class_='center', text="Escolhas"))
     if len(entries) == 0:
-        raise Exception("No room table")
+        unavailable_tag = page.find('div', text="Não há disponibilidade neste dia!", align="center")
+        if unavailable_tag is None:
+            raise Exception("No room table")
+        return None
     elif len(entries) > 1:
         raise Exception("Error parsing the library room page. Too many tables found.")
 

@@ -64,26 +64,46 @@ class Session:
         log.debug('Fetching:' + url)
         return self.__requests_session__.get(url, headers=http_headers)
 
-    def get_simplified_soup(self, url: str) -> BeautifulSoup:
+    def post(self, url: str, data: {str: str}) -> requests.Response:
+        """
+        Fetches a remote URL using an HTTP POST method using the current session attributes
+        :param url: URL to fetch
+        :param data: POST data dict
+        :return: Request response
+        """
+        log.debug(f'Fetching: {url} with params {data}')
+        return self.__requests_session__.post(url, data=data, headers=http_headers)
+
+    def get_simplified_soup(self, url: str, post_data=None) -> BeautifulSoup:
         """
         | Fetches a remote URL using an HTTP GET method using the current session attributes.
         | Then parses the response text cleaning tags which aren't useful for parsing
+        | If the post field is filled the HTTP POST method is used instead
 
         :param url: URL to fetch
+        :param post_data: If filled, upgrades the request to an HTTP POST with this being the data dict
         :return: Parsed html tree
         """
-        return read_and_clean_response(self.get(url))
+        if post_data is None:
+            return read_and_clean_response(self.get(url))
+        else:
+            return read_and_clean_response(self.post(url, data=post_data))
 
-    def get_broken_simplified_soup(self, url: str) -> BeautifulSoup:
+    def get_broken_simplified_soup(self, url: str, post_data=None) -> BeautifulSoup:
         """
         | Fetches a remote URL using an HTTP GET method using the current session attributes.
         | Then parses the response text with an heavy parser (allowing for broken HTML)
             cleaning tags which aren't useful for parsing
+        | If the post field is filled the HTTP POST method is used instead
 
         :param url: URL to fetch
+        :param post_data: If filled, upgrades the request to an HTTP POST with this being the data dict
         :return: Parsed html tree
         """
-        return read_and_clean_broken_response(self.get(url))
+        if post_data is None:
+            return read_and_clean_broken_response(self.get(url))
+        else:
+            return read_and_clean_broken_response(self.post(url, data=post_data))
 
     def get_file(self, url: str) -> (bytes, str):
         """

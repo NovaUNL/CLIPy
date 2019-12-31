@@ -278,6 +278,14 @@ GRADUATION_STUDENTS = ROOT + \
                       "/utente/institui%E7%E3o_sede/unidade_organica/ensino/desempenho/diplomados/curso?" \
                       "ano_lectivo={year}&institui%E7%E3o={institution}&curso={course}"
 
+LIBRARY_INDIVIDUAL_ROOMS = ROOT + \
+                      "/utente/eu/aluno/reserva_de_espa%E7os?" \
+                      "tipo_de_espa%E7o=gabti&tipo_de_responsabilidade_sobre_espa%E7o=1&institui%E7%E3o=97747"
+
+LIBRARY_GROUP_ROOMS = ROOT + \
+                      "/utente/eu/aluno/reserva_de_espa%E7os?" \
+                      "tipo_de_espa%E7o=gabtg&tipo_de_responsabilidade_sobre_espa%E7o=1&institui%E7%E3o=97747"
+
 COURSE_EXP = re.compile("\\bcurso=(\d+)\\b")
 PERIOD_EXP = re.compile('\\bper%EDodo_lectivo=(\d)\\b')
 PERIOD_TYPE_EXP = re.compile('\\btipo_de_per%EDodo_lectivo=(\w+)\\b')

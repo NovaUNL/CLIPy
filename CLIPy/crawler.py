@@ -2,6 +2,7 @@ import hashlib
 import logging
 import os
 import traceback
+from datetime import datetime
 from queue import Queue
 from threading import Thread, Lock
 from time import sleep
@@ -711,3 +712,21 @@ def crawl_grades(session: WebSession, database: db.Controller, class_instance: d
                 improved=improved,
                 grade=grade,
                 date=date)
+
+
+def crawl_library_individual_room_availability(session: WebSession, date: datetime.date):
+    page = session.get_broken_simplified_soup(
+        urls.LIBRARY_INDIVIDUAL_ROOMS,
+        post_data={
+            'submit:reservas:es': 'Ver+disponibilidade',
+            'data': date.isoformat()})
+    return parser.get_library_room_availability(page)
+
+
+def crawl_library_group_room_availability(session: WebSession, date: datetime.date):
+    page = session.get_broken_simplified_soup(
+        urls.LIBRARY_GROUP_ROOMS,
+        post_data={
+            'submit:reservas:es': 'Ver+disponibilidade',
+            'data': date.isoformat()})
+    return parser.get_library_group_room_availability(page)
