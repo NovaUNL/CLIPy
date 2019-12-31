@@ -1,6 +1,7 @@
 import hashlib
 import logging
 import os
+import pathlib
 import traceback
 from datetime import datetime
 from queue import Queue
@@ -52,7 +53,7 @@ class PageCrawler(Thread):
                                   f'Retrying in {5 + min(exception_count, 55)} seconds...')
 
                     if exception_count > 10:
-                        log.critical("Thread {} failed for more than 10 times. Skipping work unit " + work_unit)
+                        log.critical("Thread {} failed for more than 10 times. Skipping work unit " + work_unit.id)
                         break
                     sleep(5 + min(exception_count, 55))
             else:
@@ -80,7 +81,7 @@ def crawl_rooms(session: WebSession, database: db.Controller, institution: db.mo
                 weekday=2))  # 2 is monday
             candidates = parser.get_places(page)
             if len(candidates) > 0:
-                log.info(f'Found the following rooms in {building}, {year}:\n{candidates}')
+                log.debug(f'Found the following rooms in {building}, {year}:\n{candidates}')
             for identifier, room_type, name in candidates:
                 candidate = db.candidates.Room(identifier=identifier, room_type=room_type, name=name, building=building)
                 if identifier in rooms:
@@ -587,6 +588,12 @@ def download_files(session: WebSession, database: db.Controller, class_instance:
     files = class_instance.files
     poked_file_types = set()
 
+    if 'CLIPY_SAVE_PATH' in os.environ:
+        save_path = os.environ['CLIPY_SAVE_PATH']
+        assert os.path.isdir(save_path)
+    else:
+        save_path = './files'
+
     for file in files:
         if not file.downloaded():
             file_type = file.file_type
@@ -612,8 +619,15 @@ def download_files(session: WebSession, database: db.Controller, class_instance:
             sha1 = hasher.hexdigest()
             file: db.models.File
 
-            path = './files/' + sha1
+            dir_name = f"{save_path}/{sha1[:2]}"
+            dir_path = pathlib.Path(dir_name)
+            if dir_path.exists():
+                if not dir_path.is_dir():
+                    raise Exception("File with illegal name")
+            else:
+                os.mkdir(dir_name)
 
+            path = f"{dir_name}/{sha1[2:]}"
             if os.path.isfile(path):
                 log.info(f"{file} was already saved ({sha1})")
             else:
