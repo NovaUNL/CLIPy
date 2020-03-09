@@ -1,4 +1,7 @@
 import os
+from datetime import datetime, timedelta
+from threading import Semaphore
+
 import requests
 from http.cookiejar import LWPCookieJar
 import logging
@@ -8,8 +11,14 @@ from . import urls
 
 log = logging.getLogger(__name__)
 __active_sessions__ = []
+__auth_lock__ = Semaphore()
 
 http_headers = {'user-agent': 'Mozilla/5.0 (X11; Linux x86_64; rv:1.0) Gecko/20100101 CLIPy'}
+
+
+class AuthenticationFailure(Exception):
+    def __init__(self, *args, **kwargs):
+        super(Exception, self).__init__(*args, *kwargs)
 
 
 class Session:
@@ -33,7 +42,7 @@ class Session:
             self.save()
             log.debug('Created empty cookie file')
         __active_sessions__.append(self)
-        self.authenticate()
+        self.__last__authentication = None
 
     def save(self):
         """
@@ -45,15 +54,22 @@ class Session:
         """
         Sets up auth cookies for this session
         """
-        request = self.__requests_session__.post(
-            urls.ROOT,
-            headers=http_headers,
-            data={'identificador': self.__username__, 'senha': self.__password__})
-        if "password" in request.text:
-            raise Exception("CLIP authentication failed")
-        self.authenticated = True
-        log.info('Successfully authenticated')
-        self.save()
+        __auth_lock__.acquire()
+        try:
+            time_limit = datetime.now() - timedelta(minutes=15)
+            if self.__last__authentication is None or self.__last__authentication < time_limit:
+                request = self.__requests_session__.post(
+                    urls.ROOT,
+                    headers=http_headers,
+                    data={'identificador': self.__username__, 'senha': self.__password__})
+                if "password" in request.text:
+                    raise AuthenticationFailure("CLIP authentication failed")
+                self.authenticated = True
+                log.info('Successfully authenticated with CLIP')
+                self.__last__authentication = datetime.now()
+                self.save()
+        finally:
+            __auth_lock__.release()
 
     def get(self, url: str) -> requests.Response:
         """
@@ -62,6 +78,7 @@ class Session:
         :return: Request response
         """
         log.debug('Fetching:' + url)
+        self.authenticate()
         return self.__requests_session__.get(url, headers=http_headers)
 
     def post(self, url: str, data: {str: str}) -> requests.Response:
@@ -72,6 +89,7 @@ class Session:
         :return: Request response
         """
         log.debug(f'Fetching: {url} with params {data}')
+        self.authenticate()
         return self.__requests_session__.post(url, data=data, headers=http_headers)
 
     def get_simplified_soup(self, url: str, post_data=None) -> BeautifulSoup:

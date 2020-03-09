@@ -164,6 +164,11 @@ class Building(Base, TemporalEntity):
     def __str__(self):
         return self.name
 
+    def serialize(self):
+        return {
+            'id': self.id,
+            'name': self.name}
+
 
 class Department(Base, TemporalEntity):
     __tablename__ = TABLE_PREFIX + 'departments'
@@ -176,18 +181,30 @@ class Department(Base, TemporalEntity):
 
     # Relations and constraints
     institution = orm.relationship("Institution", back_populates="departments")
+    classes = orm.relationship("Class", order_by='Class.name', back_populates="department")
+    teachers = orm.relationship("Teacher", back_populates="department")
     __table_args__ = (sa.UniqueConstraint('id', 'institution_id', name='un_' + TABLE_PREFIX + 'department'),)
 
     def __str__(self):
         return "{}({}, {})".format(self.name, self.id, self.institution.abbreviation) + super().__str__()
 
+    def serialize(self):
+        return {
+            'id': self.id,
+            'name': self.name,
+            'institution': self.institution.id}
+
+    def serialize_with_related(self):
+        return {
+            'id': self.id,
+            'name': self.name,
+            'institution': self.institution.id,
+            'classes': list(map(lambda class_: class_.serialize(), self.classes)),
+            'teachers': list(map(lambda teacher: teacher.serialize(), self.teachers)),
+        }
+
 
 Institution.departments = orm.relationship(Department, order_by=Institution.id, back_populates="institution")
-
-curricular_plan_classes = sa.Table(
-    TABLE_PREFIX + 'curricular_plan_classes', Base.metadata,
-    sa.Column('curricular_plan_id', sa.ForeignKey(TABLE_PREFIX + 'curricular_plans.id'), primary_key=True),
-    sa.Column('class_id', sa.ForeignKey(TABLE_PREFIX + 'classes.id'), primary_key=True))
 
 
 class Class(Base):
@@ -208,15 +225,19 @@ class Class(Base):
 
     # Relations and constraints
     department = orm.relationship(Department, back_populates="classes")
-    curricular_plans = orm.relationship('CurricularPlan', secondary=curricular_plan_classes, back_populates='classes')
     __table_args__ = (sa.UniqueConstraint('iid', 'department_id', name='un_' + TABLE_PREFIX + 'class_dept'),)
 
     def __str__(self):
         return f'{self.name} ({self.id}, {self.department})'
 
-
-Department.classes = orm.relationship(
-    "Class", order_by=Class.name, back_populates="department")
+    def serialize(self):
+        return {
+            'id': self.id,
+            'iid': self.iid,
+            'name': self.name,
+            'abbr': self.abbreviation,
+            'ects': self.ects,
+            'dept': self.department_id}
 
 
 class Room(Base):
@@ -280,7 +301,7 @@ class File(Base):
         return self.location is not None
 
     def __str__(self):
-        return f"{self.name} ({self.id}, {self.size/1024}KB)"
+        return f"{self.name} ({self.id}, {self.size / 1024}KB)"
 
 
 class ClassInstance(Base):
@@ -392,6 +413,27 @@ class ClassInstance(Base):
     def __str__(self):
         return "{} on period {} of {}".format(self.parent, self.period, self.year)
 
+    def serialize(self):
+        return {
+            'id': self.id,
+            'class_id': self.class_id,
+            'period': self.period_id,
+            'year': self.year,
+            'description': self.description_pt,
+            'description_edited': self.description_edited_datetime,
+            'description_editor': self.description_editor,
+            'objectives': self.objectives_pt,
+            'requirements': self.requirements_pt,
+            'competences': self.competences_pt,
+            'program': self.program_pt,
+            'bibliography': self.bibliography_pt,
+            'assistance': self.assistance_pt,
+            'teaching_methods': self.teaching_methods_pt,
+            'evaluation_methods': self.evaluation_methods_pt,
+            'extra_info': self.extra_info_pt,
+            'working_hours': self.working_hours
+        }
+
 
 Class.instances = orm.relationship(ClassInstance, order_by=ClassInstance.year, back_populates="parent")
 Period.class_instances = orm.relationship(ClassInstance, order_by=ClassInstance.year, back_populates="period")
@@ -457,6 +499,16 @@ class Course(Base, TemporalEntity):
             self.name, self.iid, self.abbreviation, self.degree, self.institution)
                 + super().__str__())
 
+    def serialize(self):
+        return {
+            'id': self.id,
+            'iid': self.iid,
+            'name': self.name,
+            'abbr': self.abbreviation,
+            'deg': self.degree_id,
+            'inst': self.institution_id,
+        }
+
 
 Degree.courses = orm.relationship("Course", order_by=Course.iid, back_populates="degree")
 Institution.courses = orm.relationship("Course", order_by=Course.iid, back_populates="institution")
@@ -502,8 +554,13 @@ class Teacher(Base, TemporalEntity):
     def __str__(self):
         return f'{self.name} ({self.iid}, {self.department.name})'
 
-
-Department.teachers = orm.relationship(Teacher, back_populates="department")
+    def serialize(self):
+        return {
+            'id': self.id,
+            'iid': self.iid,
+            'name': self.name,
+            'dept': self.department_id,
+        }
 
 
 class Student(Base, TemporalEntity):
@@ -543,6 +600,15 @@ class Student(Base, TemporalEntity):
 
     def __str__(self):
         return "{} ({}, {})".format(self.name, self.iid, self.abbreviation)
+
+    def serialize(self):
+        return {
+            'id': self.id,
+            'iid': self.iid,
+            'name': self.name,
+            'abbr': self.abbreviation,
+            'inst': self.institution_id,
+            'course': self.course_id}
 
 
 Course.students = orm.relationship(Student, order_by=Student.iid, back_populates="course")
@@ -712,6 +778,19 @@ class Turn(Base):
     def __str__(self):
         return "{} {}.{}".format(self.class_instance, self.type, self.number)
 
+    def serialize(self):
+        return {
+            'id': self.id,
+            'class_instance_id': self.class_instance_id,
+            'number': self.number,
+            'type': self.type_id,
+            'minutes': self.minutes,
+            'restrictions': self.restrictions,
+            'state': self.state,
+            'teachers': list(map(lambda teacher: teacher.id, self.teachers)),
+            'students': list(map(lambda student: student.id, self.students))
+        }
+
 
 ClassInstance.turns = orm.relationship("Turn", order_by=Turn.number, back_populates="class_instance")
 # TODO sort by turn number too
@@ -753,22 +832,3 @@ class TurnInstance(Base):
 Turn.instances = orm.relationship(TurnInstance, order_by=TurnInstance.weekday, back_populates='turn',
                                   cascade="save-update, merge, delete")
 Room.turn_instances = orm.relationship(TurnInstance, order_by=TurnInstance.weekday, back_populates='room')
-
-
-class CurricularPlan(Base):
-    __tablename__ = TABLE_PREFIX + 'curricular_plans'
-    #: CLIP assigned identifier
-    id = sa.Column(sa.Integer, primary_key=True)
-    #: Short title description
-    title = sa.Column(sa.String(50))
-    #: Course it belong to
-    course_id = sa.Column(sa.Integer, sa.ForeignKey(Course.id))
-    #: Major revision number for this plan
-    major = sa.Column(sa.Integer)
-    #: Year this plan was applied
-    year = sa.Column(sa.Integer)
-
-    # Relations
-    course = orm.relationship(Course)
-    classes = orm.relationship(Class, secondary=curricular_plan_classes, back_populates='curricular_plans')
-    # TODO constraints when this is well understood

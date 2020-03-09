@@ -311,6 +311,9 @@ class Controller:
                     elif len(matches) > 1:
                         raise Exception("Multiple matches. Unable to determine the correct one.")
 
+    def get_courses(self ) -> [models.Course]:
+        return self.session.query(models.Course).all()
+
     def get_turn_type(self, abbreviation: str) -> Optional[models.TurnType]:
         if self.__caching__:
             if abbreviation in self.__turn_types__:
@@ -379,6 +382,9 @@ class Controller:
 
             log.error(f'Several teachers with the name {name}')  # TODO to exception
             return None
+
+    def get_teacher_by_id(self, id: int) -> Optional[models.Teacher]:
+        return self.session.query(models.Teacher).filter_by(id=id).first()
 
     def get_class(self, iid: int, department: models.Department) -> Optional[models.Class]:
         matches = self.session.query(models.Class).filter_by(iid=iid, department=department).all()
@@ -786,6 +792,12 @@ class Controller:
                         return match
             raise Exception("Multiple students with this ID")
 
+    def get_students(self, latest_only=False):
+        if latest_only:
+            return self.session.query(models.Student).filter_by(last_year=2020).all()
+        else:
+            return self.session.query(models.Student).all()
+
     def add_student_course(self, student: models.Student, course: models.Course, year: int):
         if student is None or course is None or year is None:
             raise Exception("Missing details on a student's course assignment.")
@@ -916,6 +928,9 @@ class Controller:
 
         [db_turn.teachers.append(teacher) for teacher in turn.teachers]
         return db_turn
+
+    def get_turn(self, id: int) -> models.Turn:
+        return self.session.query(models.Turn).get(id)
 
     # Reconstructs the instances of a turn.
     # Destructive is faster because it doesn't worry about checking instance by instance,
