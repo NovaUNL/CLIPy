@@ -11,8 +11,7 @@ import sqlalchemy.orm as orm
 from sqlalchemy.exc import IntegrityError
 from unidecode import unidecode
 from difflib import SequenceMatcher
-
-from . import models, candidates
+from . import models, candidates, exceptions
 
 log = logging.getLogger(__name__)
 
@@ -242,6 +241,9 @@ class Controller:
         else:
             return set(self.session.query(models.Building).all())
 
+    def get_room_set(self) -> {models.Building}:
+        return set(self.session.query(models.Room).all())
+
     def get_department_set(self) -> {models.Department}:
         if self.__caching__:
             return set(self.__departments__.values())
@@ -298,7 +300,7 @@ class Controller:
                 return matches[0]
             elif len(matches) > 1:
                 if year is None:
-                    raise Exception("Multiple matches. Year unspecified")
+                    raise exceptions.MultipleMatches("Multiple matches. Year unspecified")
 
                 # Year filter
                 if year is not None:
@@ -309,9 +311,9 @@ class Controller:
                     if len(year_matches) == 1:
                         return year_matches[0]
                     elif len(matches) > 1:
-                        raise Exception("Multiple matches. Unable to determine the correct one.")
+                        raise exceptions.MultipleMatches("Multiple matches. Unable to determine the correct one.")
 
-    def get_courses(self ) -> [models.Course]:
+    def get_courses(self) -> [models.Course]:
         return self.session.query(models.Course).all()
 
     def get_turn_type(self, abbreviation: str) -> Optional[models.TurnType]:
@@ -387,12 +389,24 @@ class Controller:
         return self.session.query(models.Teacher).filter_by(id=id).first()
 
     def get_class(self, iid: int, department: models.Department) -> Optional[models.Class]:
+        """TODO remove the department information from the class. Deduplicate."""
         matches = self.session.query(models.Class).filter_by(iid=iid, department=department).all()
         count = len(matches)
         if count == 1:
             return matches[0]
         elif count > 1:
             raise Exception(f"Multiple classes the internal id {iid} found in the department {department}")
+
+    def get_class_instance(self, class_iid: int, year: int, period: models.Period) -> Optional[models.ClassInstance]:
+        matches = self.session \
+            .query(models.ClassInstance) \
+            .filter(models.ClassInstance.parent.has(iid= class_iid),
+                    models.ClassInstance.year == year,
+                    models.ClassInstance.period == period) \
+            .all()
+        count = len(matches)
+        if count == 1:
+            return matches[0]
 
     def add_institutions(self, institutions: [candidates.Institution]):
         """
@@ -573,8 +587,8 @@ class Controller:
                     period=instance.period
                 ))
                 self.session.commit()
-        if len(instances) > 0:
-            log.info("{} class instances added successfully! ({} ignored)".format(len(instances), ignored))
+        if len(instances) - ignored > 0:
+            log.info(f"{len(instances) - ignored} class instances added successfully! ({ignored} ignored)")
 
     def update_class_instance_info(self, instance: models.ClassInstance, info):
         if 'description' in info:
@@ -741,7 +755,7 @@ class Controller:
                         student.name = candidate.name
                         self.session.commit()
                     else:
-                        raise Exception(
+                        raise exceptions.IdCollision(
                             "Students having an ID collision\n"
                             "Student:{}\n"
                             "Candidate{}".format(student, candidate))
@@ -752,10 +766,15 @@ class Controller:
                         student.abbreviation = candidate.abbreviation
                         self.session.commit()
                 elif candidate.abbreviation is not None and candidate.abbreviation != student.abbreviation:
-                    raise Exception(
-                        "Attempted to change the student abbreviation to another one\n"
+                    student.abbreviation = candidate.abbreviation
+                    self.session.commit()
+                    log.critical("Attempted to change the student abbreviation to another one\n"
                         "Student:{}\n"
                         "Candidate{}".format(student, candidate))
+                    # raise Exception(
+                    #     "Attempted to change the student abbreviation to another one\n"
+                    #     "Student:{}\n"
+                    #     "Candidate{}".format(student, candidate))
 
             if candidate.course is not None:
                 try:  # Hackish race condition prevention. Not pretty but works (most of the time)
@@ -792,11 +811,17 @@ class Controller:
                         return match
             raise Exception("Multiple students with this ID")
 
-    def get_students(self, latest_only=False):
-        if latest_only:
-            return self.session.query(models.Student).filter_by(last_year=2020).all()
-        else:
+    def get_students(self, year=None):
+        if year is None:
             return self.session.query(models.Student).all()
+        else:
+            return self.session.query(models.Student).filter_by(last_year=year).all()
+
+    def get_teachers(self, year=None):
+        if year is None:
+            return self.session.query(models.Teacher).all()
+        else:
+            return self.session.query(models.Teacher).filter_by(last_year=year).all()
 
     def add_student_course(self, student: models.Student, course: models.Course, year: int):
         if student is None or course is None or year is None:
@@ -819,61 +844,48 @@ class Controller:
         self.session.commit()
 
     def add_teacher(self, candidate: candidates.Teacher) -> models.Teacher:
-        teacher_matches: [models.Teacher] = self.session.query(models.Teacher).filter_by(iid=candidate.id).all()
-        count = len(teacher_matches)
-        changed = False  # DB changed, reload flag
+        if candidate.id is None:
+            raise Exception("Teacher candidates must have an ID set")
+        teacher: [models.Teacher] = self.session.query(models.Teacher).filter_by(id=candidate.id).first()
 
-        # Ensure that the candidate matches existing id matches
-        for teacher in teacher_matches:
-            if SequenceMatcher(None, teacher.name, candidate.name).ratio() < 0.5:
-                raise Exception('Two diferent teachers with the same ID:\n'
-                                f'\t{teacher}\n'
-                                f'\t{candidate}')
-            break  # Just needs to run once, but none if there are no matches
-
-        if count == 0:  # No teacher, add him/her
-            teacher = models.Teacher(iid=candidate.id,
+        if teacher is None:  # No teacher, add him/her
+            teacher = models.Teacher(id=candidate.id,
                                      name=candidate.name,
-                                     department=candidate.department,
                                      first_year=candidate.first_year,
                                      last_year=candidate.last_year)
+
             self.session.add(teacher)
-            changed = True
-        else:  # There are records of that teacher
-            teacher = None  # A record matches if it shares the iid and department
-            if count == 1:
-                if teacher_matches[0].department == candidate.department:
-                    teacher = teacher_matches[0]
-            else:
-                for match in teacher_matches:
-                    teacher: models.Teacher
-                    if match.department == candidate.department:
-                        teacher = match
-                        break
+            log.info(f'Added the teacher {teacher}')
+            teacher.departments.append(candidate.department)
+        else:
+            if candidate.department not in teacher.departments:
+                teacher.departments.append(candidate.department)
 
-            if teacher is None:
-                teacher = models.Teacher(iid=candidate.id,
-                                         name=candidate.name,
-                                         department=candidate.department,
-                                         first_year=candidate.first_year,
-                                         last_year=candidate.last_year)
-                self.session.add(teacher)
-                changed = True
-            else:
-                if teacher.first_year != candidate.first_year or teacher.last_year != candidate.last_year:
-                    teacher.add_year(candidate.first_year)
-                    teacher.add_year(candidate.last_year)
-                    changed = True
+            teacher.add_year(candidate.first_year)
+            teacher.add_year(candidate.last_year)
 
-                if teacher.name != candidate.name:
-                    log.warn(f"Changing teacher {teacher.name} to {candidate.name}")
-                    teacher.name = candidate.name
-                    changed = True
+            if teacher.name != candidate.name:
+                log.warning(f"Changing teacher {teacher.name} to {candidate.name}")
+                teacher.name = candidate.name
 
-        if changed:
-            self.session.commit()
-            if self.__caching__:
-                self.__load_teachers__()
+        # Handle the newly known turns and remove the old ones if they disappeared
+        new_turns = {turn for turn_year in candidate.schedule_entries.values() for turn in turn_year}
+        year_period_set = {y_p for y_p in candidate.schedule_entries.keys()}
+        for existing_turn in teacher.turns:
+            if existing_turn in new_turns:
+                new_turns.remove(existing_turn)
+                continue
+
+            class_instance = existing_turn.class_instance
+            if (class_instance.year, class_instance.period) in year_period_set:
+                log.warning("Teacher stopped lecturing a turn")
+                # teacher.turns.remove(existing_turn)
+        for new_turn in new_turns:
+            teacher.turns.append(new_turn)
+
+        self.session.commit()
+        if self.__caching__:
+            self.__load_teachers__()
 
         return teacher
 
@@ -926,11 +938,15 @@ class Controller:
             if changed:
                 self.session.commit()
 
-        [db_turn.teachers.append(teacher) for teacher in turn.teachers]
         return db_turn
 
-    def get_turn(self, id: int) -> models.Turn:
-        return self.session.query(models.Turn).get(id)
+    def get_turn(self, class_instance: models.ClassInstance, turn_type: models.TurnType, number: int) -> models.Turn:
+        return self.session.query(models.Turn) \
+            .filter_by(
+            class_instance=class_instance,
+            type=turn_type,
+            number=number) \
+            .first()
 
     # Reconstructs the instances of a turn.
     # Destructive is faster because it doesn't worry about checking instance by instance,
@@ -1020,7 +1036,10 @@ class Controller:
     def add_enrollments(self, enrollments: [candidates.Enrollment]):
         added = 0
         updated = 0
+        class_instance = None
         for enrollment in enrollments:
+            if class_instance is None:
+                class_instance = enrollment.class_instance
             db_enrollment: models.Enrollment = self.session.query(models.Enrollment).filter_by(
                 student=enrollment.student,
                 class_instance=enrollment.class_instance
@@ -1054,8 +1073,9 @@ class Controller:
                 self.session.add(enrollment)
                 self.session.commit()
 
-        log.info("{} enrollments added and {} updated ({} ignored)!".format(
-            added, updated, len(enrollments) - added - updated))
+        if added > 0 or updated > 0:
+            log.info("{} enrollments added to {} and {} updated ({} ignored)!".format(
+                added, class_instance, updated, len(enrollments) - added - updated))
 
     def update_enrollment_results(self, student: models.Student, class_instance: models.ClassInstance, results,
                                   approved: bool):
