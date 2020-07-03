@@ -170,6 +170,11 @@ class Building(Base, TemporalEntity):
             'name': self.name}
 
 
+department_teachers = sa.Table(
+    TABLE_PREFIX + 'department_teachers', Base.metadata,
+    sa.Column('department_id', sa.ForeignKey(TABLE_PREFIX + 'departments.id'), primary_key=True),
+    sa.Column('teacher_id', sa.ForeignKey(TABLE_PREFIX + 'teachers.id'), primary_key=True))
+
 class Department(Base, TemporalEntity):
     __tablename__ = TABLE_PREFIX + 'departments'
     #: CLIP assigned identifier
@@ -182,7 +187,7 @@ class Department(Base, TemporalEntity):
     # Relations and constraints
     institution = orm.relationship("Institution", back_populates="departments")
     classes = orm.relationship("Class", order_by='Class.name', back_populates="department")
-    teachers = orm.relationship("Teacher", back_populates="department")
+    teachers = orm.relationship("Teacher", secondary=department_teachers, back_populates="departments")
     __table_args__ = (sa.UniqueConstraint('id', 'institution_id', name='un_' + TABLE_PREFIX + 'department'),)
 
     def __str__(self):
@@ -199,8 +204,8 @@ class Department(Base, TemporalEntity):
             'id': self.id,
             'name': self.name,
             'institution': self.institution.id,
-            'classes': list(map(lambda class_: class_.serialize(), self.classes)),
-            'teachers': list(map(lambda teacher: teacher.serialize(), self.teachers)),
+            'classes': [class_.serialize() for class_ in self.classes],
+            'teachers': [teacher.serialize() for teacher in self.teachers],
         }
 
 
@@ -257,6 +262,13 @@ class Room(Base):
 
     def __str__(self):
         return "{} - {}".format(self.name, self.building.name)
+
+    def serialize(self):
+        return {
+            'id': self.id,
+            'name': self.name,
+            'type': str(self.room_type),
+            'building': self.building_id}
 
 
 Building.rooms = orm.relationship(Room, order_by=Room.name, back_populates="building")
@@ -535,31 +547,30 @@ class Teacher(Base, TemporalEntity):
     | TODO In case there's a day I'm feeling specially worthless, benchmark this as a M2M and port if it isn't that bad
     """
     __tablename__ = TABLE_PREFIX + 'teachers'
-    #: Auto-generated identifier.
-    #: Needed because iid is not unique (one teacher, multiple departments)
-    id = sa.Column(sa.Integer, sa.Sequence(TABLE_PREFIX + 'course_id_seq'), primary_key=True)
     #: CLIP assigned identifier
-    iid = sa.Column(sa.Integer, nullable=False)
+    id = sa.Column(sa.Integer, primary_key=True)
     #: Full name
     name = sa.Column(sa.String)
-    #: Belonging department
-    department_id = sa.Column(sa.Integer, sa.ForeignKey(Department.id))
+    #: Full name
+    department_id = sa.Column(sa.Integer)
 
     # Relations and constraints
-    department = orm.relationship(Department, back_populates="teachers")
+    departments = orm.relationship(Department, secondary=department_teachers, back_populates="teachers")
     turns = orm.relationship('Turn', secondary=turn_teachers, back_populates='teachers')
     class_messages = orm.relationship('ClassMessages')
-    __table_args__ = (sa.UniqueConstraint('iid', 'department_id', name='un_' + TABLE_PREFIX + 'teacher'),)
 
     def __str__(self):
-        return f'{self.name} ({self.iid}, {self.department.name})'
+        return f'{self.name} ({self.id}, {list(self.departments)})'
 
     def serialize(self):
         return {
             'id': self.id,
-            'iid': self.iid,
+            'iid': self.id,
             'name': self.name,
             'dept': self.department_id,
+            'first_year': self.first_year,
+            'last_year': self.last_year,
+            # 'depts': [department.serialize() for department in self.departments]
         }
 
 
@@ -590,6 +601,7 @@ class Student(Base, TemporalEntity):
     # Relations and constraints
     course = orm.relationship(Course, back_populates="students")  # TODO remove
     institution = orm.relationship("Institution", back_populates="students")
+    enrollments = orm.relationship("Enrollment", order_by="Enrollment.student_year", back_populates="student")
     turns = orm.relationship('Turn', secondary=turn_students, back_populates='students')
     course_relations = orm.relationship(StudentCourse, back_populates="student")
     courses = association_proxy('course_relations', 'course')
@@ -608,8 +620,9 @@ class Student(Base, TemporalEntity):
             'name': self.name,
             'abbr': self.abbreviation,
             'inst': self.institution_id,
-            'course': self.course_id}
-
+            'course': self.course_id,
+            'first_year': self.first_year,
+            'last_year': self.last_year}
 
 Course.students = orm.relationship(Student, order_by=Student.iid, back_populates="course")
 Institution.students = orm.relationship(Student, order_by=Student.iid, back_populates="institution")
@@ -677,6 +690,17 @@ class Admission(Base):
             self.course.abbreviation, self.course_id, self.option, self.phase, self.year, self.state,
             self.check_date))
 
+    def serialize(self):
+        return {
+            'id': self.id,
+            'student': self.student_id,
+            'name': self.name,
+            'course': self.course,
+            'phase': self.phase,
+            'year': self.year,
+            'option': self.option,
+            'state': self.state,
+            'check_date': self.check_date}
 
 Student.admission_records = orm.relationship("Admission", order_by=Admission.check_date, back_populates="student")
 Course.admissions = orm.relationship("Admission", order_by=Admission.check_date, back_populates="course")
@@ -735,8 +759,27 @@ class Enrollment(Base):
         return "{} enrolled to {}, attempt:{}, student year:{}, statutes:{}, obs:{}".format(
             self.student, self.class_instance, self.attempt, self.student_year, self.statutes, self.observation)
 
-
-Student.enrollments = orm.relationship("Enrollment", order_by=Enrollment.student_year, back_populates="student")
+    def serialize(self):
+        return {
+            'id': self.id,
+            'student_id': self.student_id,
+            'class_instance_id': self.class_instance,
+            'attempt': self.attempt,
+            'student_year': self.student_year,
+            'statutes': self.statutes,
+            'attendance': self.attendance,
+            'attendance_date': self.attendance_date,
+            'improved': self.improved,
+            'improvement_grade': self.improvement_grade,
+            'improvement_grade_date': self.improvement_grade_date,
+            'continuous_grade': self.continuous_grade,
+            'continuous_grade_date': self.attendance_date,
+            'exam_grade': self.attendance_date,
+            'exam_grade_date': self.attendance_date,
+            'special_grade': self.attendance_date,
+            'special_grade_date': self.attendance_date,
+            'approved': self.approved,
+        }
 ClassInstance.enrollments = orm.relationship("Enrollment", order_by=Enrollment.id, back_populates="class_instance")
 
 
@@ -787,8 +830,8 @@ class Turn(Base):
             'minutes': self.minutes,
             'restrictions': self.restrictions,
             'state': self.state,
-            'teachers': list(map(lambda teacher: teacher.id, self.teachers)),
-            'students': list(map(lambda student: student.id, self.students))
+            'teachers': [teacher.id for teacher in self.teachers],
+            'students': [student.id for student in self.students]
         }
 
 
