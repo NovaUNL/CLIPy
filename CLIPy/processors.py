@@ -21,12 +21,19 @@ def task_queue_processor(session: Session, db_registry: db.SessionRegistry, task
         threads[thread].start()
 
     while True:
+        alive_threads = 0
+        for thread in threads:
+            if thread.is_alive():
+                alive_threads += 1
         lock.acquire()
-        if queue.empty():
+        remaining_tasks = queue.qsize()
+        if remaining_tasks == 0:
             lock.release()
             break
         else:
-            log.info("Approximately {} work units remaining".format(queue.qsize()))
+            if alive_threads == 0:
+                raise Exception("Every thread was died")
+            log.info(f"Approximately {remaining_tasks} work units remaining ({alive_threads} threads alive).")
             lock.release()
             sleep(5)
 
@@ -47,10 +54,13 @@ def institution_task(session: Session, db_registry: db.SessionRegistry, task: Ca
     task_queue_processor(session, db_registry, task, institution_queue)
 
 
-def department_task(session: Session, db_registry: db.SessionRegistry, task: Callable):
+def department_task(session: Session, db_registry: db.SessionRegistry, task: Callable, inst_id: int = None):
     database = db.Controller(db_registry)
     department_queue = Queue()
-    [department_queue.put(department) for department in database.get_department_set()]
+    if inst_id:
+        [department_queue.put(department) for department in database.get_department_set() if department.institution_id == inst_id]
+    else:
+        [department_queue.put(department) for department in database.get_department_set()]
     task_queue_processor(session, db_registry, task, department_queue)
 
 
