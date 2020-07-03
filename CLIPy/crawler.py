@@ -14,6 +14,7 @@ from sqlalchemy.exc import IntegrityError
 
 from . import parser
 from . import database as db
+from .database import exceptions
 from .session import Session as WebSession
 from . import urls
 
@@ -95,11 +96,12 @@ def crawl_rooms(session: WebSession, database: db.Controller, institution: db.mo
 
 def crawl_teachers(session: WebSession, database: db.Controller, department: db.models.Department):
     department = database.session.merge(department)
-    teachers = {}  # id -> Candidate
     periods = database.get_period_set()
+    classes_instances_cache = dict()  # cache to avoid queries
 
     # for each year this institution operated (knowing that the first building was recorded in 2001)
     for year in range(department.first_year, department.last_year + 1):
+        teachers = {}  # id -> Candidate
         for period in periods:
             page = session.get_simplified_soup(urls.DEPARTMENT_TEACHERS.format(
                 institution=department.institution.id,
@@ -115,19 +117,56 @@ def crawl_teachers(session: WebSession, database: db.Controller, department: db.
                     break
 
                 if identifier in teachers:
-                    if teachers[identifier].name != name:
+                    teacher = teachers[identifier]
+                    if teacher.name != name:
                         raise Exception(f'Found two teachers with the same id ({identifier}).\n'
                                         f'\tT1:"{teachers[identifier].name}"\n\tT2:{name}')
-                    teachers[identifier].add_year(year)
+                    teacher.add_year(year)
                 else:
-                    teachers[identifier] = db.candidates.Teacher(
+                    teacher = db.candidates.Teacher(
                         identifier=identifier,
                         name=name,
                         department=department,
                         first_year=year,
                         last_year=year)
-    for candidate in teachers.values():
-        database.add_teacher(candidate)
+                    teachers[identifier] = teacher
+
+                schedule_page = session.get_simplified_soup(urls.TEACHER_SCHEDULE.format(
+                    teacher=identifier,
+                    institution=department.institution.id,
+                    department=department.id,
+                    year=year,
+                    period=period.part,
+                    period_type=period.letter))
+
+                for turn_link_tag in schedule_page.find_all(href=urls.TURN_LINK_EXP):
+                    turn_link = turn_link_tag.attrs['href']
+                    class_match = urls.CLASS_ALT_EXP.search(turn_link)
+                    if class_match is None:
+                        raise Exception(f"Failed to match a class identifier in {turn_link}")
+                    class_id = int(class_match.group(1))
+                    turn_match = urls.TURN_LINK_EXP.search(turn_link)
+                    if class_match is None:
+                        raise Exception(f"Failed to match a turn in {turn_link}")
+                    turn_type = database.get_turn_type(turn_match.group('type'))
+                    turn_number = turn_match.group('number')
+                    class_instance_key = (class_id, year, period)
+                    if class_instance_key in classes_instances_cache:
+                        class_instance = classes_instances_cache[class_instance_key]
+                    else:
+                        class_instance = database.get_class_instance(class_id, year, period)
+                        if class_instance is None:
+                            logging.error("Teacher schedule has unknown class")
+                            continue
+                        classes_instances_cache[class_instance_key] = class_instance
+                    turn = database.get_turn(class_instance, turn_type, turn_number)
+                    if turn is None:
+                        logging.error("Unknown turn")
+                        continue
+                    teacher.add_turn(turn)
+
+        for candidate in teachers.values():
+            database.add_teacher(candidate)
 
 
 def crawl_classes(session: WebSession, database: db.Controller, department: db.models.Department):
@@ -167,13 +206,13 @@ def crawl_classes(session: WebSession, database: db.Controller, department: db.m
             if period is None:
                 raise Exception("Unknown period")
 
-            period = database.get_period(part, parts)
+            period = database.get_period(period.part, period.parts)
             page = session.get_simplified_soup(urls.DEPARTMENT_CLASSES.format(
                 institution=department.institution.id,
                 department=department.id,
                 year=year,
-                period=part,
-                period_type=period_type))
+                period=period.part,
+                period_type=period.letter))
 
             class_links = page.find_all(href=urls.CLASS_EXP)
 
@@ -187,8 +226,8 @@ def crawl_classes(session: WebSession, database: db.Controller, department: db.m
                         institution=department.institution.id,
                         year=year,
                         department=department.id,
-                        period=part,
-                        period_type=period_type,
+                        period=period.part,
+                        period_type=period.letter,
                         class_id=class_id))
                     elements = page.find_all('td', attrs={'class': 'subtitulo'})
                     abbr = None
@@ -235,7 +274,7 @@ def crawl_admissions(session: WebSession, database: db.Controller, institution: 
             course_ids.add(course_id)
 
         for course_id in course_ids:
-            course = database.get_course(identifier=course_id, institution=institution)
+            course = database.get_course(identifier=course_id, institution=institution, year=year)
             if course is None:
                 log.error("Unable to fetch the course with the internal identifier {course_id}. Skipping.")
                 continue
@@ -285,8 +324,13 @@ def crawl_class_enrollments(session: WebSession, database: db.Controller, class_
 
     enrollments = []
     for student_id, name, abbreviation, statutes, course_abbr, attempt, student_year in parser.get_enrollments(page):
-        course = database.get_course(abbreviation=course_abbr, year=class_instance.year, institution=institution)
-
+        try:
+            course = database.get_course(abbreviation=course_abbr, year=class_instance.year, institution=institution)
+        except exceptions.MultipleMatches:
+            # TODO propagate unresolvable course abbreviations
+            # from students of the same course abbreviation with a known course.
+            course = None
+            log.error(f"Unable to determine which course is {course_abbr} in {class_instance.year}. Got multiple matches.")
         # TODO consider sub-courses EG: MIEA/[Something]
         observation = course_abbr if course is not None else (course_abbr + "(Unknown)")
         # update student info and take id
@@ -304,6 +348,9 @@ def crawl_class_enrollments(session: WebSession, database: db.Controller, class_
             # Quite likely that multiple threads found the student at the same time. Give it another chance
             sleep(3)
             student = database.add_student(student_candidate)
+        except exceptions.IdCollision as e:
+            log.error(str(e))
+            continue
 
         enrollment = db.candidates.Enrollment(student, class_instance, attempt, student_year, statutes, observation)
         enrollments.append(enrollment)
@@ -471,14 +518,6 @@ def crawl_class_turns(session: WebSession, database: db.Controller, class_instan
         if turn_type is None:
             log.error(f"Unable to resolve turn type {turn_pages[1]}.\n\tWas crawling {class_instance}, skipping!")
             continue
-
-        teachers = []
-        for name in teachers_names:
-            teacher = database.get_teacher(name=name, department=department)
-            if teacher is None:
-                log.warning(f'Unknown teacher {name}')
-            else:
-                teachers.append(teacher)
         turn = database.add_turn(
             db.candidates.Turn(
                 class_instance=class_instance,
@@ -489,8 +528,7 @@ def crawl_class_turns(session: WebSession, database: db.Controller, class_instan
                 minutes=minutes,
                 routes=routes_str,
                 restrictions=restrictions,
-                state=state,
-                teachers=teachers))
+                state=state))
 
         # Create instances of this turn
         instances_aux = instances
@@ -744,3 +782,18 @@ def crawl_library_group_room_availability(session: WebSession, date: datetime.da
             'submit:reservas:es': 'Ver+disponibilidade',
             'data': date.isoformat()})
     return parser.get_library_group_room_availability(page)
+
+
+def _get_period_from_url(database, url):
+    match = urls.TURN_LINK_EXP.search(url)
+    period_type = match.group("type")
+    part = int(match.group("stage"))
+    if period_type == 'a':
+        parts = 1
+    elif period_type == 's':
+        parts = 2
+    elif period_type == 't':
+        parts = 4
+    else:
+        parts = None
+    return database.get_period(part, parts)
