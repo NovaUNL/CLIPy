@@ -32,7 +32,7 @@ def task_queue_processor(session: Session, db_registry: db.SessionRegistry, task
             break
         else:
             if alive_threads == 0:
-                raise Exception("Every thread was died")
+                raise Exception("Every thread has died")
             log.info(f"Approximately {remaining_tasks} work units remaining ({alive_threads} threads alive).")
             lock.release()
             sleep(5)
