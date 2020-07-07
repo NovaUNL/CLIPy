@@ -220,17 +220,13 @@ class Department(Base, TemporalEntity):
             'name': self.name,
             'institution': self.institution.id}
 
-    def serialize_with_related(self):
+    def serialize_related(self):
         return {
             'id': self.id,
             'name': self.name,
             'institution': self.institution.id,
-            'classes': [class_.serialize() for class_ in self.classes],
-            'teachers': [teacher.serialize() for teacher in self.teachers],
-        }
-
-
-Institution.departments = orm.relationship(Department, order_by=Institution.id, back_populates="institution")
+            'classes': [class_.id for class_ in self.classes],
+            'teachers': [teacher.id for teacher in self.teachers]}
 
 
 class Class(Base):
@@ -264,7 +260,8 @@ class Class(Base):
             'name': self.name,
             'abbr': self.abbreviation,
             'ects': self.ects,
-            'dept': self.department_id}
+            'dept': self.department_id,
+            'instances': [instance.id for instance in self.instances]}
 
 
 class Room(Base):
@@ -290,7 +287,7 @@ class Room(Base):
         return {
             'id': self.id,
             'name': self.name,
-            'type': str(self.room_type),
+            'type': self.room_type.value,
             'building': self.building_id}
 
 
@@ -468,29 +465,95 @@ class ClassInstance(Base):
         return "{} on period {} of {}".format(self.parent, self.period, self.year)
 
     def serialize(self):
-        return {
+        information = dict()
+        if self.description_pt is not None:
+            information['description'] = {
+                'pt': self.description_pt,
+                'en': self.description_en,
+                'edited_datetime': self.description_edited_datetime,
+                'editor': self.description_editor}
+
+        if self.objectives_pt is not None:
+            information['objectives'] = {
+                'pt': self.objectives_pt,
+                'en': self.objectives_en,
+                'edited_datetime': self.objectives_edited_datetime,
+                'editor': self.objectives_editor}
+
+        if self.requirements_pt is not None:
+            information['requirements'] = {
+                'pt': self.requirements_pt,
+                'en': self.requirements_en,
+                'edited_datetime': self.requirements_edited_datetime,
+                'editor': self.requirements_editor}
+
+        if self.competences_pt is not None:
+            information['competences'] = {
+                'pt': self.competences_pt,
+                'en': self.competences_en,
+                'edited_datetime': self.competences_edited_datetime,
+                'editor': self.competences_editor}
+
+        if self.program_pt is not None:
+            information['program'] = {
+                'pt': self.program_pt,
+                'en': self.program_en,
+                'edited_datetime': self.program_edited_datetime,
+                'editor': self.program_editor}
+
+        if self.bibliography_pt is not None:
+            information['bibliography'] = {
+                'pt': self.bibliography_pt,
+                'en': self.bibliography_en,
+                'edited_datetime': self.bibliography_edited_datetime,
+                'editor': self.bibliography_editor}
+
+        if self.assistance_pt is not None:
+            information['assistance'] = {
+                'pt': self.assistance_pt,
+                'en': self.assistance_en,
+                'edited_datetime': self.assistance_edited_datetime,
+                'editor': self.assistance_editor}
+
+        if self.assistance_pt is not None:
+            information['teaching'] = {
+                'pt': self.teaching_methods_pt,
+                'en': self.teaching_methods_en,
+                'edited_datetime': self.teaching_methods_edited_datetime,
+                'editor': self.teaching_methods_editor}
+
+        if self.teaching_methods_pt is not None:
+            information['teaching'] = {
+                'pt': self.teaching_methods_pt,
+                'en': self.teaching_methods_en,
+                'edited_datetime': self.teaching_methods_edited_datetime,
+                'editor': self.teaching_methods_editor}
+
+        if self.evaluation_methods_pt is not None:
+            information['evaluation'] = {
+                'pt': self.evaluation_methods_pt,
+                'en': self.evaluation_methods_en,
+                'edited_datetime': self.evaluation_methods_edited_datetime,
+                'editor': self.evaluation_methods_editor}
+        if self.extra_info_pt is not None:
+            information['extra'] = {
+                'pt': self.extra_info_pt,
+                'en': self.extra_info_en,
+                'edited_datetime': self.extra_info_edited_datetime,
+                'editor': self.extra_info_editor}
+        data = {
             'id': self.id,
             'class_id': self.class_id,
             'period': self.period_id,
             'year': self.year,
-            'description': self.description_pt,
-            'description_edited': self.description_edited_datetime,
-            'description_editor': self.description_editor,
-            'objectives': self.objectives_pt,
-            'requirements': self.requirements_pt,
-            'competences': self.competences_pt,
-            'program': self.program_pt,
-            'bibliography': self.bibliography_pt,
-            'assistance': self.assistance_pt,
-            'teaching_methods': self.teaching_methods_pt,
-            'evaluation_methods': self.evaluation_methods_pt,
-            'extra_info': self.extra_info_pt,
-            'working_hours': self.working_hours
+            'info': information,
+            'working_hours': self.working_hours,
+            'enrollments': [enrollment.id for enrollment in self.enrollments],
+            'turns': [turn.id for turn in self.turns],
+            'evaluations': [evaluation.id for evaluation in self.evaluations],
+            'files': [file.id for file in self.files],
         }
-
-
-Class.instances = orm.relationship(ClassInstance, order_by=ClassInstance.year, back_populates="parent")
-Period.class_instances = orm.relationship(ClassInstance, order_by=ClassInstance.year, back_populates="period")
+        return data
 
 
 class ClassEvaluations(Base):
@@ -602,7 +665,6 @@ class Teacher(Base, TemporalEntity):
     def serialize(self):
         return {
             'id': self.id,
-            'iid': self.id,
             'name': self.name,
             'dept': self.department_id,
             'first_year': self.first_year,
@@ -790,8 +852,8 @@ class Enrollment(Base):
     def serialize(self):
         return {
             'id': self.id,
-            'student_id': self.student_id,
-            'class_instance_id': self.class_instance,
+            'student': self.student_id,
+            'class_instance': self.class_instance_id,
             'attempt': self.attempt,
             'student_year': self.student_year,
             'statutes': self.statutes,
@@ -857,12 +919,13 @@ class Turn(Base):
             'id': self.id,
             'class_instance_id': self.class_instance_id,
             'number': self.number,
-            'type': self.type_id,
+            'type': self.type.abbreviation,
             'minutes': self.minutes,
             'restrictions': self.restrictions,
             'state': self.state,
             'teachers': [teacher.id for teacher in self.teachers],
-            'students': [student.id for student in self.students]
+            'students': [student.id for student in self.students],
+            'instances': [instance.id for instance in self.instances]
         }
 
 
@@ -893,6 +956,15 @@ class TurnInstance(Base):
     @staticmethod
     def minutes_to_str(minutes: int):
         return "{}:{}".format(minutes / 60, minutes % 60)
+
+    def serialize(self):
+        return {
+            'id': self.id,
+            'turn': self.turn_id,
+            'start': self.start,
+            'end': self.end,
+            'room': self.room_id,
+            'weekday': self.weekday}
 
     def __str__(self):
         return "{}, weekday {}, hour {}".format(self.turn, self.weekday, self.minutes_to_str(self.start))
