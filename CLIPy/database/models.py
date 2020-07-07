@@ -81,6 +81,9 @@ class Degree(Base):
     #: Verbose representation
     name = sa.Column(sa.String, nullable=False)
 
+    # Relations
+    courses = orm.relationship("Course", order_by="Course.iid", back_populates="degree")
+
     def __str__(self):
         return self.name
 
@@ -96,6 +99,9 @@ class Period(Base):
     #: Letter which describes the type of this period (a - annual, s - semester, t-trimester)
     letter = sa.Column(sa.CHAR, nullable=False)
 
+    # Relation
+    class_instances = orm.relationship("ClassInstance", order_by="ClassInstance.year", back_populates="period")
+
     def __str__(self):
         return "{} out of {}({})".format(self.part, self.parts, self.letter)
 
@@ -108,6 +114,10 @@ class TurnType(Base):
     name = sa.Column(sa.String(30), nullable=False)
     #: Abbreviated name
     abbreviation = sa.Column(sa.String(5), nullable=False)
+
+    # Relation
+    # TODO sort by turn number too
+    instances = orm.relationship("Turn", order_by="Turn.class_instance_id", back_populates="type")
 
     def __str__(self):
         return self.name
@@ -150,6 +160,11 @@ class Institution(Base, TemporalEntity):
     #: Full name
     name = sa.Column(sa.String(100))
 
+    # Relations
+    departments = orm.relationship("Department", order_by="Institution.id", back_populates="institution")
+    courses = orm.relationship("Course", order_by="Course.iid", back_populates="institution")
+    students = orm.relationship("Student", order_by="Student.iid", back_populates="institution")
+
     def __str__(self):
         return self.abbreviation
 
@@ -160,6 +175,9 @@ class Building(Base, TemporalEntity):
     id = sa.Column(sa.Integer, primary_key=True)
     #: CLIP name (usually not the full name)
     name = sa.Column(sa.String(50), nullable=False)
+
+    # Relation
+    rooms = orm.relationship("Room", order_by="Room.name", back_populates="building")
 
     def __str__(self):
         return self.name
@@ -174,6 +192,7 @@ department_teachers = sa.Table(
     TABLE_PREFIX + 'department_teachers', Base.metadata,
     sa.Column('department_id', sa.ForeignKey(TABLE_PREFIX + 'departments.id'), primary_key=True),
     sa.Column('teacher_id', sa.ForeignKey(TABLE_PREFIX + 'teachers.id'), primary_key=True))
+
 
 class Department(Base, TemporalEntity):
     __tablename__ = TABLE_PREFIX + 'departments'
@@ -230,6 +249,7 @@ class Class(Base):
 
     # Relations and constraints
     department = orm.relationship(Department, back_populates="classes")
+    instances = orm.relationship("ClassInstance", order_by="ClassInstance.year", back_populates="parent")
     __table_args__ = (sa.UniqueConstraint('iid', 'department_id', name='un_' + TABLE_PREFIX + 'class_dept'),)
 
     def __str__(self):
@@ -258,6 +278,7 @@ class Room(Base):
 
     # Relations and constraints
     building = orm.relationship(Building, back_populates="rooms")
+    turn_instances = orm.relationship("TurnInstance", order_by="TurnInstance.weekday", back_populates='room')
     __table_args__ = (sa.UniqueConstraint('building_id', 'name', 'room_type', name='un_' + TABLE_PREFIX + 'room'),)
 
     def __str__(self):
@@ -269,9 +290,6 @@ class Room(Base):
             'name': self.name,
             'type': str(self.room_type),
             'building': self.building_id}
-
-
-Building.rooms = orm.relationship(Room, order_by=Room.name, back_populates="building")
 
 
 class ClassFile(Base):
@@ -418,7 +436,12 @@ class ClassInstance(Base):
     parent = orm.relationship(Class, back_populates="instances")
     period = orm.relationship(Period, back_populates="class_instances")
     file_relations = orm.relationship(ClassFile, back_populates="class_instance")
+    enrollments = orm.relationship("Enrollment", order_by="Enrollment.id", back_populates="class_instance")
+    turns = orm.relationship("Turn", order_by="Turn.number", back_populates="class_instance")
     files = association_proxy('file_relations', 'file')
+    evaluations = orm.relationship("ClassEvaluations", order_by="ClassEvaluations.datetime",
+                                   back_populates="class_instance")
+    messages = orm.relationship("ClassMessages", order_by="ClassMessages.datetime", back_populates="class_instance")
     __table_args__ = (
         sa.UniqueConstraint('class_id', 'year', 'period_id', name='un_' + TABLE_PREFIX + 'class_instance'),)
 
@@ -468,10 +491,6 @@ class ClassEvaluations(Base):
         'class_instance_id', 'datetime', 'evaluation_type', name='un_' + TABLE_PREFIX + 'class_evaluation'),)
 
 
-ClassInstance.evaluations = orm.relationship(ClassEvaluations,
-                                             order_by=ClassEvaluations.datetime, back_populates="class_instance")
-
-
 class StudentCourse(Base, TemporalEntity):
     __tablename__ = TABLE_PREFIX + 'student_courses'
     id = sa.Column(sa.Integer, sa.Sequence(TABLE_PREFIX + 'student_course_id_seq'), primary_key=True)
@@ -502,7 +521,9 @@ class Course(Base, TemporalEntity):
     degree = orm.relationship(Degree, back_populates="courses")
     institution = orm.relationship("Institution", back_populates="courses")
     student_relations = orm.relationship(StudentCourse, back_populates="course")
-    students = association_proxy('student_relations', 'student')
+    admissions = orm.relationship("Admission", order_by="Admission.check_date", back_populates="course")
+    students = orm.relationship("Student", order_by="Student.iid", back_populates="course")
+    # students = association_proxy('student_relations', 'student')
     __table_args__ = (
         sa.UniqueConstraint('institution_id', 'iid', 'abbreviation', name='un_' + TABLE_PREFIX + 'course'),)
 
@@ -521,9 +542,6 @@ class Course(Base, TemporalEntity):
             'inst': self.institution_id,
         }
 
-
-Degree.courses = orm.relationship("Course", order_by=Course.iid, back_populates="degree")
-Institution.courses = orm.relationship("Course", order_by=Course.iid, back_populates="institution")
 
 turn_students = sa.Table(
     TABLE_PREFIX + 'turn_students', Base.metadata,
@@ -604,6 +622,7 @@ class Student(Base, TemporalEntity):
     enrollments = orm.relationship("Enrollment", order_by="Enrollment.student_year", back_populates="student")
     turns = orm.relationship('Turn', secondary=turn_students, back_populates='students')
     course_relations = orm.relationship(StudentCourse, back_populates="student")
+    admission_records = orm.relationship("Admission", order_by="Admission.check_date", back_populates="student")
     courses = association_proxy('course_relations', 'course')
     __table_args__ = (
         sa.UniqueConstraint('institution_id', 'iid', name='un_' + TABLE_PREFIX + 'student_id_institution'),
@@ -623,9 +642,6 @@ class Student(Base, TemporalEntity):
             'course': self.course_id,
             'first_year': self.first_year,
             'last_year': self.last_year}
-
-Course.students = orm.relationship(Student, order_by=Student.iid, back_populates="course")
-Institution.students = orm.relationship(Student, order_by=Student.iid, back_populates="institution")
 
 
 class ClassMessages(Base):
@@ -647,10 +663,6 @@ class ClassMessages(Base):
     teacher = orm.relationship(Teacher, back_populates="class_messages")
     class_instance = orm.relationship(ClassInstance, back_populates="messages")
     __table_args__ = (sa.UniqueConstraint('class_instance_id', 'datetime', name='un_' + TABLE_PREFIX + 'message'),)
-
-
-ClassInstance.messages = orm.relationship(ClassMessages,
-                                          order_by=ClassMessages.datetime, back_populates="class_instance")
 
 
 class Admission(Base):
@@ -701,9 +713,6 @@ class Admission(Base):
             'option': self.option,
             'state': self.state,
             'check_date': self.check_date}
-
-Student.admission_records = orm.relationship("Admission", order_by=Admission.check_date, back_populates="student")
-Course.admissions = orm.relationship("Admission", order_by=Admission.check_date, back_populates="course")
 
 
 class Enrollment(Base):
@@ -778,9 +787,7 @@ class Enrollment(Base):
             'exam_grade_date': self.attendance_date,
             'special_grade': self.attendance_date,
             'special_grade_date': self.attendance_date,
-            'approved': self.approved,
-        }
-ClassInstance.enrollments = orm.relationship("Enrollment", order_by=Enrollment.id, back_populates="class_instance")
+            'approved': self.approved}
 
 
 class Turn(Base):
@@ -814,6 +821,11 @@ class Turn(Base):
     teachers = orm.relationship(Teacher, secondary=turn_teachers, back_populates='turns')
     students = orm.relationship(Student, secondary=turn_students, back_populates='turns')
     class_instance = orm.relationship("ClassInstance", back_populates="turns")
+    instances = orm.relationship(
+        "TurnInstance",
+        order_by="TurnInstance.weekday",
+        back_populates='turn',
+        cascade="save-update, merge, delete")
     type = orm.relationship("TurnType", back_populates="instances")
     __table_args__ = (
         sa.UniqueConstraint('class_instance_id', 'number', 'type_id', name='un_' + TABLE_PREFIX + 'turn'),)
@@ -833,11 +845,6 @@ class Turn(Base):
             'teachers': [teacher.id for teacher in self.teachers],
             'students': [student.id for student in self.students]
         }
-
-
-ClassInstance.turns = orm.relationship("Turn", order_by=Turn.number, back_populates="class_instance")
-# TODO sort by turn number too
-TurnType.instances = orm.relationship("Turn", order_by=Turn.class_instance_id, back_populates="type")
 
 
 class TurnInstance(Base):
@@ -870,8 +877,3 @@ class TurnInstance(Base):
 
     def __str__(self):
         return "{}, weekday {}, hour {}".format(self.turn, self.weekday, self.minutes_to_str(self.start))
-
-
-Turn.instances = orm.relationship(TurnInstance, order_by=TurnInstance.weekday, back_populates='turn',
-                                  cascade="save-update, merge, delete")
-Room.turn_instances = orm.relationship(TurnInstance, order_by=TurnInstance.weekday, back_populates='room')
