@@ -111,9 +111,17 @@ class Teacher(TemporalEntity):
         super().__init__(identifier, first_year, last_year)
         self.name = name
         self.department = department
+        self.schedule_entries = dict()
 
     def __str__(self):
         return f'{self.name} ({self.id}, {self.department.name})'
+
+    def add_turn(self, turn: models.Turn):
+        key = (turn.class_instance.year, turn.class_instance.period)
+        if key in self.schedule_entries:
+            self.schedule_entries[key].add(turn)
+        else:
+            self.schedule_entries[key] = {turn, }
 
 
 class Admission:
@@ -188,7 +196,7 @@ class Room:
 
 class Turn:
     def __init__(self, class_instance: models.ClassInstance, number: int, turn_type: models.TurnType, enrolled: int,
-                 capacity: int, minutes=None, routes=None, restrictions=None, state=None, teachers=list()):
+                 capacity: int, minutes=None, routes=None, restrictions=None, state=None):
         self.class_instance = class_instance
         self.number = number
         self.type = turn_type
@@ -198,12 +206,14 @@ class Turn:
         self.routes = routes
         self.restrictions = restrictions
         self.state = state
-        self.teachers = teachers
 
     def __str__(self):
-        return "turn {}.{} of {} {}/{} students, {} hours, {} routes, state: {}, {} teachers".format(
+        return "turn {}.{} of {} {}/{} students, {} hours, {} routes, state: {}".format(
             self.type, self.number, self.class_instance, self.enrolled, self.capacity,
-            self.minutes / 60, self.routes, self.state, len(self.teachers))
+            self.minutes / 60, self.routes, self.state)
+
+    def __hash__(self):
+        return self.class_instance.id.__hash__() + self.type.id.__hash__() + (self.number + 100).__hash__()
 
 
 class TurnInstance:
