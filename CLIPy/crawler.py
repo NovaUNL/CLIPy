@@ -330,7 +330,8 @@ def crawl_class_enrollments(session: WebSession, database: db.Controller, class_
             # TODO propagate unresolvable course abbreviations
             # from students of the same course abbreviation with a known course.
             course = None
-            log.error(f"Unable to determine which course is {course_abbr} in {class_instance.year}. Got multiple matches.")
+            log.error(f"Unable to determine which course is {course_abbr} in {class_instance.year}. "
+                      "Got multiple matches.")
         # TODO consider sub-courses EG: MIEA/[Something]
         observation = course_abbr if course is not None else (course_abbr + "(Unknown)")
         # update student info and take id
@@ -572,12 +573,7 @@ def crawl_files(session: WebSession, database: db.Controller, class_instance: db
     class_instance: db.models.ClassInstance = database.session.merge(class_instance)
     department = class_instance.parent.department
     institution = department.institution
-    known_file_count = 0
-    known_file_ids = []
-
-    for file in class_instance.files:
-        known_file_ids.append(file.id)
-        known_file_count += 1
+    known_file_ids = {file.id for file in class_instance.files}
 
     page = session.get_simplified_soup(urls.CLASS_FILE_TYPES.format(
         institution=institution.id,
@@ -588,14 +584,6 @@ def crawl_files(session: WebSession, database: db.Controller, class_instance: db
         period_type=class_instance.period.letter))
 
     file_types = parser.get_file_types(page)
-
-    current_file_count = 0
-    for _, count in file_types:
-        current_file_count += count
-
-    if known_file_count == current_file_count != 0:
-        log.info("Le moi thinks that every file is known (unless sneaky sneaky teachers deleted stuff and re-added)")
-        return
 
     for file_type, _ in file_types:
         page = session.get_simplified_soup(urls.CLASS_FILES.format(
@@ -617,7 +605,7 @@ def crawl_files(session: WebSession, database: db.Controller, class_instance: db
                     uploader=uploader,
                     file_type=file_type)
                 database.add_class_file(candidate=candidate, class_instance=class_instance)
-
+    # TODO deletion
 
 def download_files(session: WebSession, database: db.Controller, class_instance: db.models.ClassInstance):
     class_instance: db.models.ClassInstance = database.session.merge(class_instance)
