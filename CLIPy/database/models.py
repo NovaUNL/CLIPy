@@ -296,6 +296,10 @@ class ClassFile(Base):
     __tablename__ = TABLE_PREFIX + 'class_instance_files'
     class_instance_id = sa.Column(sa.ForeignKey(TABLE_PREFIX + 'class_instances.id'), primary_key=True)
     file_id = sa.Column(sa.ForeignKey(TABLE_PREFIX + 'files.id'), primary_key=True)
+    #: File name (some places don't tell the file name)
+    name = sa.Column(sa.String(256), nullable=True)
+    #: What this file represents or the category it got dumped into
+    file_type = sa.Column(TupleEnum(FileType))
     #: Time at which the file was uploaded
     upload_datetime = sa.Column(sa.DateTime, primary_key=True)
     #: Uploader TODO check if this can be anyone beside teachers and adapt the field
@@ -305,15 +309,22 @@ class ClassFile(Base):
     class_instance = orm.relationship("ClassInstance", back_populates="file_relations")
     file = orm.relationship("File", back_populates="class_instance_relations")
 
+    def serialize(self):
+        file = self.file  # TODO this is silly. Partition this and File properly
+        return {
+            'class': self.class_instance_id,
+            'upload_datetime': self.upload_datetime,
+            'uploader': self.uploader,
+            'id': file.id,
+            'name': self.name,
+            'type': self.file_type.value,
+        }
+
 
 class File(Base):
     __tablename__ = TABLE_PREFIX + 'files'
     #: CLIP assigned identifier
     id = sa.Column(sa.Integer, primary_key=True)
-    #: File name (some places don't tell the file name)
-    name = sa.Column(sa.String(256), nullable=True)
-    #: What this file represents or the category it got dumped into
-    file_type = sa.Column(TupleEnum(FileType))
     #: Approximate size reported by CLIP (used as a download consistency check)
     size = sa.Column(sa.Integer)
     #: File hash (sha1)
@@ -331,7 +342,13 @@ class File(Base):
         return self.location is not None
 
     def __str__(self):
-        return f"{self.name} ({self.id}, {self.size / 1024}KB)"
+        return f"File {self.id} ({self.size / 1024}KB)"
+
+    def serialize(self):
+        return {
+            'id': self.id,
+            'hash': self.hash,
+            'mime': self.mime}
 
 
 class ClassInstance(Base):

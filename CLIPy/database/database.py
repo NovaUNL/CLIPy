@@ -1282,14 +1282,14 @@ class Controller:
         if file is None:
             file = models.File(
                 id=candidate.id,
-                name=candidate.name,
-                file_type=candidate.file_type,
                 size=candidate.size,
                 hash=candidate.hash,
                 location=candidate.location)
             log.info(f"Adding file {file}")
             self.session.add(file)
             class_file = models.ClassFile(
+                name=candidate.name,
+                file_type=candidate.file_type,
                 uploader=candidate.uploader,
                 upload_datetime=candidate.upload_datetime,
                 file=file,
