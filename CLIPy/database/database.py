@@ -337,14 +337,13 @@ class Controller:
             and hopefully there's only one match left. If there isn't check if non-department-filtered results are
             the same teacher and return one of them.
         | Albeit unlikely, the two possible issues with this method are:
-        | - A teacher is lecturing a class given by another department (CTCT please...) and there's a name collision
+        | - A teacher is lecturing a class given by another department and there's a name collision
         | - There are two different teachers with the same name in the same department.
         | TODO A workaround which is ridiculously CPU/time intensive unless implemented properly is to use
             :py:const:`CLIPy.urls.TEACHER_SCHEDULE` to check if results match.
-            That can easily become an O(n^2) if not properly implemented.
         | An idea is to ignore unmatched teachers (leave turns without the teacher) and then crawl
-            :py:const:`CLIPy.urls.TEACHER_SCHEDULE` once and fill the gaps. This idea is an O(n).
-        | TODO 2 Add `year` to the equation in hope to better guess which `teacher` is the correct in the
+            :py:const:`CLIPy.urls.TEACHER_SCHEDULE` once and fill the gaps.
+        | TODO 2 Add `year` to the equation in hope of better guessing which `teacher` is the correct in the
             `multiple but all the same` scenario.
         | TODO 3 Find some alcohol and forget this
 
@@ -385,9 +384,6 @@ class Controller:
             log.error(f'Several teachers with the name {name}')  # TODO to exception
             return None
 
-    def get_teacher_by_id(self, id: int) -> Optional[models.Teacher]:
-        return self.session.query(models.Teacher).filter_by(id=id).first()
-
     def get_class(self, iid: int, department: models.Department) -> Optional[models.Class]:
         """TODO remove the department information from the class. Deduplicate."""
         matches = self.session.query(models.Class).filter_by(iid=iid, department=department).all()
@@ -397,10 +393,10 @@ class Controller:
         elif count > 1:
             raise Exception(f"Multiple classes the internal id {iid} found in the department {department}")
 
-    def get_class_instance(self, class_iid: int, year: int, period: models.Period) -> Optional[models.ClassInstance]:
+    def guess_class_instance(self, class_iid: int, year: int, period: models.Period) -> Optional[models.ClassInstance]:
         matches = self.session \
             .query(models.ClassInstance) \
-            .filter(models.ClassInstance.parent.has(iid= class_iid),
+            .filter(models.ClassInstance.parent.has(iid=class_iid),
                     models.ClassInstance.year == year,
                     models.ClassInstance.period == period) \
             .all()
@@ -444,18 +440,10 @@ class Controller:
                         institution.abbreviation = candidate.abbreviation
                         updated = True
 
-                    if institution.first_year is None:
-                        institution.first_year = candidate.first_year
-                        updated = True
-                    elif candidate.first_year is not None and candidate.first_year < institution.first_year:
-                        institution.first_year = candidate.first_year
-                        updated = True
-
-                    if institution.last_year is None:
-                        institution.last_year = candidate.last_year
-                        updated = True
-                    elif candidate.last_year is not None and candidate.last_year > institution.last_year:
-                        institution.last_year = candidate.last_year
+                    first, last = institution.first_year, institution.last_year
+                    institution.add_year(candidate.first_year)
+                    institution.add_year(candidate.last_year)
+                    if (institution.first_year, institution.last_year) != (first, last):
                         updated = True
 
                     if updated:
@@ -501,20 +489,11 @@ class Controller:
                         department.name = candidate.name
                         updated = True
 
-                    if department.first_year is None:
-                        department.first_year = candidate.first_year
+                    first, last = department.first_year, department.last_year
+                    department.add_year(candidate.first_year)
+                    department.add_year(candidate.last_year)
+                    if (department.first_year, department.last_year) != (first, last):
                         updated = True
-                    elif candidate.first_year is not None and candidate.first_year < department.first_year:
-                        department.first_year = candidate.first_year
-                        updated = True
-
-                    if department.last_year is None:
-                        department.last_year = candidate.last_year
-                        updated = True
-                    elif candidate.last_year is not None and candidate.last_year > department.last_year:
-                        department.last_year = candidate.last_year
-                        updated = True
-
                     if updated:
                         updated_count += 1
 
@@ -769,8 +748,8 @@ class Controller:
                     student.abbreviation = candidate.abbreviation
                     self.session.commit()
                     log.critical("Attempted to change the student abbreviation to another one\n"
-                        "Student:{}\n"
-                        "Candidate{}".format(student, candidate))
+                                 "Student:{}\n"
+                                 "Candidate{}".format(student, candidate))
                     # raise Exception(
                     #     "Attempted to change the student abbreviation to another one\n"
                     #     "Student:{}\n"
@@ -922,9 +901,6 @@ class Controller:
                 changed = True
             if turn.capacity is not None:
                 db_turn.capacity = turn.capacity
-                changed = True
-            if turn.minutes is not None and turn.minutes != 0:
-                db_turn.minutes = turn.minutes
                 changed = True
             if turn.routes is not None:
                 db_turn.routes = turn.routes
@@ -1141,13 +1117,14 @@ class Controller:
             enrollment.improvement_grade = grade
             enrollment.improvement_grade_date = date
         else:
-            enrollment: [models.Enrollment] = self.session.query(models.Enrollment) \
+            enrollments: [models.Enrollment] = self.session.query(models.Enrollment) \
                 .filter_by(student=student, approved=True) \
                 .join(models.ClassInstance) \
                 .filter(models.ClassInstance.parent == class_instance.parent) \
                 .all()
-            count = len(enrollment)
+            count = len(enrollments)
             if count == 1:
+                enrollment = enrollments[0]
                 enrollment.improved = improved
                 enrollment.improvement_grade = grade
                 enrollment.improvement_grade_date = date

@@ -154,7 +154,7 @@ def crawl_teachers(session: WebSession, database: db.Controller, department: db.
                     if class_instance_key in classes_instances_cache:
                         class_instance = classes_instances_cache[class_instance_key]
                     else:
-                        class_instance = database.get_class_instance(class_id, year, period)
+                        class_instance = database.guess_class_instance(class_id, year, period)
                         if class_instance is None:
                             logging.error("Teacher schedule has unknown class")
                             continue
