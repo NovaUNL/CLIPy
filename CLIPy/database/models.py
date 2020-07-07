@@ -133,6 +133,8 @@ class TemporalEntity:
         return not (self.first_year is None or self.last_year is None)
 
     def add_year(self, year):
+        if year is None:
+            return
         if self.first_year is None:
             self.first_year = year
         if self.last_year is None:
