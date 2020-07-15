@@ -64,6 +64,10 @@ def get_class(class_id):
 def get_class_instance(instance_id):
     return jsonify(clip.get_class_instance(instance_id))
 
+@bp.route('/files/<int:instance_id>', methods=['GET'])
+def get_files(instance_id):
+    return jsonify(clip.get_class_instance_files(instance_id))
+
 
 @bp.route('/turn/<int:turn_id>', methods=['GET'])
 def get_turn(turn_id):

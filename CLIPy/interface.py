@@ -84,6 +84,10 @@ class Clip:
         obj = self.cache.controller.session.query(m.ClassInstance).get(id)
         return None if obj is None else obj.serialize()
 
+    def get_class_instance_files(self, id):
+        obj = self.cache.controller.session.query(m.ClassInstance).get(id)
+        return None if obj is None else [file.serialize() for file in obj.file_relations]
+
     def get_turn(self, id):
         obj = self.cache.controller.session.query(m.Turn).get(id)
         return None if obj is None else obj.serialize()
