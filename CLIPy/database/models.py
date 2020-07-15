@@ -309,15 +309,15 @@ class ClassFile(Base):
     file = orm.relationship("File", back_populates="class_instance_relations")
 
     def serialize(self):
-        file = self.file  # TODO this is silly. Partition this and File properly
         return {
-            'class': self.class_instance_id,
-            'upload_datetime': self.upload_datetime,
+            'upload_datetime': self.upload_datetime.isoformat(),
             'uploader': self.uploader,
-            'id': file.id,
+            'id': self.file_id,
             'name': self.name,
-            'type': self.file_type.value,
-        }
+            'type': self.file_type.value[0],
+            'hash': self.file.hash,
+            'mime': self.file.mime,
+            'size': self.file.size}
 
 
 class File(Base):
@@ -470,76 +470,92 @@ class ClassInstance(Base):
             information['description'] = {
                 'pt': self.description_pt,
                 'en': self.description_en,
-                'edited_datetime': self.description_edited_datetime,
+                'edited_datetime':
+                    None if self.description_edited_datetime is None else self.description_edited_datetime.isoformat(),
                 'editor': self.description_editor}
 
         if self.objectives_pt is not None:
             information['objectives'] = {
                 'pt': self.objectives_pt,
                 'en': self.objectives_en,
-                'edited_datetime': self.objectives_edited_datetime,
+                'edited_datetime':
+                    None if self.objectives_edited_datetime is None else self.objectives_edited_datetime.isoformat(),
                 'editor': self.objectives_editor}
 
         if self.requirements_pt is not None:
             information['requirements'] = {
                 'pt': self.requirements_pt,
                 'en': self.requirements_en,
-                'edited_datetime': self.requirements_edited_datetime,
+                'edited_datetime':
+                    None if self.requirements_edited_datetime is None
+                    else self.requirements_edited_datetime.isoformat(),
                 'editor': self.requirements_editor}
 
         if self.competences_pt is not None:
             information['competences'] = {
                 'pt': self.competences_pt,
                 'en': self.competences_en,
-                'edited_datetime': self.competences_edited_datetime,
+                'edited_datetime':
+                    None if self.competences_edited_datetime is None else self.competences_edited_datetime.isoformat(),
                 'editor': self.competences_editor}
 
         if self.program_pt is not None:
             information['program'] = {
                 'pt': self.program_pt,
                 'en': self.program_en,
-                'edited_datetime': self.program_edited_datetime,
+                'edited_datetime':
+                    None if self.program_edited_datetime is None else self.program_edited_datetime.isoformat(),
                 'editor': self.program_editor}
 
         if self.bibliography_pt is not None:
             information['bibliography'] = {
                 'pt': self.bibliography_pt,
                 'en': self.bibliography_en,
-                'edited_datetime': self.bibliography_edited_datetime,
+                'edited_datetime':
+                    None if self.bibliography_edited_datetime is None
+                    else self.bibliography_edited_datetime.isoformat(),
                 'editor': self.bibliography_editor}
 
         if self.assistance_pt is not None:
             information['assistance'] = {
                 'pt': self.assistance_pt,
                 'en': self.assistance_en,
-                'edited_datetime': self.assistance_edited_datetime,
+                'edited_datetime':
+                    None if self.assistance_edited_datetime is None else self.assistance_edited_datetime.isoformat(),
                 'editor': self.assistance_editor}
 
         if self.assistance_pt is not None:
             information['teaching'] = {
                 'pt': self.teaching_methods_pt,
                 'en': self.teaching_methods_en,
-                'edited_datetime': self.teaching_methods_edited_datetime,
+                'edited_datetime':
+                    None if self.teaching_methods_edited_datetime is None
+                    else self.teaching_methods_edited_datetime.isoformat(),
                 'editor': self.teaching_methods_editor}
 
         if self.teaching_methods_pt is not None:
             information['teaching'] = {
                 'pt': self.teaching_methods_pt,
                 'en': self.teaching_methods_en,
-                'edited_datetime': self.teaching_methods_edited_datetime,
+                'edited_datetime':
+                    None if self.teaching_methods_edited_datetime is None
+                    else self.teaching_methods_edited_datetime.isoformat(),
                 'editor': self.teaching_methods_editor}
 
         if self.evaluation_methods_pt is not None:
             information['evaluation'] = {
                 'pt': self.evaluation_methods_pt,
                 'en': self.evaluation_methods_en,
-                'edited_datetime': self.evaluation_methods_edited_datetime,
+                'edited_datetime':
+                    None if self.evaluation_methods_edited_datetime is None
+                    else self.evaluation_methods_edited_datetime.isoformat(),
                 'editor': self.evaluation_methods_editor}
         if self.extra_info_pt is not None:
             information['extra'] = {
                 'pt': self.extra_info_pt,
                 'en': self.extra_info_en,
-                'edited_datetime': self.extra_info_edited_datetime,
+                'edited_datetime':
+                    None if self.extra_info_edited_datetime is None else self.extra_info_edited_datetime.isoformat(),
                 'editor': self.extra_info_editor}
         data = {
             'id': self.id,
@@ -550,9 +566,7 @@ class ClassInstance(Base):
             'working_hours': self.working_hours,
             'enrollments': [enrollment.id for enrollment in self.enrollments],
             'turns': [turn.id for turn in self.turns],
-            'evaluations': [evaluation.id for evaluation in self.evaluations],
-            'files': [file.id for file in self.files],
-        }
+            'evaluations': [evaluation.id for evaluation in self.evaluations]}
         return data
 
 
@@ -793,7 +807,7 @@ class Admission(Base):
             'year': self.year,
             'option': self.option,
             'state': self.state,
-            'check_date': self.check_date}
+            'check_date': self.check_date.isoformat()}
 
 
 class Enrollment(Base):
@@ -858,16 +872,18 @@ class Enrollment(Base):
             'student_year': self.student_year,
             'statutes': self.statutes,
             'attendance': self.attendance,
-            'attendance_date': self.attendance_date,
+            'attendance_date': None if self.attendance_date is None else self.attendance_date.isoformat(),
             'improved': self.improved,
             'improvement_grade': self.improvement_grade,
-            'improvement_grade_date': self.improvement_grade_date,
+            'improvement_grade_date':
+                None if self.improvement_grade_date is None else self.improvement_grade_date.isoformat(),
             'continuous_grade': self.continuous_grade,
-            'continuous_grade_date': self.attendance_date,
-            'exam_grade': self.attendance_date,
-            'exam_grade_date': self.attendance_date,
-            'special_grade': self.attendance_date,
-            'special_grade_date': self.attendance_date,
+            'continuous_grade_date':
+                None if self.continuous_grade_date is None else self.continuous_grade_date.isoformat(),
+            'exam_grade': self.exam_grade,
+            'exam_grade_date': self.exam_grade_date,
+            'special_grade': self.special_grade,
+            'special_grade_date': None if self.special_grade_date is None else self.special_grade_date.isoformat(),
             'approved': self.approved}
 
 
