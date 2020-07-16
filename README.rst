@@ -6,7 +6,7 @@ Campus Life Integration Platform wrapper
 **In case you have no clue of what CLIP is then this package is not for you.**
 
 This is a crawler which downloads relevant information from CLIP, as such it requires student credentials.
-It does provide an interface to lookup the crawled data.
+It does provide an interface (both programatic as wel as a webservice with REST endpoints) to lookup the crawled data.
 
 Even if you're a student and have the all mighty credentials, it still isn't probably something you'll want to try.
 
@@ -30,3 +30,4 @@ Right now, most of CLIP data.
 - Files (with deduplication :) )
 - Physical entities (buildings, classrooms, auditoriums, laboratories, ...)
 - National access contest admissions
+- Library occupied/spare rooms
