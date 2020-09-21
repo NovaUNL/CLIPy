@@ -307,7 +307,7 @@ def crawl_admissions(session: WebSession, database: db.Controller, institution: 
 
 
 def crawl_class_enrollments(session: WebSession, database: db.Controller, class_instance: db.models.ClassInstance):
-    log.info("Crawling class instance ID %s" % class_instance.id)
+    log.info("Crawling enrollments in class instance ID %s" % class_instance.id)
     class_instance: db.models.ClassInstance = database.session.merge(class_instance)
     institution = class_instance.parent.department.institution
     year = class_instance.year
@@ -363,7 +363,7 @@ def crawl_class_enrollments(session: WebSession, database: db.Controller, class_
 
 
 def crawl_class_info(session: WebSession, database: db.Controller, class_instance: db.models.ClassInstance):
-    log.info("Crawling class instance ID %s" % class_instance.id)
+    log.info("Crawling info from class instance ID %s" % class_instance.id)
     class_instance = database.session.merge(class_instance)
     institution = class_instance.parent.department.institution
     class_info = {}
@@ -458,7 +458,7 @@ def crawl_class_turns(session: WebSession, database: db.Controller, class_instan
     :param database: Database controller
     :param class_instance: ClassInstance object to look after
     """
-    log.info("Crawling class instance ID %s" % class_instance.id)
+    log.info("Crawling turns class instance ID %s" % class_instance.id)
     class_instance: db.models.ClassInstance = database.session.merge(class_instance)
     department = class_instance.parent.department
     institution = department.institution
