@@ -610,11 +610,12 @@ def crawl_files(session: WebSession, database: db.Controller, class_instance: db
                 database.add_class_file(candidate=candidate, class_instance=class_instance)
     # TODO deletion
 
+
 def download_files(session: WebSession, database: db.Controller, class_instance: db.models.ClassInstance):
     class_instance: db.models.ClassInstance = database.session.merge(class_instance)
     department = class_instance.parent.department
     institution = department.institution
-    files = class_instance.files
+    class_files = class_instance.file_relations
     poked_file_types = set()
 
     if 'CLIPY_SAVE_PATH' in os.environ:
@@ -623,9 +624,9 @@ def download_files(session: WebSession, database: db.Controller, class_instance:
     else:
         save_path = './files'
 
-    for file in files:
-        if not file.downloaded():
-            file_type = file.file_type
+    for class_file in class_files:
+        if not class_file.file.downloaded():
+            file_type = class_file.file_type
             if file_type not in poked_file_types:
                 poked_file_types.add(file_type)
 
@@ -637,9 +638,9 @@ def download_files(session: WebSession, database: db.Controller, class_instance:
                     class_id=class_instance.parent.iid,
                     period=class_instance.period.part,
                     period_type=class_instance.period.letter,
-                    file_type=file.file_type.to_url_argument()))
+                    file_type=class_file.file_type.to_url_argument()))
 
-            response = session.get_file(urls.FILE_URL.format(file_identifier=file.id))
+            response = session.get_file(urls.FILE_URL.format(file_identifier=class_file.file.id))
             if response is None:
                 raise Exception("Unable to download file")
             content, mime = response
@@ -658,13 +659,13 @@ def download_files(session: WebSession, database: db.Controller, class_instance:
 
             path = f"{dir_name}/{sha1[2:]}"
             if os.path.isfile(path):
-                log.info(f"{file} was already saved ({sha1})")
+                log.info(f"{class_file} was already saved ({sha1})")
             else:
-                log.info(f"Saving {file} as {sha1}")
+                log.info(f"Saving {class_file} as {sha1}")
                 with open(path, 'wb') as fd:
                     fd.write(content)
 
-            database.update_downloaded_file(file=file, hash=sha1, path=path, mime=mime)
+            database.update_downloaded_file(file=class_file.file, hash=sha1, path=path, mime=mime)
 
 
 def crawl_grades(session: WebSession, database: db.Controller, class_instance: db.models.ClassInstance):

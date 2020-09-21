@@ -1276,6 +1276,8 @@ class Controller:
         else:
             if file not in class_instance.files:
                 class_file = models.ClassFile(
+                    name=candidate.name,
+                    file_type=candidate.file_type,
                     uploader=candidate.uploader,
                     upload_datetime=candidate.upload_datetime,
                     file=file,
