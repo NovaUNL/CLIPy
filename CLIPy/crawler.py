@@ -149,6 +149,9 @@ def crawl_teachers(session: WebSession, database: db.Controller, department: db.
                     if class_match is None:
                         raise Exception(f"Failed to match a turn in {turn_link}")
                     turn_type = database.get_turn_type(turn_match.group('type'))
+                    if turn_type is None:
+                        logging.error("Unknown turn type %s" % turn_match.group('type'))
+                        continue
                     turn_number = turn_match.group('number')
                     class_instance_key = (class_id, year, period)
                     if class_instance_key in classes_instances_cache:
