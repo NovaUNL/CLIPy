@@ -56,6 +56,9 @@ BUILDING_SCHEDULE = ROOT + \
 #: List of courses taught by a given institution
 COURSES = ROOT + "/utente/institui%E7%E3o_sede/unidade_organica/ensino/curso?institui%E7%E3o={institution}"
 
+#: Course taught by a given institution
+COURSE = ROOT + "/utente/institui%E7%E3o_sede/unidade_organica/ensino/curso?institui%E7%E3o={institution}&curso={course}"
+
 #: History of curricular plans for a given course
 CURRICULAR_PLANS = ROOT + \
     "/utente/institui%E7%E3o_sede/unidade_organica/ensino/curso" \

@@ -135,14 +135,26 @@ def populate_courses(session: Session, database: db.Controller):
             courses[identifier] = candidate
 
         # fetch course abbreviation from the statistics page
+        integrated_master_degree = list(filter(lambda deg: deg.id == 4, database.get_degree_set()))[0]
         for degree in database.get_degree_set():
+            if degree.id == 4:  # Skip integrated masters
+                continue
             page = session.get_simplified_soup(urls.STATISTICS.format(
                 institution=institution.id,
                 degree=degree.iid))
             for identifier, abbreviation in parser.get_course_abbreviations(page):
                 if identifier in courses:
+                    course = courses[identifier]
                     courses[identifier].abbreviation = abbreviation
-                    courses[identifier].degree = degree
+                    if degree.id == 2 and abbreviation.startswith('MI'):  # Distinguish masters from integrated masters
+                        course_page = session.get_simplified_soup(
+                            urls.COURSES.format(institution=institution.id, course=course.id))
+                        if course_page.find(text=re.compile(".*Mestrado Integrado.*")):
+                            courses[identifier].degree = integrated_master_degree
+                        else:
+                            courses[identifier].degree = degree
+                    else:
+                        courses[identifier].degree = degree
                 else:
                     raise Exception(
                         "{}({}) was listed in the abbreviation list but a corresponding course wasn't found".format(
