@@ -1309,7 +1309,7 @@ class Controller:
                 instances = self.session.query(models.ClassInstance).filter_by(year=year).order_by(order).all()
             else:
                 instances = self.session.query(models.ClassInstance). \
-                    filter_by(year=year, period=period).order_by(order).all()
+                    filter_by(year=year, period_id=period).order_by(order).all()
         return list(instances)
 
     def find_student(self, name: str, course=None) -> [models.Student]:
