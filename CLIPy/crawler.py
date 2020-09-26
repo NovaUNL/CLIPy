@@ -692,18 +692,19 @@ def crawl_grades(session: WebSession, database: db.Controller, class_instance: d
         results = parser.get_results(page)
 
         for student, evaluations, approved in results:
-            db_student = database.get_student(identifier=student[0], name=student[1])
+            student_number, student_name, gender = student
+            db_student = database.get_student(identifier=student_number, name=student_name)
 
             if db_student is None:
                 raise Exception("Student dodged the enrollment search.\n" + student)
 
-            if db_student.gender is None:
-                if student[2] == 'f':
+            if db_student.gender is None and gender is not None:
+                if gender == 'f':
                     gender = 0
-                elif student[2] == 'm':
+                elif gender == 'm':
                     gender = 1
                 else:
-                    raise Exception("A new gender appeared in the pokédex")
+                    raise Exception("Impossible gender")
                 database.update_student_gender(student=db_student, gender=gender)
             database.update_enrollment_results(
                 student=db_student,
