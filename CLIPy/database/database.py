@@ -191,7 +191,10 @@ class Controller:
              models.TurnType(id=3, name="Practical-Theoretical", abbreviation="tp"),
              models.TurnType(id=4, name="Seminar", abbreviation="s"),
              models.TurnType(id=5, name="Tutorial Orientation", abbreviation="ot"),
-             models.TurnType(id=6, name="Field Work", abbreviation="tc")])
+             models.TurnType(id=6, name="Field Work", abbreviation="tc"),
+             models.TurnType(id=7, name="Online Theoretical", abbreviation="to"),
+             models.TurnType(id=8, name="Online Practical", abbreviation="po"),
+             models.TurnType(id=9, name="Online Practical-Theoretical", abbreviation="op")])
         self.session.commit()
 
     def get_institution(self, identifier: int) -> Optional[models.Institution]:
