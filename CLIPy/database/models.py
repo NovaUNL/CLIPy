@@ -196,6 +196,14 @@ department_teachers = sa.Table(
     sa.Column('teacher_id', sa.ForeignKey(TABLE_PREFIX + 'teachers.id'), primary_key=True))
 
 
+class DepartmentClass(Base, TemporalEntity):
+    __tablename__ = TABLE_PREFIX + 'department_classes'
+    department_id = sa.Column(sa.ForeignKey(TABLE_PREFIX + 'departments.id'), primary_key=True)
+    class_id = sa.Column(sa.ForeignKey(TABLE_PREFIX + 'classes.id'), primary_key=True)
+    department = orm.relationship("Department", back_populates="classes")
+    class_ = orm.relationship("Class", back_populates="departments")
+
+
 class Department(Base, TemporalEntity):
     __tablename__ = TABLE_PREFIX + 'departments'
     #: CLIP assigned identifier
@@ -207,7 +215,7 @@ class Department(Base, TemporalEntity):
 
     # Relations and constraints
     institution = orm.relationship("Institution", back_populates="departments")
-    classes = orm.relationship("Class", order_by='Class.name', back_populates="department")
+    classes = orm.relationship(DepartmentClass, back_populates="department")
     teachers = orm.relationship("Teacher", secondary=department_teachers, back_populates="departments")
     __table_args__ = (sa.UniqueConstraint('id', 'institution_id', name='un_' + TABLE_PREFIX + 'department'),)
 
@@ -231,24 +239,18 @@ class Department(Base, TemporalEntity):
 
 class Class(Base):
     __tablename__ = TABLE_PREFIX + 'classes'
-    #: Crawler assigned identifier
-    id = sa.Column(sa.Integer, sa.Sequence(TABLE_PREFIX + 'class_id_seq'), primary_key=True)
-    #: | CLIP assigned identifier (has collisions, apparently some time ago departments shared classes)
-    #: | This could be fixed to become the only identifier, but it's probably not worth the normalization.
-    iid = sa.Column(sa.Integer)
+    #: CLIP assigned identifier
+    id = sa.Column(sa.Integer, primary_key=True)
     #: Full name
     name = sa.Column(sa.String(100))
     #: Acconym-ish name given by someone over the rainbow (probably a nice madam @ divisão académica)
     abbreviation = sa.Column(sa.String(15))
     #: Number of *half* credits (bologna) that this class takes.
     ects = sa.Column(sa.Integer, nullable=True)
-    #: Parent department
-    department_id = sa.Column(sa.Integer, sa.ForeignKey(Department.id))
 
     # Relations and constraints
-    department = orm.relationship(Department, back_populates="classes")
+    departments = orm.relationship(DepartmentClass, back_populates="class_")
     instances = orm.relationship("ClassInstance", order_by="ClassInstance.year", back_populates="parent")
-    __table_args__ = (sa.UniqueConstraint('iid', 'department_id', name='un_' + TABLE_PREFIX + 'class_dept'),)
 
     def __str__(self):
         return f'{self.name} ({self.id}, {self.department})'
@@ -256,7 +258,6 @@ class Class(Base):
     def serialize(self):
         return {
             'id': self.id,
-            'iid': self.iid,
             'name': self.name,
             'abbr': self.abbreviation,
             'ects': self.ects,
@@ -318,6 +319,9 @@ class ClassFile(Base):
             'hash': self.file.hash,
             'mime': self.file.mime,
             'size': self.file.size}
+
+    def __str__(self):
+        return f"{self.name} ({self.class_instance_id}, {self.file_id})"
 
 
 class File(Base):

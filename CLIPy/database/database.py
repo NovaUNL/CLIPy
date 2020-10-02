@@ -387,25 +387,15 @@ class Controller:
             log.error(f'Several teachers with the name {name}')  # TODO to exception
             return None
 
-    def get_class(self, iid: int, department: models.Department) -> Optional[models.Class]:
-        """TODO remove the department information from the class. Deduplicate."""
-        matches = self.session.query(models.Class).filter_by(iid=iid, department=department).all()
-        count = len(matches)
-        if count == 1:
-            return matches[0]
-        elif count > 1:
-            raise Exception(f"Multiple classes the internal id {iid} found in the department {department}")
+    def get_class(self, id: int) -> Optional[models.Class]:
+        return self.session.query(models.Class).filter_by(id=id).first()
 
-    def guess_class_instance(self, class_iid: int, year: int, period: models.Period) -> Optional[models.ClassInstance]:
-        matches = self.session \
-            .query(models.ClassInstance) \
-            .filter(models.ClassInstance.parent.has(iid=class_iid),
+    def get_class_instance(self, class_id: int, year: int, period: models.Period) -> Optional[models.ClassInstance]:
+        return self.session.query(models.ClassInstance) \
+            .filter(models.ClassInstance.class_id == class_id,
                     models.ClassInstance.year == year,
                     models.ClassInstance.period == period) \
-            .all()
-        count = len(matches)
-        if count == 1:
-            return matches[0]
+            .first()
 
     def add_institutions(self, institutions: [candidates.Institution]):
         """
@@ -509,10 +499,7 @@ class Controller:
             self.session.rollback()
 
     def add_class(self, candidate: candidates.Class) -> models.Class:
-        db_class = self.session.query(models.Class).filter_by(
-            iid=candidate.id,
-            department=candidate.department
-        ).first()
+        db_class = self.session.query(models.Class).filter_by(id=candidate.id).first()
 
         if db_class is not None:  # Already stored
             changed = False
@@ -543,14 +530,32 @@ class Controller:
 
         log.info("Adding class {}".format(candidate))
         db_class = models.Class(
-            iid=candidate.id,
+            id=candidate.id,
             name=candidate.name,
-            department=candidate.department,
             abbreviation=candidate.abbreviation,
             ects=candidate.ects)
         self.session.add(db_class)
         self.session.commit()
         return db_class
+
+    def add_department_classes(self, department, class_time_range):
+        for class_id, year_range in class_time_range.items():
+            first_year, last_year = year_range
+            current = self.session.query(models.DepartmentClass) \
+                .filter_by(department_id=department.id, class_id=class_id) \
+                .first()
+            if current is None:
+                self.session.add(
+                    models.DepartmentClass(
+                        department_id=department.id,
+                        class_id=class_id,
+                        first_year=first_year,
+                        last_year=last_year))
+                self.session.commit()
+            else:
+                current.first_year = first_year
+                current.last_year = last_year
+                self.session.commit()
 
     def add_class_instances(self, instances: [candidates.ClassInstance]):
         ignored = 0

@@ -157,7 +157,7 @@ def crawl_teachers(session: WebSession, database: db.Controller, department: db.
                     if class_instance_key in classes_instances_cache:
                         class_instance = classes_instances_cache[class_instance_key]
                     else:
-                        class_instance = database.guess_class_instance(class_id, year, period)
+                        class_instance = database.get_class_instance(class_id, year, period)
                         if class_instance is None:
                             logging.error("Teacher schedule has unknown class")
                             continue
@@ -176,6 +176,7 @@ def crawl_classes(session: WebSession, database: db.Controller, department: db.m
     department = database.session.merge(department)
     classes = {}
     class_instances = []
+    class_year_range = dict()
 
     period_exp = re.compile('&tipo_de_per%EDodo_lectivo=(?P<type>\w)&per%EDodo_lectivo=(?P<stage>\d)$')
     abbr_exp = re.compile('\(.+\) .* \((?P<abbr>.+)\)$')
@@ -256,11 +257,15 @@ def crawl_classes(session: WebSession, database: db.Controller, department: db.m
                             department=department,
                             abbreviation=abbr,
                             ects=ects))
+                    class_year_range[class_id] = [year, year]
+                else:
+                    class_year_range[class_id][1] = year
 
                 if classes[class_id] is None:
                     raise Exception("Null class")
                 class_instances.append(db.candidates.ClassInstance(classes[class_id], period, year))
     database.add_class_instances(class_instances)
+    database.add_department_classes(department, class_year_range)
 
 
 def crawl_admissions(session: WebSession, database: db.Controller, institution: db.models.Institution):
