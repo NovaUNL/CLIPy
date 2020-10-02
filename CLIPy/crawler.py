@@ -54,7 +54,7 @@ class PageCrawler(Thread):
                                   f'Retrying in {5 + min(exception_count, 55)} seconds...')
 
                     if exception_count > 10:
-                        log.critical("Thread {} failed for more than 10 times. Skipping work unit " + work_unit.id)
+                        log.critical(f"Thread failed for more than 10 times. Skipping work unit {work_unit.id}")
                         break
                     sleep(5 + min(exception_count, 55))
             else:
@@ -273,7 +273,7 @@ def crawl_admissions(session: WebSession, database: db.Controller, institution: 
     admissions = []
     years = range(max(institution.first_year, 2006), institution.last_year + 1)  # TODO put that magic number in a conf
     for year in years:
-        log.info(f"Crawling {institution} admissions for the year {year}")
+        log.debug(f"Crawling {institution} admissions for the year {year}")
         course_ids = set()  # Courses found in this year's page
         page = session.get_simplified_soup(urls.ADMISSIONS.format(institution=institution.id, year=year))
         course_links = page.find_all(href=urls.COURSE_EXP)
@@ -312,7 +312,7 @@ def crawl_admissions(session: WebSession, database: db.Controller, institution: 
 
 
 def crawl_class_enrollments(session: WebSession, database: db.Controller, class_instance: db.models.ClassInstance):
-    log.info("Crawling enrollments in class instance ID %s" % class_instance.id)
+    log.debug("Crawling enrollments in class instance ID %s" % class_instance.id)
     class_instance: db.models.ClassInstance = database.session.merge(class_instance)
     institution = class_instance.parent.department.institution
     year = class_instance.year
@@ -368,7 +368,7 @@ def crawl_class_enrollments(session: WebSession, database: db.Controller, class_
 
 
 def crawl_class_info(session: WebSession, database: db.Controller, class_instance: db.models.ClassInstance):
-    log.info("Crawling info from class instance ID %s" % class_instance.id)
+    log.debug("Crawling info from class instance ID %s" % class_instance.id)
     class_instance = database.session.merge(class_instance)
     institution = class_instance.parent.department.institution
     class_info = {}
@@ -463,7 +463,7 @@ def crawl_class_turns(session: WebSession, database: db.Controller, class_instan
     :param database: Database controller
     :param class_instance: ClassInstance object to look after
     """
-    log.info("Crawling turns class instance ID %s" % class_instance.id)
+    log.debug("Crawling turns class instance ID %s" % class_instance.id)
     class_instance: db.models.ClassInstance = database.session.merge(class_instance)
     department = class_instance.parent.department
     institution = department.institution
@@ -577,7 +577,7 @@ def crawl_files(session: WebSession, database: db.Controller, class_instance: db
     :param database: Database controller
     :param class_instance: ClassInstance object to look after
     """
-    log.info("Crawling class instance ID %s files" % class_instance.id)
+    log.debug("Crawling class instance ID %s files" % class_instance.id)
     class_instance: db.models.ClassInstance = database.session.merge(class_instance)
     department = class_instance.parent.department
     institution = department.institution
