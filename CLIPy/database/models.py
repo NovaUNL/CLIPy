@@ -82,7 +82,7 @@ class Degree(Base):
     name = sa.Column(sa.String, nullable=False)
 
     # Relations
-    courses = orm.relationship("Course", order_by="Course.iid", back_populates="degree")
+    courses = orm.relationship("Course", order_by="Course.id", back_populates="degree")
 
     def __str__(self):
         return self.name
@@ -164,7 +164,7 @@ class Institution(Base, TemporalEntity):
 
     # Relations
     departments = orm.relationship("Department", order_by="Institution.id", back_populates="institution")
-    courses = orm.relationship("Course", order_by="Course.iid", back_populates="institution")
+    courses = orm.relationship("Course", order_by="Course.id", back_populates="institution")
     students = orm.relationship("Student", order_by="Student.iid", back_populates="institution")
 
     def __str__(self):
@@ -196,14 +196,6 @@ department_teachers = sa.Table(
     sa.Column('teacher_id', sa.ForeignKey(TABLE_PREFIX + 'teachers.id'), primary_key=True))
 
 
-class DepartmentClass(Base, TemporalEntity):
-    __tablename__ = TABLE_PREFIX + 'department_classes'
-    department_id = sa.Column(sa.ForeignKey(TABLE_PREFIX + 'departments.id'), primary_key=True)
-    class_id = sa.Column(sa.ForeignKey(TABLE_PREFIX + 'classes.id'), primary_key=True)
-    department = orm.relationship("Department", back_populates="classes")
-    class_ = orm.relationship("Class", back_populates="departments")
-
-
 class Department(Base, TemporalEntity):
     __tablename__ = TABLE_PREFIX + 'departments'
     #: CLIP assigned identifier
@@ -215,7 +207,6 @@ class Department(Base, TemporalEntity):
 
     # Relations and constraints
     institution = orm.relationship("Institution", back_populates="departments")
-    classes = orm.relationship(DepartmentClass, back_populates="department")
     teachers = orm.relationship("Teacher", secondary=department_teachers, back_populates="departments")
     __table_args__ = (sa.UniqueConstraint('id', 'institution_id', name='un_' + TABLE_PREFIX + 'department'),)
 
@@ -249,7 +240,6 @@ class Class(Base):
     ects = sa.Column(sa.Integer, nullable=True)
 
     # Relations and constraints
-    departments = orm.relationship(DepartmentClass, back_populates="class_")
     instances = orm.relationship("ClassInstance", order_by="ClassInstance.year", back_populates="parent")
 
     def __str__(self):
@@ -367,6 +357,8 @@ class ClassInstance(Base):
     class_id = sa.Column(sa.Integer, sa.ForeignKey(Class.id), nullable=False)
     #: Academic period on which this instance happened
     period_id = sa.Column(sa.Integer, sa.ForeignKey(Period.id), nullable=False)
+    #: (Cached) Department where to which this instance belonged
+    department_id = sa.Column(sa.Integer, sa.ForeignKey(Department.id), nullable=True)  # TODO nullable=false
     #: Year on which this instance happened
     year = sa.Column(sa.Integer)
     #: Description of what happens in this class (portuguese)
@@ -453,6 +445,7 @@ class ClassInstance(Base):
     working_hours = sa.Column(sa.Text, nullable=True)
 
     # Relations and constraints
+    department = orm.relationship(Department)
     parent = orm.relationship(Class, back_populates="instances")
     period = orm.relationship(Period, back_populates="class_instances")
     file_relations = orm.relationship(ClassFile, back_populates="class_instance")
@@ -604,10 +597,8 @@ class StudentCourse(Base, TemporalEntity):
 
 class Course(Base, TemporalEntity):
     __tablename__ = TABLE_PREFIX + 'courses'
-    #: Crawler generated identifier
-    id = sa.Column(sa.Integer, sa.Sequence(TABLE_PREFIX + 'course_id_seq'), primary_key=True)
     #: CLIP internal identifier
-    iid = sa.Column(sa.Integer)
+    id = sa.Column(sa.Integer, primary_key=True)
     #: Full name
     name = sa.Column(sa.String(80))
     #: Course acronym
@@ -625,17 +616,18 @@ class Course(Base, TemporalEntity):
     students = orm.relationship("Student", order_by="Student.iid", back_populates="course")
     # students = association_proxy('student_relations', 'student')
     __table_args__ = (
-        sa.UniqueConstraint('institution_id', 'iid', 'abbreviation', name='un_' + TABLE_PREFIX + 'course'),)
+        sa.UniqueConstraint('id', 'institution_id', 'abbreviation', name='un_' + TABLE_PREFIX + 'course'),
+        sa.UniqueConstraint('id', name='un_' + TABLE_PREFIX + 'course_id'),
+    )
 
     def __str__(self):
         return ("{}(ID:{} Abbreviation:{}, Degree:{} Institution:{})".format(
-            self.name, self.iid, self.abbreviation, self.degree, self.institution)
+            self.name, self.id, self.abbreviation, self.degree, self.institution)
                 + super().__str__())
 
     def serialize(self):
         return {
             'id': self.id,
-            'iid': self.iid,
             'name': self.name,
             'abbr': self.abbreviation,
             'deg': self.degree_id,
@@ -669,9 +661,6 @@ class Teacher(Base, TemporalEntity):
     id = sa.Column(sa.Integer, primary_key=True)
     #: Full name
     name = sa.Column(sa.String)
-    #: Full name
-    department_id = sa.Column(sa.Integer)
-
     # Relations and constraints
     departments = orm.relationship(Department, secondary=department_teachers, back_populates="teachers")
     turns = orm.relationship('Turn', secondary=turn_teachers, back_populates='teachers')
@@ -684,10 +673,9 @@ class Teacher(Base, TemporalEntity):
         return {
             'id': self.id,
             'name': self.name,
-            'dept': self.department_id,
             'first_year': self.first_year,
             'last_year': self.last_year,
-            # 'depts': [department.serialize() for department in self.departments]
+            'depts': [department.id for department in self.departments]
         }
 
 
@@ -707,7 +695,7 @@ class Student(Base, TemporalEntity):
     #: CLIP assigned auth abbreviation (eg: john.f)
     abbreviation = sa.Column(sa.String(100), nullable=True)
     #: Student course
-    course_id = sa.Column(sa.Integer, sa.ForeignKey(Course.id))  # TODO remove
+    course_id = sa.Column(sa.Integer, sa.ForeignKey(Course.id))
     #: (kinda redudant) student institution
     institution_id = sa.Column(sa.Integer, sa.ForeignKey(Institution.id), nullable=False)
     #: Student sexual gender (0 - grill, 1 - boy)

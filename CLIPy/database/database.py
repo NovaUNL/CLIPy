@@ -286,9 +286,9 @@ class Controller:
         else:  # Query it from the db (with the provided parameters)
             if identifier is not None:
                 if institution is not None:
-                    matches = self.session.query(models.Course).filter_by(iid=identifier, institution=institution).all()
+                    matches = self.session.query(models.Course).filter_by(id=identifier, institution=institution).all()
                 else:
-                    matches = self.session.query(models.Course).filter_by(iid=identifier).all()
+                    matches = self.session.query(models.Course).filter_by(id=identifier).all()
             elif abbreviation is not None:
                 if institution is not None:
                     matches = self.session.query(models.Course) \
@@ -517,10 +517,10 @@ class Controller:
                 elif db_class.abbreviation != candidate.abbreviation:
                     if SequenceMatcher(None, db_class.abbreviation, candidate.abbreviation).ratio() < 0.3:
                         raise Exception("Class abbreviation change attempt."
-                                        f"{db_class.abbreviation} to {candidate.abbreviation} (iid {candidate.id})")
+                                        f"{db_class.abbreviation} to {candidate.abbreviation} (id {candidate.id})")
                     else:
-                        log.warn("Class abbreviation change."
-                                 f"{db_class.abbreviation} to {candidate.abbreviation} (iid {candidate.id})")
+                        log.warning("Class abbreviation change."
+                                    f"{db_class.abbreviation} to {candidate.abbreviation} (id {candidate.id})")
                         db_class.abbreviation = candidate.abbreviation
                         changed = True
             if changed:
@@ -571,7 +571,8 @@ class Controller:
                 self.session.add(models.ClassInstance(
                     parent=instance.parent,
                     year=instance.year,
-                    period=instance.period
+                    period=instance.period,
+                    department=instance.department
                 ))
                 self.session.commit()
         if len(instances) - ignored > 0:
@@ -638,13 +639,13 @@ class Controller:
         try:
             for course in courses:
                 db_course = self.session.query(models.Course).filter_by(
-                    iid=course.id,
+                    id=course.id,
                     institution=course.institution
                 ).first()
 
                 if db_course is None:
                     self.session.add(models.Course(
-                        iid=course.id,
+                        id=course.id,
                         name=course.name,
                         abbreviation=course.abbreviation,
                         first_year=course.first_year,

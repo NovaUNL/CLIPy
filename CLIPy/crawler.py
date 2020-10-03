@@ -174,9 +174,9 @@ def crawl_teachers(session: WebSession, database: db.Controller, department: db.
 
 def crawl_classes(session: WebSession, database: db.Controller, department: db.models.Department):
     department = database.session.merge(department)
+    log.debug("Crawling classes in department %s" % department.id)
     classes = {}
     class_instances = []
-    class_year_range = dict()
 
     period_exp = re.compile('&tipo_de_per%EDodo_lectivo=(?P<type>\w)&per%EDodo_lectivo=(?P<stage>\d)$')
     abbr_exp = re.compile('\(.+\) .* \((?P<abbr>.+)\)$')
@@ -257,15 +257,11 @@ def crawl_classes(session: WebSession, database: db.Controller, department: db.m
                             department=department,
                             abbreviation=abbr,
                             ects=ects))
-                    class_year_range[class_id] = [year, year]
-                else:
-                    class_year_range[class_id][1] = year
 
                 if classes[class_id] is None:
                     raise Exception("Null class")
-                class_instances.append(db.candidates.ClassInstance(classes[class_id], period, year))
+                class_instances.append(db.candidates.ClassInstance(classes[class_id], period, year, department))
     database.add_class_instances(class_instances)
-    database.add_department_classes(department, class_year_range)
 
 
 def crawl_admissions(session: WebSession, database: db.Controller, institution: db.models.Institution):
@@ -314,7 +310,7 @@ def crawl_admissions(session: WebSession, database: db.Controller, institution: 
 def crawl_class_enrollments(session: WebSession, database: db.Controller, class_instance: db.models.ClassInstance):
     log.debug("Crawling enrollments in class instance ID %s" % class_instance.id)
     class_instance: db.models.ClassInstance = database.session.merge(class_instance)
-    institution = class_instance.parent.department.institution
+    institution = class_instance.department.institution
     year = class_instance.year
 
     page = session.get_simplified_soup(urls.CLASS_ENROLLED.format(
@@ -323,7 +319,7 @@ def crawl_class_enrollments(session: WebSession, database: db.Controller, class_
         year=class_instance.year,
         period=class_instance.period.part,
         period_type=class_instance.period.letter,
-        class_id=class_instance.parent.iid))
+        class_id=class_instance.parent.id))
 
     # Strip file header and split it into lines
     if len(page.find_all(string=re.compile("Pedido inválido"))) > 0:
@@ -379,7 +375,7 @@ def crawl_class_info(session: WebSession, database: db.Controller, class_instanc
         year=class_instance.year,
         period=class_instance.period.part,
         period_type=class_instance.period.letter,
-        class_id=class_instance.parent.iid))
+        class_id=class_instance.parent.id))
     class_info['description'] = parser.get_bilingual_info(page)
     page = session.get_broken_simplified_soup(urls.CLASS_OBJECTIVES.format(
         institution=institution.id,
@@ -387,7 +383,7 @@ def crawl_class_info(session: WebSession, database: db.Controller, class_instanc
         year=class_instance.year,
         period=class_instance.period.part,
         period_type=class_instance.period.letter,
-        class_id=class_instance.parent.iid))
+        class_id=class_instance.parent.id))
     class_info['objectives'] = parser.get_bilingual_info(page)
     page = session.get_broken_simplified_soup(urls.CLASS_REQUIREMENTS.format(
         institution=institution.id,
@@ -395,7 +391,7 @@ def crawl_class_info(session: WebSession, database: db.Controller, class_instanc
         year=class_instance.year,
         period=class_instance.period.part,
         period_type=class_instance.period.letter,
-        class_id=class_instance.parent.iid))
+        class_id=class_instance.parent.id))
     class_info['requirements'] = parser.get_bilingual_info(page)
     page = session.get_broken_simplified_soup(urls.CLASS_COMPETENCES.format(
         institution=institution.id,
@@ -403,7 +399,7 @@ def crawl_class_info(session: WebSession, database: db.Controller, class_instanc
         year=class_instance.year,
         period=class_instance.period.part,
         period_type=class_instance.period.letter,
-        class_id=class_instance.parent.iid))
+        class_id=class_instance.parent.id))
     class_info['competences'] = parser.get_bilingual_info(page)
     page = session.get_broken_simplified_soup(urls.CLASS_PROGRAM.format(
         institution=institution.id,
@@ -411,7 +407,7 @@ def crawl_class_info(session: WebSession, database: db.Controller, class_instanc
         year=class_instance.year,
         period=class_instance.period.part,
         period_type=class_instance.period.letter,
-        class_id=class_instance.parent.iid))
+        class_id=class_instance.parent.id))
     class_info['program'] = parser.get_bilingual_info(page)
     page = session.get_broken_simplified_soup(urls.CLASS_BIBLIOGRAPHY.format(
         institution=institution.id,
@@ -419,7 +415,7 @@ def crawl_class_info(session: WebSession, database: db.Controller, class_instanc
         year=class_instance.year,
         period=class_instance.period.part,
         period_type=class_instance.period.letter,
-        class_id=class_instance.parent.iid))
+        class_id=class_instance.parent.id))
     class_info['bibliography'] = parser.get_bilingual_info(page)
     page = session.get_broken_simplified_soup(urls.CLASS_ASSISTANCE.format(
         institution=institution.id,
@@ -427,7 +423,7 @@ def crawl_class_info(session: WebSession, database: db.Controller, class_instanc
         year=class_instance.year,
         period=class_instance.period.part,
         period_type=class_instance.period.letter,
-        class_id=class_instance.parent.iid))
+        class_id=class_instance.parent.id))
     class_info['assistance'] = parser.get_bilingual_info(page)
     page = session.get_broken_simplified_soup(urls.CLASS_TEACHING_METHODS.format(
         institution=institution.id,
@@ -435,7 +431,7 @@ def crawl_class_info(session: WebSession, database: db.Controller, class_instanc
         year=class_instance.year,
         period=class_instance.period.part,
         period_type=class_instance.period.letter,
-        class_id=class_instance.parent.iid))
+        class_id=class_instance.parent.id))
     class_info['teaching_methods'] = parser.get_bilingual_info(page)
     page = session.get_broken_simplified_soup(urls.CLASS_EVALUATION_METHODS.format(
         institution=institution.id,
@@ -443,7 +439,7 @@ def crawl_class_info(session: WebSession, database: db.Controller, class_instanc
         year=class_instance.year,
         period=class_instance.period.part,
         period_type=class_instance.period.letter,
-        class_id=class_instance.parent.iid))
+        class_id=class_instance.parent.id))
     class_info['evaluation_methods'] = parser.get_bilingual_info(page)
     page = session.get_broken_simplified_soup(urls.CLASS_EXTRA.format(
         institution=institution.id,
@@ -451,7 +447,7 @@ def crawl_class_info(session: WebSession, database: db.Controller, class_instanc
         year=class_instance.year,
         period=class_instance.period.part,
         period_type=class_instance.period.letter,
-        class_id=class_instance.parent.iid))
+        class_id=class_instance.parent.id))
     class_info['extra_info'] = parser.get_bilingual_info(page)
     database.update_class_instance_info(class_instance, class_info)
 
@@ -474,7 +470,7 @@ def crawl_class_turns(session: WebSession, database: db.Controller, class_instan
         institution=institution.id,
         year=class_instance.year,
         department=class_instance.parent.department.id,
-        class_id=class_instance.parent.iid,
+        class_id=class_instance.parent.id,
         period=class_instance.period.part,
         period_type=class_instance.period.letter))
 
@@ -587,7 +583,7 @@ def crawl_files(session: WebSession, database: db.Controller, class_instance: db
         institution=institution.id,
         year=class_instance.year,
         department=class_instance.parent.department.id,
-        class_id=class_instance.parent.iid,
+        class_id=class_instance.parent.id,
         period=class_instance.period.part,
         period_type=class_instance.period.letter))
 
@@ -598,7 +594,7 @@ def crawl_files(session: WebSession, database: db.Controller, class_instance: db
             institution=institution.id,
             year=class_instance.year,
             department=class_instance.parent.department.id,
-            class_id=class_instance.parent.iid,
+            class_id=class_instance.parent.id,
             period=class_instance.period.part,
             period_type=class_instance.period.letter,
             file_type=file_type.to_url_argument()))
@@ -618,7 +614,7 @@ def crawl_files(session: WebSession, database: db.Controller, class_instance: db
 
 def download_files(session: WebSession, database: db.Controller, class_instance: db.models.ClassInstance):
     class_instance: db.models.ClassInstance = database.session.merge(class_instance)
-    department = class_instance.parent.department
+    department = class_instance.department
     institution = department.institution
     class_files = class_instance.file_relations
     poked_file_types = set()
@@ -639,8 +635,8 @@ def download_files(session: WebSession, database: db.Controller, class_instance:
                 session.get_simplified_soup(urls.CLASS_FILES.format(
                     institution=institution.id,
                     year=class_instance.year,
-                    department=class_instance.parent.department.id,
-                    class_id=class_instance.parent.iid,
+                    department=class_instance.department.id,
+                    class_id=class_instance.parent.id,
                     period=class_instance.period.part,
                     period_type=class_instance.period.letter,
                     file_type=class_file.file_type.to_url_argument()))
@@ -686,7 +682,7 @@ def crawl_grades(session: WebSession, database: db.Controller, class_instance: d
         institution=institution.id,
         year=class_instance.year,
         department=class_instance.parent.department.id,
-        class_id=class_instance.parent.iid,
+        class_id=class_instance.parent.id,
         period=class_instance.period.part,
         period_type=class_instance.period.letter))
 
@@ -722,7 +718,7 @@ def crawl_grades(session: WebSession, database: db.Controller, class_instance: d
         institution=institution.id,
         year=class_instance.year,
         department=class_instance.parent.department.id,
-        class_id=class_instance.parent.iid,
+        class_id=class_instance.parent.id,
         period=class_instance.period.part,
         period_type=class_instance.period.letter))
     course_links = page.find_all(href=urls.COURSE_EXP)
@@ -744,7 +740,7 @@ def crawl_grades(session: WebSession, database: db.Controller, class_instance: d
         institution=institution.id,
         year=class_instance.year,
         department=class_instance.parent.department.id,
-        class_id=class_instance.parent.iid,
+        class_id=class_instance.parent.id,
         period=class_instance.period.part,
         period_type=class_instance.period.letter))
     course_links = page.find_all(href=urls.COURSE_EXP)

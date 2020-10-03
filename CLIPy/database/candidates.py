@@ -70,10 +70,11 @@ class Class:
 
 
 class ClassInstance:
-    def __init__(self, parent: Class, period: models.Period, year: int):
+    def __init__(self, parent: Class, period: models.Period, year: int, department: models.Department):
         self.parent = parent
         self.period = period
         self.year = year
+        self.department = department
 
     def __str__(self):
         return "{} on period {} of {}".format(self.parent, self.period, self.year)
