@@ -8,7 +8,6 @@ from sqlalchemy.ext.declarative import declarative_base
 
 from .types import IntEnum, TupleEnum
 
-TABLE_PREFIX = 'clip_'
 Base = declarative_base()
 
 
@@ -73,9 +72,9 @@ class EvaluationType(Enum):
 
 
 class Degree(Base):
-    __tablename__ = TABLE_PREFIX + 'degrees'
+    __tablename__ = 'degrees'
     #: Identifier
-    id = sa.Column(sa.Integer, sa.Sequence(TABLE_PREFIX + 'degree_id_seq'), primary_key=True)
+    id = sa.Column(sa.Integer, sa.Sequence('degree_id_seq'), primary_key=True)
     #: CLIP representation for this degree
     iid = sa.Column(sa.String(5), nullable=False)
     #: Verbose representation
@@ -89,9 +88,9 @@ class Degree(Base):
 
 
 class Period(Base):
-    __tablename__ = TABLE_PREFIX + 'periods'
+    __tablename__ = 'periods'
     #: Identifier
-    id = sa.Column(sa.Integer, sa.Sequence(TABLE_PREFIX + 'period_id_seq'), primary_key=True)
+    id = sa.Column(sa.Integer, sa.Sequence('period_id_seq'), primary_key=True)
     #: Part of parts, with the first starting with the academic year (~september)
     part = sa.Column(sa.Integer, nullable=False)
     #: Times this type of period fits in a year (eg: semester = 2, trimester=4)
@@ -107,7 +106,7 @@ class Period(Base):
 
 
 class TurnType(Base):
-    __tablename__ = TABLE_PREFIX + 'turn_types'
+    __tablename__ = 'turn_types'
     #: Identifier
     id = sa.Column(sa.Integer, primary_key=True)
     #: Verbose name
@@ -153,26 +152,8 @@ class TemporalEntity:
             self.first_year, self.last_year))
 
 
-class Institution(Base, TemporalEntity):
-    __tablename__ = TABLE_PREFIX + 'institutions'
-    #: CLIP assigned identifier
-    id = sa.Column(sa.Integer, primary_key=True)
-    #: Name acronym
-    abbreviation = sa.Column(sa.String(10))
-    #: Full name
-    name = sa.Column(sa.String(100))
-
-    # Relations
-    departments = orm.relationship("Department", order_by="Institution.id", back_populates="institution")
-    courses = orm.relationship("Course", order_by="Course.id", back_populates="institution")
-    students = orm.relationship("Student", order_by="Student.iid", back_populates="institution")
-
-    def __str__(self):
-        return self.abbreviation
-
-
 class Building(Base, TemporalEntity):
-    __tablename__ = TABLE_PREFIX + 'buildings'
+    __tablename__ = 'buildings'
     #: CLIP generated identifier
     id = sa.Column(sa.Integer, primary_key=True)
     #: CLIP name (usually not the full name)
@@ -191,45 +172,39 @@ class Building(Base, TemporalEntity):
 
 
 department_teachers = sa.Table(
-    TABLE_PREFIX + 'department_teachers', Base.metadata,
-    sa.Column('department_id', sa.ForeignKey(TABLE_PREFIX + 'departments.id'), primary_key=True),
-    sa.Column('teacher_id', sa.ForeignKey(TABLE_PREFIX + 'teachers.id'), primary_key=True))
+    'department_teachers', Base.metadata,
+    sa.Column('department_id', sa.ForeignKey('departments.id'), primary_key=True),
+    sa.Column('teacher_id', sa.ForeignKey('teachers.id'), primary_key=True))
 
 
 class Department(Base, TemporalEntity):
-    __tablename__ = TABLE_PREFIX + 'departments'
+    __tablename__ = 'departments'
     #: CLIP assigned identifier
     id = sa.Column(sa.Integer, primary_key=True)
     #: Full name
     name = sa.Column(sa.String(50))
-    #: Parent institution
-    institution_id = sa.Column(sa.Integer, sa.ForeignKey(Institution.id))
 
     # Relations and constraints
-    institution = orm.relationship("Institution", back_populates="departments")
     teachers = orm.relationship("Teacher", secondary=department_teachers, back_populates="departments")
-    __table_args__ = (sa.UniqueConstraint('id', 'institution_id', name='un_' + TABLE_PREFIX + 'department'),)
 
     def __str__(self):
-        return "{}({}, {})".format(self.name, self.id, self.institution.abbreviation) + super().__str__()
+        return "{}({})".format(self.name, self.id) + super().__str__()
 
     def serialize(self):
         return {
             'id': self.id,
-            'name': self.name,
-            'institution': self.institution.id}
+            'name': self.name}
 
     def serialize_related(self):
         return {
             'id': self.id,
             'name': self.name,
-            'institution': self.institution.id,
             'classes': [class_.id for class_ in self.classes],
             'teachers': [teacher.id for teacher in self.teachers]}
 
 
 class Class(Base):
-    __tablename__ = TABLE_PREFIX + 'classes'
+    __tablename__ = 'classes'
     #: CLIP assigned identifier
     id = sa.Column(sa.Integer, primary_key=True)
     #: Full name
@@ -243,7 +218,7 @@ class Class(Base):
     instances = orm.relationship("ClassInstance", order_by="ClassInstance.year", back_populates="parent")
 
     def __str__(self):
-        return f'{self.name} ({self.id}, {self.department})'
+        return f'{self.name} ({self.id})'
 
     def serialize(self):
         return {
@@ -256,7 +231,7 @@ class Class(Base):
 
 
 class Room(Base):
-    __tablename__ = TABLE_PREFIX + 'rooms'
+    __tablename__ = 'rooms'
     #: CLIP assigned identifier
     id = sa.Column(sa.Integer, primary_key=True)
     #: CLIP name (usually not the full name)
@@ -269,7 +244,7 @@ class Room(Base):
     # Relations and constraints
     building = orm.relationship(Building, back_populates="rooms")
     turn_instances = orm.relationship("TurnInstance", order_by="TurnInstance.weekday", back_populates='room')
-    __table_args__ = (sa.UniqueConstraint('building_id', 'name', 'room_type', name='un_' + TABLE_PREFIX + 'room'),)
+    __table_args__ = (sa.UniqueConstraint('building_id', 'name', 'room_type', name='un_room'),)
 
     def __str__(self):
         return "{} - {}".format(self.name, self.building.name)
@@ -283,9 +258,9 @@ class Room(Base):
 
 
 class ClassFile(Base):
-    __tablename__ = TABLE_PREFIX + 'class_instance_files'
-    class_instance_id = sa.Column(sa.ForeignKey(TABLE_PREFIX + 'class_instances.id'), primary_key=True)
-    file_id = sa.Column(sa.ForeignKey(TABLE_PREFIX + 'files.id'), primary_key=True)
+    __tablename__ = 'class_instance_files'
+    class_instance_id = sa.Column(sa.ForeignKey('class_instances.id'), primary_key=True)
+    file_id = sa.Column(sa.ForeignKey('files.id'), primary_key=True)
     #: File name (some places don't tell the file name)
     name = sa.Column(sa.String(256), nullable=True)
     #: What this file represents or the category it got dumped into
@@ -315,7 +290,7 @@ class ClassFile(Base):
 
 
 class File(Base):
-    __tablename__ = TABLE_PREFIX + 'files'
+    __tablename__ = 'files'
     #: CLIP assigned identifier
     id = sa.Column(sa.Integer, primary_key=True)
     #: Approximate size reported by CLIP (used as a download consistency check)
@@ -350,9 +325,9 @@ class ClassInstance(Base):
     | There's a lot of redundancy between different ClassInstances of the same :py:class:`Class`, but sometimes the
         associated information and related teachers change wildly.
     """
-    __tablename__ = TABLE_PREFIX + 'class_instances'
+    __tablename__ = 'class_instances'
     #: Crawler generated identifier
-    id = sa.Column(sa.Integer, sa.Sequence(TABLE_PREFIX + 'class_instance_id_seq'), primary_key=True)
+    id = sa.Column(sa.Integer, sa.Sequence('class_instance_id_seq'), primary_key=True)
     #: Parent class
     class_id = sa.Column(sa.Integer, sa.ForeignKey(Class.id), nullable=False)
     #: Academic period on which this instance happened
@@ -361,88 +336,8 @@ class ClassInstance(Base):
     department_id = sa.Column(sa.Integer, sa.ForeignKey(Department.id), nullable=True)  # TODO nullable=false
     #: Year on which this instance happened
     year = sa.Column(sa.Integer)
-    #: Description of what happens in this class (portuguese)
-    description_pt = sa.Column(sa.Text, nullable=True)
-    #: Description of what happens in this class (english)
-    description_en = sa.Column(sa.Text, nullable=True)
-    #: Timestamp of the last description fields edition
-    description_edited_datetime = sa.Column(sa.DateTime, nullable=True)
-    #: Verbose identifier of who last edited the description fields
-    description_editor = sa.Column(sa.String(100), nullable=True)
-    #: Planned student competence acquisition (portuguese)
-    objectives_pt = sa.Column(sa.Text, nullable=True)
-    #: Planned student competence acquisition (english)
-    objectives_en = sa.Column(sa.Text, nullable=True)
-    #: Timestamp of the last objectives fields edition
-    objectives_edited_datetime = sa.Column(sa.DateTime, nullable=True)
-    #: Verbose identifier of who last edited the objectives fields
-    objectives_editor = sa.Column(sa.String(100), nullable=True)
-    #: Requirements to participate in this class (portuguese)
-    requirements_pt = sa.Column(sa.Text, nullable=True)
-    #: Requirements to participate in this class (english)
-    requirements_en = sa.Column(sa.Text, nullable=True)
-    #: Timestamp of the last requirements fields edition
-    requirements_edited_datetime = sa.Column(sa.DateTime, nullable=True)
-    #: Verbose identifier of who last edited the requirements fields
-    requirements_editor = sa.Column(sa.String(100), nullable=True)
-    #: Class planned student competence acquisition (portuguese)
-    competences_pt = sa.Column(sa.Text, nullable=True)
-    #: Class planned student competence acquisition (english)
-    competences_en = sa.Column(sa.Text, nullable=True)
-    #: Timestamp of the last competences fields edition
-    competences_edited_datetime = sa.Column(sa.DateTime, nullable=True)
-    #: Verbose identifier of who last edited the competences fields
-    competences_editor = sa.Column(sa.String(100), nullable=True)
-    #: Planned teachings (portuguese)
-    program_pt = sa.Column(sa.Text, nullable=True)
-    #: Planned teachings (english)
-    program_en = sa.Column(sa.Text, nullable=True)
-    #: Timestamp of the last description fields edition
-    program_edited_datetime = sa.Column(sa.DateTime, nullable=True)
-    #: Verbose identifier of who last edited the program fields
-    program_editor = sa.Column(sa.String(100), nullable=True)
-    #: Teaching sources / bibliography (portuguese)
-    bibliography_pt = sa.Column(sa.Text, nullable=True)
-    #: Teaching sources / bibliography (english)
-    bibliography_en = sa.Column(sa.Text, nullable=True)
-    #: Timestamp of the last bibliography fields edition
-    bibliography_edited_datetime = sa.Column(sa.DateTime, nullable=True)
-    #: Verbose identifier of who last edited the bibliography fields
-    bibliography_editor = sa.Column(sa.String(100), nullable=True)
-    #: Verbose schedules for individual teacher assistance (portuguese)
-    assistance_pt = sa.Column(sa.Text, nullable=True)
-    #: Verbose schedules for individual teacher assistance (english)
-    assistance_en = sa.Column(sa.Text, nullable=True)
-    #: Timestamp of the last assistance fields edition
-    assistance_edited_datetime = sa.Column(sa.DateTime, nullable=True)
-    #: Verbose identifier of who last edited the assistance info fields
-    assistance_editor = sa.Column(sa.String(100), nullable=True)
-    #: Teaching methods verbosely explained (portuguese)
-    teaching_methods_pt = sa.Column(sa.Text, nullable=True)
-    #: Teaching methods verbosely explained (english)
-    teaching_methods_en = sa.Column(sa.Text, nullable=True)
-    #: Timestamp of the last teaching methods fields edition
-    teaching_methods_edited_datetime = sa.Column(sa.DateTime, nullable=True)
-    #: Verbose identifier of who last edited the teaching methods fields
-    teaching_methods_editor = sa.Column(sa.String(100), nullable=True)
-    #: Evaluation methods verbosely explained (portuguese)
-    evaluation_methods_pt = sa.Column(sa.Text, nullable=True)
-    #: Evaluation methods verbosely explained (english)
-    evaluation_methods_en = sa.Column(sa.Text, nullable=True)
-    #: Timestamp of the last evaluation methods fields edition
-    evaluation_methods_edited_datetime = sa.Column(sa.DateTime, nullable=True)
-    #: Verbose identifier of who last edited the evaluation methods fields
-    evaluation_methods_editor = sa.Column(sa.String(100), nullable=True)
-    #: Additional information such as start date and moodle pages (portuguese)
-    extra_info_pt = sa.Column(sa.Text, nullable=True)
-    #: Additional information such as start date and moodle pages (english)
-    extra_info_en = sa.Column(sa.Text, nullable=True)
-    #: Timestamp of the extra info edition
-    extra_info_edited_datetime = sa.Column(sa.DateTime, nullable=True)
-    #: Verbose identifier of who last edited the extra info fields
-    extra_info_editor = sa.Column(sa.String(100), nullable=True)
-    #: JSON encoded representation of the class working hours type of work
-    working_hours = sa.Column(sa.Text, nullable=True)
+    #: JSON encoded representation of the class instance information
+    information = sa.Column(sa.Text, nullable=True)
 
     # Relations and constraints
     department = orm.relationship(Department)
@@ -456,110 +351,18 @@ class ClassInstance(Base):
                                    back_populates="class_instance")
     messages = orm.relationship("ClassMessages", order_by="ClassMessages.datetime", back_populates="class_instance")
     __table_args__ = (
-        sa.UniqueConstraint('class_id', 'year', 'period_id', name='un_' + TABLE_PREFIX + 'class_instance'),)
+        sa.UniqueConstraint('class_id', 'year', 'period_id', name='un_class_instance'),)
 
     def __str__(self):
         return "{} on period {} of {}".format(self.parent, self.period, self.year)
 
     def serialize(self):
-        information = dict()
-        if self.description_pt is not None:
-            information['description'] = {
-                'pt': self.description_pt,
-                'en': self.description_en,
-                'edited_datetime':
-                    None if self.description_edited_datetime is None else self.description_edited_datetime.isoformat(),
-                'editor': self.description_editor}
-
-        if self.objectives_pt is not None:
-            information['objectives'] = {
-                'pt': self.objectives_pt,
-                'en': self.objectives_en,
-                'edited_datetime':
-                    None if self.objectives_edited_datetime is None else self.objectives_edited_datetime.isoformat(),
-                'editor': self.objectives_editor}
-
-        if self.requirements_pt is not None:
-            information['requirements'] = {
-                'pt': self.requirements_pt,
-                'en': self.requirements_en,
-                'edited_datetime':
-                    None if self.requirements_edited_datetime is None
-                    else self.requirements_edited_datetime.isoformat(),
-                'editor': self.requirements_editor}
-
-        if self.competences_pt is not None:
-            information['competences'] = {
-                'pt': self.competences_pt,
-                'en': self.competences_en,
-                'edited_datetime':
-                    None if self.competences_edited_datetime is None else self.competences_edited_datetime.isoformat(),
-                'editor': self.competences_editor}
-
-        if self.program_pt is not None:
-            information['program'] = {
-                'pt': self.program_pt,
-                'en': self.program_en,
-                'edited_datetime':
-                    None if self.program_edited_datetime is None else self.program_edited_datetime.isoformat(),
-                'editor': self.program_editor}
-
-        if self.bibliography_pt is not None:
-            information['bibliography'] = {
-                'pt': self.bibliography_pt,
-                'en': self.bibliography_en,
-                'edited_datetime':
-                    None if self.bibliography_edited_datetime is None
-                    else self.bibliography_edited_datetime.isoformat(),
-                'editor': self.bibliography_editor}
-
-        if self.assistance_pt is not None:
-            information['assistance'] = {
-                'pt': self.assistance_pt,
-                'en': self.assistance_en,
-                'edited_datetime':
-                    None if self.assistance_edited_datetime is None else self.assistance_edited_datetime.isoformat(),
-                'editor': self.assistance_editor}
-
-        if self.assistance_pt is not None:
-            information['teaching'] = {
-                'pt': self.teaching_methods_pt,
-                'en': self.teaching_methods_en,
-                'edited_datetime':
-                    None if self.teaching_methods_edited_datetime is None
-                    else self.teaching_methods_edited_datetime.isoformat(),
-                'editor': self.teaching_methods_editor}
-
-        if self.teaching_methods_pt is not None:
-            information['teaching'] = {
-                'pt': self.teaching_methods_pt,
-                'en': self.teaching_methods_en,
-                'edited_datetime':
-                    None if self.teaching_methods_edited_datetime is None
-                    else self.teaching_methods_edited_datetime.isoformat(),
-                'editor': self.teaching_methods_editor}
-
-        if self.evaluation_methods_pt is not None:
-            information['evaluation'] = {
-                'pt': self.evaluation_methods_pt,
-                'en': self.evaluation_methods_en,
-                'edited_datetime':
-                    None if self.evaluation_methods_edited_datetime is None
-                    else self.evaluation_methods_edited_datetime.isoformat(),
-                'editor': self.evaluation_methods_editor}
-        if self.extra_info_pt is not None:
-            information['extra'] = {
-                'pt': self.extra_info_pt,
-                'en': self.extra_info_en,
-                'edited_datetime':
-                    None if self.extra_info_edited_datetime is None else self.extra_info_edited_datetime.isoformat(),
-                'editor': self.extra_info_editor}
         data = {
             'id': self.id,
             'class_id': self.class_id,
             'period': self.period_id,
             'year': self.year,
-            'info': information,
+            'info': self.information,
             'working_hours': self.working_hours,
             'enrollments': [enrollment.id for enrollment in self.enrollments],
             'turns': [turn.id for turn in self.turns],
@@ -568,9 +371,9 @@ class ClassInstance(Base):
 
 
 class ClassEvaluations(Base):
-    __tablename__ = TABLE_PREFIX + 'class_evaluations'
+    __tablename__ = 'class_evaluations'
     #: Crawler generated identifier
-    id = sa.Column(sa.Integer, sa.Sequence(TABLE_PREFIX + 'class_instance_id_seq'), primary_key=True)
+    id = sa.Column(sa.Integer, sa.Sequence('class_instance_id_seq'), primary_key=True)
     #: Class instance
     class_instance_id = sa.Column(sa.Integer, sa.ForeignKey(ClassInstance.id), nullable=False)
     #: Occasion on which this evaluation will happen/happened
@@ -581,22 +384,22 @@ class ClassEvaluations(Base):
     # Relations and constraints
     class_instance = orm.relationship(ClassInstance, back_populates="evaluations")
     __table_args__ = (sa.UniqueConstraint(
-        'class_instance_id', 'datetime', 'evaluation_type', name='un_' + TABLE_PREFIX + 'class_evaluation'),)
+        'class_instance_id', 'datetime', 'evaluation_type', name='un_class_evaluation'),)
 
 
 class StudentCourse(Base, TemporalEntity):
-    __tablename__ = TABLE_PREFIX + 'student_courses'
-    id = sa.Column(sa.Integer, sa.Sequence(TABLE_PREFIX + 'student_course_id_seq'), primary_key=True)
-    student_id = sa.Column(sa.ForeignKey(TABLE_PREFIX + 'students.id'))
-    course_id = sa.Column(sa.ForeignKey(TABLE_PREFIX + 'courses.id'))
+    __tablename__ = 'student_courses'
+    id = sa.Column(sa.Integer, sa.Sequence('student_course_id_seq'), primary_key=True)
+    student_id = sa.Column(sa.ForeignKey('students.id'))
+    course_id = sa.Column(sa.ForeignKey('courses.id'))
     # Relations
     student = orm.relationship("Student", back_populates="course_relations")
     course = orm.relationship("Course", back_populates="student_relations")
-    __table_args__ = (sa.UniqueConstraint('student_id', 'course_id', name='un_' + TABLE_PREFIX + 'student_course'),)
+    __table_args__ = (sa.UniqueConstraint('student_id', 'course_id', name='un_student_course'),)
 
 
 class Course(Base, TemporalEntity):
-    __tablename__ = TABLE_PREFIX + 'courses'
+    __tablename__ = 'courses'
     #: CLIP internal identifier
     id = sa.Column(sa.Integer, primary_key=True)
     #: Full name
@@ -605,24 +408,17 @@ class Course(Base, TemporalEntity):
     abbreviation = sa.Column(sa.String(15))
     #: Degree conferred by this course
     degree_id = sa.Column(sa.Integer, sa.ForeignKey(Degree.id))
-    #: Lecturing institution
-    institution_id = sa.Column(sa.Integer, sa.ForeignKey(Institution.id))
 
     # Relations and constraints
     degree = orm.relationship(Degree, back_populates="courses")
-    institution = orm.relationship("Institution", back_populates="courses")
     student_relations = orm.relationship(StudentCourse, back_populates="course")
     admissions = orm.relationship("Admission", order_by="Admission.check_date", back_populates="course")
-    students = orm.relationship("Student", order_by="Student.iid", back_populates="course")
+    students = orm.relationship("Student", back_populates="course")
     # students = association_proxy('student_relations', 'student')
-    __table_args__ = (
-        sa.UniqueConstraint('id', 'institution_id', 'abbreviation', name='un_' + TABLE_PREFIX + 'course'),
-        sa.UniqueConstraint('id', name='un_' + TABLE_PREFIX + 'course_id'),
-    )
+    __table_args__ = (sa.UniqueConstraint('id', name='un_course_id'),)
 
     def __str__(self):
-        return ("{}(ID:{} Abbreviation:{}, Degree:{} Institution:{})".format(
-            self.name, self.id, self.abbreviation, self.degree, self.institution)
+        return ("{}(ID:{} Abbreviation:{}, Degree:{})".format(self.name, self.id, self.abbreviation, self.degree)
                 + super().__str__())
 
     def serialize(self):
@@ -631,19 +427,18 @@ class Course(Base, TemporalEntity):
             'name': self.name,
             'abbr': self.abbreviation,
             'deg': self.degree_id,
-            'inst': self.institution_id,
         }
 
 
 turn_students = sa.Table(
-    TABLE_PREFIX + 'turn_students', Base.metadata,
-    sa.Column('turn_id', sa.ForeignKey(TABLE_PREFIX + 'turns.id'), primary_key=True),
-    sa.Column('student_id', sa.ForeignKey(TABLE_PREFIX + 'students.id'), primary_key=True))
+    'turn_students', Base.metadata,
+    sa.Column('turn_id', sa.ForeignKey('turns.id'), primary_key=True),
+    sa.Column('student_id', sa.ForeignKey('students.id'), primary_key=True))
 
 turn_teachers = sa.Table(
-    TABLE_PREFIX + 'turn_teachers', Base.metadata,
-    sa.Column('turn_id', sa.ForeignKey(TABLE_PREFIX + 'turns.id'), primary_key=True),
-    sa.Column('teacher_id', sa.ForeignKey(TABLE_PREFIX + 'teachers.id'), primary_key=True))
+    'turn_teachers', Base.metadata,
+    sa.Column('turn_id', sa.ForeignKey('turns.id'), primary_key=True),
+    sa.Column('teacher_id', sa.ForeignKey('teachers.id'), primary_key=True))
 
 
 class Teacher(Base, TemporalEntity):
@@ -656,7 +451,7 @@ class Teacher(Base, TemporalEntity):
         this isn't a huge table some redundancy can be tolerated.
     | TODO In case there's a day I'm feeling specially worthless, benchmark this as a M2M and port if it isn't that bad
     """
-    __tablename__ = TABLE_PREFIX + 'teachers'
+    __tablename__ = 'teachers'
     #: CLIP assigned identifier
     id = sa.Column(sa.Integer, primary_key=True)
     #: Full name
@@ -685,19 +480,17 @@ class Student(Base, TemporalEntity):
     | When a student transfers to another course a new ``iid`` is assigned, so some persons have multiple
         student entries.
     """
-    __tablename__ = TABLE_PREFIX + 'students'
-    #: Crawler assigned ID
-    id = sa.Column(sa.Integer, sa.Sequence(TABLE_PREFIX + 'student_id_seq'), primary_key=True)
+    __tablename__ = 'students'
+    # #: Crawler assigned ID
+    # id = sa.Column(sa.Integer, sa.Sequence( 'student_id_seq'), primary_key=True)
     #: CLIP assigned ID
-    iid = sa.Column(sa.Integer)
+    id = sa.Column(sa.Integer, primary_key=True)
     #: Student full name
     name = sa.Column(sa.String(100))
     #: CLIP assigned auth abbreviation (eg: john.f)
     abbreviation = sa.Column(sa.String(100), nullable=True)
     #: Student course
     course_id = sa.Column(sa.Integer, sa.ForeignKey(Course.id))
-    #: (kinda redudant) student institution
-    institution_id = sa.Column(sa.Integer, sa.ForeignKey(Institution.id), nullable=False)
     #: Student sexual gender (0 - grill, 1 - boy)
     gender = sa.Column(sa.Boolean, nullable=True, default=None)
     #: The grade the student obtained at his/her graduation (0-200)
@@ -705,36 +498,30 @@ class Student(Base, TemporalEntity):
 
     # Relations and constraints
     course = orm.relationship(Course, back_populates="students")  # TODO remove
-    institution = orm.relationship("Institution", back_populates="students")
     enrollments = orm.relationship("Enrollment", order_by="Enrollment.student_year", back_populates="student")
     turns = orm.relationship('Turn', secondary=turn_students, back_populates='students')
     course_relations = orm.relationship(StudentCourse, back_populates="student")
     admission_records = orm.relationship("Admission", order_by="Admission.check_date", back_populates="student")
     courses = association_proxy('course_relations', 'course')
-    __table_args__ = (
-        sa.UniqueConstraint('institution_id', 'iid', name='un_' + TABLE_PREFIX + 'student_id_institution'),
-        sa.UniqueConstraint('iid', 'name', name='un_' + TABLE_PREFIX + 'student_id_name'),
-        sa.UniqueConstraint('iid', 'abbreviation', name='un_' + TABLE_PREFIX + 'student_id_abbr'),)
+    __table_args__ = (sa.UniqueConstraint('abbreviation', name='un_student_id_abbr'),)
 
     def __str__(self):
-        return "{} ({}, {})".format(self.name, self.iid, self.abbreviation)
+        return "{} ({}, {})".format(self.name, self.id, self.abbreviation)
 
     def serialize(self):
         return {
             'id': self.id,
-            'iid': self.iid,
             'name': self.name,
             'abbr': self.abbreviation,
-            'inst': self.institution_id,
             'course': self.course_id,
             'first_year': self.first_year,
             'last_year': self.last_year}
 
 
 class ClassMessages(Base):
-    __tablename__ = TABLE_PREFIX + 'class_instance_messages'
+    __tablename__ = 'class_instance_messages'
     #: Generated identifier
-    id = sa.Column(sa.Integer, sa.Sequence(TABLE_PREFIX + 'class_instance_message_id_seq'), primary_key=True)
+    id = sa.Column(sa.Integer, sa.Sequence('class_instance_message_id_seq'), primary_key=True)
     #: Class intance for which the message was broadcasted
     class_instance_id = sa.Column(sa.Integer, sa.ForeignKey(ClassInstance.id))
     #: Teacher who sent the message
@@ -749,7 +536,7 @@ class ClassMessages(Base):
     # Relations and constraints
     teacher = orm.relationship(Teacher, back_populates="class_messages")
     class_instance = orm.relationship(ClassInstance, back_populates="messages")
-    __table_args__ = (sa.UniqueConstraint('class_instance_id', 'datetime', name='un_' + TABLE_PREFIX + 'message'),)
+    __table_args__ = (sa.UniqueConstraint('class_instance_id', 'datetime', name='un_message'),)
 
 
 class Admission(Base):
@@ -757,9 +544,9 @@ class Admission(Base):
     An admission represents a national access contest entry which was successfully accepted.
     Sometimes students reject admissions and they never become "real" CLIP students.
     """
-    __tablename__ = TABLE_PREFIX + 'admissions'
+    __tablename__ = 'admissions'
     #: Crawler assigned identifier
-    id = sa.Column(sa.Integer, sa.Sequence(TABLE_PREFIX + 'admission_id_seq'), primary_key=True)
+    id = sa.Column(sa.Integer, sa.Sequence('admission_id_seq'), primary_key=True)
     #: CLIP student reference (if the student is present)
     student_id = sa.Column(sa.Integer, sa.ForeignKey(Student.id), nullable=True)
     #: Student full name
@@ -781,7 +568,7 @@ class Admission(Base):
     student = orm.relationship("Student", back_populates="admission_records")
     course = orm.relationship("Course", back_populates="admissions")
     __table_args__ = (
-        sa.UniqueConstraint('student_id', 'name', 'year', 'phase', name='un_' + TABLE_PREFIX + 'admission'),)
+        sa.UniqueConstraint('student_id', 'name', 'year', 'phase', name='un_admission'),)
 
     def __str__(self):
         return ("{}, admitted to {}({}) (option {}) at the phase {} of the {} contest. {} as of {}".format(
@@ -806,9 +593,9 @@ class Enrollment(Base):
     """
     An enrollment is a :py:class:`Student` to :py:class:`ClassInstance` relationship
     """
-    __tablename__ = TABLE_PREFIX + 'enrollments'
+    __tablename__ = 'enrollments'
     #: Generated identifier
-    id = sa.Column(sa.Integer, sa.Sequence(TABLE_PREFIX + 'enrollement_id_seq'), primary_key=True)
+    id = sa.Column(sa.Integer, sa.Sequence('enrollement_id_seq'), primary_key=True)
     #: :py:class:`Student` reference
     student_id = sa.Column(sa.Integer, sa.ForeignKey(Student.id))
     #: :py:class:`ClassInstance` reference
@@ -849,7 +636,7 @@ class Enrollment(Base):
     # Relations and constraints
     student = orm.relationship("Student", back_populates="enrollments")
     class_instance = orm.relationship("ClassInstance", back_populates="enrollments")
-    __table_args__ = (sa.UniqueConstraint('student_id', 'class_instance_id', name='un_' + TABLE_PREFIX + 'enrollment'),)
+    __table_args__ = (sa.UniqueConstraint('student_id', 'class_instance_id', name='un_enrollment'),)
 
     def __str__(self):
         return "{} enrolled to {}, attempt:{}, student year:{}, statutes:{}, obs:{}".format(
@@ -884,9 +671,9 @@ class Turn(Base):
     | The generic concept of a :py:class:`Class` turn, which students enroll to.
     | It has corresponding :py:class:`TurnInstance` entities to represent the physical/temporal existence of this turn.
     """
-    __tablename__ = TABLE_PREFIX + 'turns'
+    __tablename__ = 'turns'
     #: Identifier
-    id = sa.Column(sa.Integer, sa.Sequence(TABLE_PREFIX + 'turn_id_seq'), primary_key=True)
+    id = sa.Column(sa.Integer, sa.Sequence('turn_id_seq'), primary_key=True)
     #: Parent :py:class:`ClassInstance` for this turn
     class_instance_id = sa.Column(sa.Integer, sa.ForeignKey(ClassInstance.id))
     #: number out of n turns that the parent :py:class:`ClassInstance` has
@@ -917,7 +704,7 @@ class Turn(Base):
         cascade="save-update, merge, delete")
     type = orm.relationship("TurnType", back_populates="instances")
     __table_args__ = (
-        sa.UniqueConstraint('class_instance_id', 'number', 'type_id', name='un_' + TABLE_PREFIX + 'turn'),)
+        sa.UniqueConstraint('class_instance_id', 'number', 'type_id', name='un_turn'),)
 
     def __str__(self):
         return "{} {}.{}".format(self.class_instance, self.type, self.number)
@@ -942,9 +729,9 @@ class TurnInstance(Base):
     | An instance of a :py:class:`Turn`.
     | This represents the physical and temporal presences a turn.
     """
-    __tablename__ = TABLE_PREFIX + 'turn_instances'
+    __tablename__ = 'turn_instances'
     #: Identifier
-    id = sa.Column(sa.Integer, sa.Sequence(TABLE_PREFIX + 'turn_instance_id_seq'), primary_key=True)
+    id = sa.Column(sa.Integer, sa.Sequence('turn_instance_id_seq'), primary_key=True)
     #: Parent :py:class:`Turn`
     turn_id = sa.Column(sa.Integer, sa.ForeignKey(Turn.id))
     #: Starting time (in minutes counting from the midnight)
@@ -959,7 +746,7 @@ class TurnInstance(Base):
     # Relations and constraints
     turn = orm.relationship(Turn, back_populates='instances')
     room = orm.relationship(Room, back_populates="turn_instances")
-    __table_args__ = (sa.UniqueConstraint('turn_id', 'start', 'weekday', name='un_' + TABLE_PREFIX + 'turn_instance'),)
+    __table_args__ = (sa.UniqueConstraint('turn_id', 'start', 'weekday', name='un_turn_instance'),)
 
     @staticmethod
     def minutes_to_str(minutes: int):

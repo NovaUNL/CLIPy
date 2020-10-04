@@ -14,6 +14,7 @@ from sqlalchemy.exc import IntegrityError
 
 from . import parser
 from . import database as db
+from .config import INSTITUTION_FIRST_YEAR, INSTITUTION_LAST_YEAR, INSTITUTION_ID
 from .database import exceptions
 from .session import Session as WebSession
 from . import urls
@@ -65,31 +66,28 @@ class PageCrawler(Thread):
         self.db_registry.remove()
 
 
-def crawl_rooms(session: WebSession, database: db.Controller, institution: db.models.Institution):
-    institution = database.session.merge(institution)
+def crawl_rooms(session: WebSession, database: db.Controller, building: db.models.Building):
+    building = database.session.merge(building)
     rooms = {}  # id -> Candidate
-    buildings = database.get_building_set()
 
-    # for each year this institution operated (knowing that the first building was recorded in 2001)
-    for year in range(max(2001, institution.first_year), institution.last_year + 1):
-        for building in buildings:
-            page = session.get_simplified_soup(urls.BUILDING_SCHEDULE.format(
-                institution=institution.id,
-                building=building.id,
-                year=year,
-                period=1,
-                period_type='s',
-                weekday=2))  # 2 is monday
-            candidates = parser.get_places(page)
-            if len(candidates) > 0:
-                log.debug(f'Found the following rooms in {building}, {year}:\n{candidates}')
-            for identifier, room_type, name in candidates:
-                candidate = db.candidates.Room(identifier=identifier, room_type=room_type, name=name, building=building)
-                if identifier in rooms:
-                    if rooms[identifier] != candidate:
-                        raise Exception("Found two different rooms going by the same ID")
-                else:
-                    rooms[identifier] = candidate
+    for year in range(building.first_year, building.last_year + 1):
+        page = session.get_simplified_soup(urls.BUILDING_SCHEDULE.format(
+            institution=INSTITUTION_ID,
+            building=building.id,
+            year=year,
+            period=1,
+            period_type='s',
+            weekday=2))  # 2 is monday
+        candidates = parser.get_places(page)
+        if len(candidates) > 0:
+            log.debug(f'Found the following rooms in {building}, {year}:\n{candidates}')
+        for identifier, room_type, name in candidates:
+            candidate = db.candidates.Room(identifier=identifier, room_type=room_type, name=name, building=building)
+            if identifier in rooms:
+                if rooms[identifier] != candidate:
+                    raise Exception("Found two different rooms going by the same ID")
+            else:
+                rooms[identifier] = candidate
     for room in rooms.values():
         database.add_room(room)
 
@@ -185,7 +183,7 @@ def crawl_classes(session: WebSession, database: db.Controller, department: db.m
     # for each year this department operated
     for year in range(department.first_year, department.last_year + 1):
         page = session.get_simplified_soup(urls.DEPARTMENT_PERIODS.format(
-            institution=department.institution.id,
+            institution=INSTITUTION_ID,
             department=department.id,
             year=year))
 
@@ -210,13 +208,12 @@ def crawl_classes(session: WebSession, database: db.Controller, department: db.m
             if period is None:
                 raise Exception("Unknown period")
 
-            period = database.get_period(period.part, period.parts)
             page = session.get_simplified_soup(urls.DEPARTMENT_CLASSES.format(
-                institution=department.institution.id,
+                institution=INSTITUTION_ID,
                 department=department.id,
                 year=year,
-                period=period.part,
-                period_type=period.letter))
+                period=period['part'],
+                period_type=period['letter']))
 
             class_links = page.find_all(href=urls.CLASS_EXP)
 
@@ -227,11 +224,11 @@ def crawl_classes(session: WebSession, database: db.Controller, department: db.m
                 if class_id not in classes:
                     # Fetch abbreviation and number of ECTSs
                     page = session.get_simplified_soup(urls.CLASS.format(
-                        institution=department.institution.id,
+                        institution=INSTITUTION_ID,
                         year=year,
                         department=department.id,
-                        period=period.part,
-                        period_type=period.letter,
+                        period=period['part'],
+                        period_type=period['letter'],
                         class_id=class_id))
                     elements = page.find_all('td', attrs={'class': 'subtitulo'})
                     abbr = None
@@ -260,62 +257,58 @@ def crawl_classes(session: WebSession, database: db.Controller, department: db.m
 
                 if classes[class_id] is None:
                     raise Exception("Null class")
-                class_instances.append(db.candidates.ClassInstance(classes[class_id], period, year, department))
+                class_instances.append(db.candidates.ClassInstance(classes[class_id], period['id'], year, department))
     database.add_class_instances(class_instances)
 
 
-def crawl_admissions(session: WebSession, database: db.Controller, institution: db.models.Institution):
-    institution = database.session.merge(institution)
+def crawl_admissions(session: WebSession, database: db.Controller, year):
     admissions = []
-    years = range(max(institution.first_year, 2006), institution.last_year + 1)  # TODO put that magic number in a conf
-    for year in years:
-        log.debug(f"Crawling {institution} admissions for the year {year}")
-        course_ids = set()  # Courses found in this year's page
-        page = session.get_simplified_soup(urls.ADMISSIONS.format(institution=institution.id, year=year))
-        course_links = page.find_all(href=urls.COURSE_EXP)
-        for course_link in course_links:  # For every found course
-            course_id = int(urls.COURSE_EXP.findall(course_link.attrs['href'])[0])
-            course_ids.add(course_id)
+    if year < 2006:
+        return
+    log.debug(f"Crawling admissions for the year {year}")
+    course_ids = set()  # Courses found in this year's page
+    page = session.get_simplified_soup(urls.ADMISSIONS.format(institution=INSTITUTION_ID, year=year))
+    course_links = page.find_all(href=urls.COURSE_EXP)
+    for course_link in course_links:  # For every found course
+        course_id = int(urls.COURSE_EXP.findall(course_link.attrs['href'])[0])
+        course_ids.add(course_id)
 
-        for course_id in course_ids:
-            course = database.get_course(identifier=course_id, institution=institution, year=year)
-            if course is None:
-                log.error("Unable to fetch the course with the internal identifier {course_id}. Skipping.")
-                continue
-            for phase in range(1, 4):  # For every of the three phases
-                page = session.get_simplified_soup(urls.ADMITTED.format(
-                    institution=institution.id,
-                    year=year,
-                    course=course_id,
-                    phase=phase))
-                candidates = parser.get_admissions(page)
-                for name, option, student_iid, state in candidates:
-                    student = None
-                    if student_iid:  # if the student has an id add him/her to the database
-                        student = database.add_student(
-                            db.candidates.Student(
-                                identifier=student_iid,
-                                name=name,
-                                course=course,
-                                institution=institution,
-                                first_year=year,
-                                last_year=year))
+    for course_id in course_ids:
+        course = database.get_course(identifier=course_id, year=year)
+        if course is None:
+            log.error(f"Unable to fetch the course with the internal identifier {course_id}. Skipping.")
+            continue
+        for phase in range(1, 4):  # For every of the three phases
+            page = session.get_simplified_soup(urls.ADMITTED.format(
+                institution=INSTITUTION_ID,
+                year=year,
+                course=course_id,
+                phase=phase))
+            candidates = parser.get_admissions(page)
+            for name, option, student_id, state in candidates:
+                student = None
+                if student_id:  # if the student has an id add him/her to the database
+                    student = database.add_student(
+                        db.candidates.Student(
+                            identifier=student_id,
+                            name=name,
+                            course=course,
+                            first_year=year,
+                            last_year=year))
 
-                    name = name if student is None else None
-                    admission = db.candidates.Admission(student, name, course, phase, year, option, state)
-                    admissions.append(admission)
+                name = name if student is None else None
+                admission = db.candidates.Admission(student, name, course, phase, year, option, state)
+                admissions.append(admission)
     database.add_admissions(admissions)
 
 
 def crawl_class_enrollments(session: WebSession, database: db.Controller, class_instance: db.models.ClassInstance):
     log.debug("Crawling enrollments in class instance ID %s" % class_instance.id)
     class_instance: db.models.ClassInstance = database.session.merge(class_instance)
-    institution = class_instance.department.institution
     year = class_instance.year
 
     page = session.get_simplified_soup(urls.CLASS_ENROLLED.format(
-        institution=institution.id,
-        department=class_instance.parent.department.id,
+        institution=INSTITUTION_ID,
         year=class_instance.year,
         period=class_instance.period.part,
         period_type=class_instance.period.letter,
@@ -329,7 +322,7 @@ def crawl_class_enrollments(session: WebSession, database: db.Controller, class_
     enrollments = []
     for student_id, name, abbreviation, statutes, course_abbr, attempt, student_year in parser.get_enrollments(page):
         try:
-            course = database.get_course(abbreviation=course_abbr, year=class_instance.year, institution=institution)
+            course = database.get_course(abbreviation=course_abbr, year=class_instance.year)
         except exceptions.MultipleMatches:
             # TODO propagate unresolvable course abbreviations
             # from students of the same course abbreviation with a known course.
@@ -344,7 +337,6 @@ def crawl_class_enrollments(session: WebSession, database: db.Controller, class_
             name=name,
             abbreviation=abbreviation,
             course=course,
-            institution=institution,
             first_year=year,
             last_year=year)
         try:
@@ -359,95 +351,40 @@ def crawl_class_enrollments(session: WebSession, database: db.Controller, class_
 
         enrollment = db.candidates.Enrollment(student, class_instance, attempt, student_year, statutes, observation)
         enrollments.append(enrollment)
-
     database.add_enrollments(enrollments)
 
 
 def crawl_class_info(session: WebSession, database: db.Controller, class_instance: db.models.ClassInstance):
     log.debug("Crawling info from class instance ID %s" % class_instance.id)
     class_instance = database.session.merge(class_instance)
-    institution = class_instance.parent.department.institution
     class_info = {}
 
-    page = session.get_broken_simplified_soup(urls.CLASS_DESCRIPTION.format(
-        institution=institution.id,
-        department=class_instance.parent.department.id,
-        year=class_instance.year,
-        period=class_instance.period.part,
-        period_type=class_instance.period.letter,
-        class_id=class_instance.parent.id))
+    args = {
+        'institution': INSTITUTION_ID,
+        'year': class_instance.year,
+        'period': class_instance.period.part,
+        'period_type': class_instance.period.letter,
+        'class_id': class_instance.parent.id
+    }
+    page = session.get_broken_simplified_soup(urls.CLASS_DESCRIPTION.format(**args))
     class_info['description'] = parser.get_bilingual_info(page)
-    page = session.get_broken_simplified_soup(urls.CLASS_OBJECTIVES.format(
-        institution=institution.id,
-        department=class_instance.parent.department.id,
-        year=class_instance.year,
-        period=class_instance.period.part,
-        period_type=class_instance.period.letter,
-        class_id=class_instance.parent.id))
+    page = session.get_broken_simplified_soup(urls.CLASS_OBJECTIVES.format(**args))
     class_info['objectives'] = parser.get_bilingual_info(page)
-    page = session.get_broken_simplified_soup(urls.CLASS_REQUIREMENTS.format(
-        institution=institution.id,
-        department=class_instance.parent.department.id,
-        year=class_instance.year,
-        period=class_instance.period.part,
-        period_type=class_instance.period.letter,
-        class_id=class_instance.parent.id))
+    page = session.get_broken_simplified_soup(urls.CLASS_REQUIREMENTS.format(**args))
     class_info['requirements'] = parser.get_bilingual_info(page)
-    page = session.get_broken_simplified_soup(urls.CLASS_COMPETENCES.format(
-        institution=institution.id,
-        department=class_instance.parent.department.id,
-        year=class_instance.year,
-        period=class_instance.period.part,
-        period_type=class_instance.period.letter,
-        class_id=class_instance.parent.id))
+    page = session.get_broken_simplified_soup(urls.CLASS_COMPETENCES.format(**args))
     class_info['competences'] = parser.get_bilingual_info(page)
-    page = session.get_broken_simplified_soup(urls.CLASS_PROGRAM.format(
-        institution=institution.id,
-        department=class_instance.parent.department.id,
-        year=class_instance.year,
-        period=class_instance.period.part,
-        period_type=class_instance.period.letter,
-        class_id=class_instance.parent.id))
+    page = session.get_broken_simplified_soup(urls.CLASS_PROGRAM.format(**args))
     class_info['program'] = parser.get_bilingual_info(page)
-    page = session.get_broken_simplified_soup(urls.CLASS_BIBLIOGRAPHY.format(
-        institution=institution.id,
-        department=class_instance.parent.department.id,
-        year=class_instance.year,
-        period=class_instance.period.part,
-        period_type=class_instance.period.letter,
-        class_id=class_instance.parent.id))
+    page = session.get_broken_simplified_soup(urls.CLASS_BIBLIOGRAPHY.format(**args))
     class_info['bibliography'] = parser.get_bilingual_info(page)
-    page = session.get_broken_simplified_soup(urls.CLASS_ASSISTANCE.format(
-        institution=institution.id,
-        department=class_instance.parent.department.id,
-        year=class_instance.year,
-        period=class_instance.period.part,
-        period_type=class_instance.period.letter,
-        class_id=class_instance.parent.id))
+    page = session.get_broken_simplified_soup(urls.CLASS_ASSISTANCE.format(**args))
     class_info['assistance'] = parser.get_bilingual_info(page)
-    page = session.get_broken_simplified_soup(urls.CLASS_TEACHING_METHODS.format(
-        institution=institution.id,
-        department=class_instance.parent.department.id,
-        year=class_instance.year,
-        period=class_instance.period.part,
-        period_type=class_instance.period.letter,
-        class_id=class_instance.parent.id))
+    page = session.get_broken_simplified_soup(urls.CLASS_TEACHING_METHODS.format(**args))
     class_info['teaching_methods'] = parser.get_bilingual_info(page)
-    page = session.get_broken_simplified_soup(urls.CLASS_EVALUATION_METHODS.format(
-        institution=institution.id,
-        department=class_instance.parent.department.id,
-        year=class_instance.year,
-        period=class_instance.period.part,
-        period_type=class_instance.period.letter,
-        class_id=class_instance.parent.id))
+    page = session.get_broken_simplified_soup(urls.CLASS_EVALUATION_METHODS.format(**args))
     class_info['evaluation_methods'] = parser.get_bilingual_info(page)
-    page = session.get_broken_simplified_soup(urls.CLASS_EXTRA.format(
-        institution=institution.id,
-        department=class_instance.parent.department.id,
-        year=class_instance.year,
-        period=class_instance.period.part,
-        period_type=class_instance.period.letter,
-        class_id=class_instance.parent.id))
+    page = session.get_broken_simplified_soup(urls.CLASS_EXTRA.format(**args))
     class_info['extra_info'] = parser.get_bilingual_info(page)
     database.update_class_instance_info(class_instance, class_info)
 
@@ -461,18 +398,19 @@ def crawl_class_turns(session: WebSession, database: db.Controller, class_instan
     """
     log.debug("Crawling turns class instance ID %s" % class_instance.id)
     class_instance: db.models.ClassInstance = database.session.merge(class_instance)
-    department = class_instance.parent.department
-    institution = department.institution
     year = class_instance.year
 
     # --- Prepare the list of turns to crawl ---
     page = session.get_simplified_soup(urls.CLASS_TURNS.format(
-        institution=institution.id,
+        institution=INSTITUTION_ID,
         year=class_instance.year,
-        department=class_instance.parent.department.id,
         class_id=class_instance.parent.id,
         period=class_instance.period.part,
         period_type=class_instance.period.letter))
+    try:
+        page.find('td', class_="barra_de_escolhas").find('table').decompose()  # Delete block with other instances
+    except AttributeError:
+        print()
 
     # When there is only one turn, the received page is the turn itself. (CLASS_TURN instead of CLASS_TURNS)
     single_turn = False
@@ -552,13 +490,12 @@ def crawl_class_turns(session: WebSession, database: db.Controller, class_instan
         # Assign students to this turn
         students = []
         for name, student_id, abbreviation, course_abbreviation in parser.get_turn_students(page):
-            course = database.get_course(abbreviation=course_abbreviation, year=year, institution=institution)
+            course = database.get_course(abbreviation=course_abbreviation, year=year, institution=INSTITUTION_ID)
             student = database.add_student(
                 db.candidates.Student(
                     identifier=student_id,
                     name=name,
                     course=course,
-                    institution=institution,
                     abbreviation=abbreviation,
                     first_year=year,
                     last_year=year))
@@ -575,14 +512,12 @@ def crawl_files(session: WebSession, database: db.Controller, class_instance: db
     """
     log.debug("Crawling class instance ID %s files" % class_instance.id)
     class_instance: db.models.ClassInstance = database.session.merge(class_instance)
-    department = class_instance.parent.department
-    institution = department.institution
+    department = class_instance.department
     known_file_ids = {file.id for file in class_instance.files}
 
     page = session.get_simplified_soup(urls.CLASS_FILE_TYPES.format(
-        institution=institution.id,
+        institution=INSTITUTION_ID,
         year=class_instance.year,
-        department=class_instance.parent.department.id,
         class_id=class_instance.parent.id,
         period=class_instance.period.part,
         period_type=class_instance.period.letter))
@@ -591,9 +526,8 @@ def crawl_files(session: WebSession, database: db.Controller, class_instance: db
 
     for file_type, _ in file_types:
         page = session.get_simplified_soup(urls.CLASS_FILES.format(
-            institution=institution.id,
+            institution=INSTITUTION_ID,
             year=class_instance.year,
-            department=class_instance.parent.department.id,
             class_id=class_instance.parent.id,
             period=class_instance.period.part,
             period_type=class_instance.period.letter,
@@ -614,8 +548,6 @@ def crawl_files(session: WebSession, database: db.Controller, class_instance: db
 
 def download_files(session: WebSession, database: db.Controller, class_instance: db.models.ClassInstance):
     class_instance: db.models.ClassInstance = database.session.merge(class_instance)
-    department = class_instance.department
-    institution = department.institution
     class_files = class_instance.file_relations
     poked_file_types = set()
 
@@ -633,7 +565,7 @@ def download_files(session: WebSession, database: db.Controller, class_instance:
 
                 # poke the page, this is required to download, for some reason...
                 session.get_simplified_soup(urls.CLASS_FILES.format(
-                    institution=institution.id,
+                    institution=INSTITUTION_ID,
                     year=class_instance.year,
                     department=class_instance.department.id,
                     class_id=class_instance.parent.id,
@@ -671,17 +603,14 @@ def download_files(session: WebSession, database: db.Controller, class_instance:
 
 def crawl_grades(session: WebSession, database: db.Controller, class_instance: db.models.ClassInstance):
     class_instance: db.models.ClassInstance = database.session.merge(class_instance)
-    department = class_instance.parent.department
-    institution = department.institution
 
     if len(class_instance.enrollments) == 0:
         return  # Class has no one enrolled, nothing to see here...
 
     # Grades
     page = session.get_simplified_soup(urls.CLASS_RESULTS.format(
-        institution=institution.id,
+        institution=INSTITUTION_ID,
         year=class_instance.year,
-        department=class_instance.parent.department.id,
         class_id=class_instance.parent.id,
         period=class_instance.period.part,
         period_type=class_instance.period.letter))
@@ -694,7 +623,7 @@ def crawl_grades(session: WebSession, database: db.Controller, class_instance: d
 
         for student, evaluations, approved in results:
             student_number, student_name, gender = student
-            db_student = database.get_student(identifier=student_number, name=student_name)
+            db_student = database.get_student(identifier=student_number)
 
             if db_student is None:
                 raise Exception("Student dodged the enrollment search.\n" + student)
@@ -715,9 +644,8 @@ def crawl_grades(session: WebSession, database: db.Controller, class_instance: d
 
     # Attendance
     page = session.get_simplified_soup(urls.CLASS_ATTENDANCE.format(
-        institution=institution.id,
+        institution=INSTITUTION_ID,
         year=class_instance.year,
-        department=class_instance.parent.department.id,
         class_id=class_instance.parent.id,
         period=class_instance.period.part,
         period_type=class_instance.period.letter))
@@ -726,7 +654,7 @@ def crawl_grades(session: WebSession, database: db.Controller, class_instance: d
     for link in course_links:
         page = session.get_simplified_soup(urls.ROOT + link.attrs['href'])
         for student, attendance, date in parser.get_attendance(page):
-            db_student = database.get_student(student[0], student[1])
+            db_student = database.get_student(student[0])
             if db_student is None:
                 raise Exception("Student dodged the enrollment search.\n" + student)
             database.update_enrollment_attendance(
@@ -737,9 +665,8 @@ def crawl_grades(session: WebSession, database: db.Controller, class_instance: d
 
     # Improvements
     page = session.get_simplified_soup(urls.CLASS_IMPROVEMENTS.format(
-        institution=institution.id,
+        institution=INSTITUTION_ID,
         year=class_instance.year,
-        department=class_instance.parent.department.id,
         class_id=class_instance.parent.id,
         period=class_instance.period.part,
         period_type=class_instance.period.letter))
@@ -748,7 +675,7 @@ def crawl_grades(session: WebSession, database: db.Controller, class_instance: d
     for link in course_links:
         page = session.get_simplified_soup(urls.ROOT + link.attrs['href'])
         for student, improved, grade, date in parser.get_improvements(page):
-            db_student = database.get_student(student[0], student[1])
+            db_student = database.get_student(student[0])
             if db_student is None:
                 log.error("Student dodged the enrollment search.\n" + student)
 
@@ -776,18 +703,3 @@ def crawl_library_group_room_availability(session: WebSession, date: datetime.da
             'submit:reservas:es': 'Ver+disponibilidade',
             'data': date.isoformat()})
     return parser.get_library_group_room_availability(page)
-
-
-def _get_period_from_url(database, url):
-    match = urls.TURN_LINK_EXP.search(url)
-    period_type = match.group("type")
-    part = int(match.group("stage"))
-    if period_type == 'a':
-        parts = 1
-    elif period_type == 's':
-        parts = 2
-    elif period_type == 't':
-        parts = 4
-    else:
-        parts = None
-    return database.get_period(part, parts)

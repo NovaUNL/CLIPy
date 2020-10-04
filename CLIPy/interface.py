@@ -2,6 +2,7 @@ import os
 from datetime import datetime
 
 from . import database as db, processors, crawler
+from .config import INSTITUTION_FIRST_YEAR, INSTITUTION_LAST_YEAR
 from .session import Session
 from .utils import populate
 
@@ -104,14 +105,15 @@ class Clip:
         obj = self.cache.controller.session.query(m.ClassEvaluations).get(id)
         return None if obj is None else obj.serialize()
 
-    def update_admissions(self, inst_id):
-        processors.institution_task(self.session, self.cache.registry, crawler.crawl_admissions, restriction=inst_id)
+    def update_admissions(self):
+        processors.year_task(self.session, self.cache.registry, crawler.crawl_admissions,
+                             from_year=INSTITUTION_FIRST_YEAR, to_year=INSTITUTION_LAST_YEAR)
 
-    def update_teachers(self, inst_id):
-        processors.department_task(self.session, self.cache.registry, crawler.crawl_teachers, inst_id=inst_id)
+    def update_teachers(self):
+        processors.department_task(self.session, self.cache.registry, crawler.crawl_teachers)
 
-    def update_classes(self, inst_id):
-        processors.department_task(self.session, self.cache.registry, crawler.crawl_classes, inst_id=inst_id)
+    def update_classes(self):
+        processors.department_task(self.session, self.cache.registry, crawler.crawl_classes)
 
     def update_class_info(self, year: int, period_part: int, period_parts: int):
         period = self._get_period(period_part, period_parts)
@@ -132,9 +134,11 @@ class Clip:
         processors.class_task(self.session, self.cache.registry, crawler.download_files, year=year, period=period)
 
     def populate(self, year: int = None, period_part=2, period_parts=None):
-        period = self.cache.controller.get_period(period_part, period_parts)
-        period_id = period.id if period else None
-        populate.bootstrap_database(self.session, self.cache.registry, year, period_id)
+        if period_part is not None and period_parts is not None:
+            period = self.cache.controller.get_period(period_part, period_parts)
+        else:
+            period = None
+        populate.bootstrap_database(self.session, self.cache.registry, year, period)
 
     def _get_period(self, period_part, period_parts):
         if period_part is None or period_parts is None:

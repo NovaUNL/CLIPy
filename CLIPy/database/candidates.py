@@ -28,21 +28,10 @@ class TemporalEntity:
             self.first_year, self.last_year))
 
 
-class Institution(TemporalEntity):
-    def __init__(self, identifier: int, name: str, abbreviation: str, first_year=None, last_year=None):
-        super().__init__(identifier, first_year=first_year, last_year=last_year)
-        self.abbreviation = abbreviation
-        self.name = name if name is not None else abbreviation
-
-    def __str__(self):
-        return self.name
-
-
 class Department(TemporalEntity):
-    def __init__(self, identifier: int, name: str, institution: models.Institution, first_year=None, last_year=None):
+    def __init__(self, identifier: int, name: str, first_year=None, last_year=None):
         super().__init__(identifier, first_year=first_year, last_year=last_year)
         self.name = name
-        self.institution = institution
 
     def __str__(self):
         return self.name
@@ -70,7 +59,7 @@ class Class:
 
 
 class ClassInstance:
-    def __init__(self, parent: Class, period: models.Period, year: int, department: models.Department):
+    def __init__(self, parent: Class, period: int, year: int, department: models.Department):
         self.parent = parent
         self.period = period
         self.year = year
@@ -81,25 +70,22 @@ class ClassInstance:
 
 
 class Course(TemporalEntity):
-    def __init__(self, identifier: int, name: str, institution: models.Institution,
-                 degree=None, abbreviation=None, first_year=None, last_year=None):
+    def __init__(self, identifier: int, name: str, degree=None, abbreviation=None, first_year=None, last_year=None):
         super().__init__(identifier, first_year, last_year)
         self.name = name
         self.abbreviation = abbreviation
         self.degree = degree
-        self.institution = institution
 
     def __str__(self):
         return "{} ({})".format(self.name, self.degree.name)
 
 
 class Student(TemporalEntity):
-    def __init__(self, identifier, name: str, course: models.Course, institution: models.Institution,
+    def __init__(self, identifier, name: str, course: models.Course,
                  abbreviation=None, first_year: int = None, last_year: int = None):
         super().__init__(identifier, first_year, last_year)
         self.name = ' '.join(name.split())
         self.course = course
-        self.institution = institution
         self.abbreviation = abbreviation
 
     def __str__(self):
@@ -158,8 +144,10 @@ class Enrollment:
             self.student, self.class_instance, self.attempt, self.student_year, self.statutes, self.observation)
 
 
-class Building:
-    def __init__(self, identifier: int, name: str):
+class Building(TemporalEntity):
+    def __init__(self, identifier: int, name: str,
+                 first_year: int = None, last_year: int = None):
+        super().__init__(identifier, first_year, last_year)
         if name is None:
             raise ValueError("A building must have a name")
         self.id = identifier

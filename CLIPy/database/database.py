@@ -8,6 +8,7 @@ from typing import List, Optional
 
 import sqlalchemy as sa
 import sqlalchemy.orm as orm
+from bson import json_util
 from sqlalchemy.exc import IntegrityError
 from unidecode import unidecode
 from difflib import SequenceMatcher
@@ -73,23 +74,10 @@ class Controller:
 
     def __load_cached_collections__(self):
         log.debug("Building cached collections")
-        self.__load_institutions__()
         self.__load_degrees__()
         self.__load_periods__()
-        self.__load_departments__()
-        self.__load_courses__()
         self.__load_turn_types__()
-        self.__load_teachers__()
-        self.__load_buildings__()
-        self.__load_rooms__()
         log.debug("Finished building cache")
-
-    def __load_institutions__(self):
-        log.debug("Building institution cache")
-        institutions = {}
-        for institution in self.session.query(models.Institution).all():
-            institutions[institution.id] = institution
-        self.__institutions__ = institutions
 
     def __load_degrees__(self):
         log.debug("Building degree cache")
@@ -110,57 +98,12 @@ class Controller:
             periods[period.parts][period.part] = period
         self.__periods__ = periods
 
-    def __load_departments__(self):
-        log.debug("Building department cache")
-        departments = {}
-        for department in self.session.query(models.Department).all():
-            departments[department.id] = department
-        self.__departments__ = departments
-
-    def __load_courses__(self):
-        log.debug("Building course cache")
-        courses = {}
-        course_abbreviations = {}
-        for course in self.session.query(models.Course).all():
-            courses[course.iid] = course
-
-            if course.abbreviation not in course_abbreviations:
-                course_abbreviations[course.abbreviation] = []
-            course_abbreviations[course.abbreviation].append(course)
-        self.__courses__ = courses
-        self.__course_abbrs__ = course_abbreviations
-
     def __load_turn_types__(self):
         log.debug("Building turn types cache")
         turn_types = {}
         for turn_type in self.session.query(models.TurnType).all():
             turn_types[turn_type.abbreviation] = turn_type
         self.__turn_types__ = turn_types
-
-    def __load_teachers__(self):
-        log.debug("Building teacher cache")
-        teachers = {}
-        for teacher in self.session.query(models.Teacher).all():
-            teachers[teacher.name] = teacher
-        self.__teachers__ = teachers
-
-    def __load_buildings__(self):
-        log.debug("Building building cache")
-        buildings = {}
-        for building in self.session.query(models.Building).all():
-            buildings[building.name] = building
-        self.__buildings__ = buildings
-
-    def __load_rooms__(self):
-        log.debug("Building room cache")
-        rooms = {}
-        for room, building in self.session.query(models.Room, models.Building).all():
-            if building.name not in rooms:
-                rooms[building.name] = {}
-            if room.room_type not in rooms[building.name]:
-                rooms[building.name][room.room_type] = {}
-            rooms[building.name][room.room_type][room.name] = building
-        self.__rooms__ = rooms
 
     def __insert_default_periods__(self):
         self.session.add_all(
@@ -197,21 +140,8 @@ class Controller:
              models.TurnType(id=9, name="Online Practical-Theoretical", abbreviation="op")])
         self.session.commit()
 
-    def get_institution(self, identifier: int) -> Optional[models.Institution]:
-        if self.__caching__:
-            if identifier not in self.__institutions__:
-                return None
-            return self.__institutions__[identifier]
-        else:
-            return self.session.query(models.Institution).filter_by(id=identifier).first()
-
     def get_department(self, identifier: int) -> Optional[models.Department]:
-        if self.__caching__:
-            if identifier not in self.__departments__:
-                return None
-            return self.__departments__[identifier]
-        else:
-            return self.session.query(models.Department).filter_by(id=identifier).first()
+        return self.session.query(models.Department).filter_by(id=identifier).first()
 
     def get_degree(self, abbreviation: str) -> Optional[models.Degree]:
         if self.__caching__:
@@ -221,37 +151,34 @@ class Controller:
         else:
             return self.session.query(models.Degree).filter_by(id=abbreviation).first()
 
-    def get_period(self, part: int, parts: int) -> Optional[models.Period]:
-        if self.__caching__:
-            if parts not in self.__periods__ or part > parts:
-                return None
-            try:
-                return self.__periods__[parts][part]
-            except KeyError:
-                return None
-        else:
-            return self.session.query(models.Period).filter_by(part=part, parts=parts).first()
+    __periods = {
+        1: {
+            1: {'id': 1, 'parts': 1, 'part': 1, 'letter': 'a'},
+        },
+        2: {
+            1: {'id': 2, 'parts': 2, 'part': 1, 'letter': 's'},
+            2: {'id': 3, 'parts': 2, 'part': 2, 'letter': 's'},
 
-    def get_institution_set(self) -> {models.Institution}:
-        if self.__caching__:
-            return set(self.__institutions__.values())
-        else:
-            return set(self.session.query(models.Institution).all())
+        },
+        4: {
+            1: {'id': 4, 'parts': 4, 'part': 1, 'letter': 't'},
+            2: {'id': 5, 'parts': 4, 'part': 2, 'letter': 't'},
+            3: {'id': 6, 'parts': 4, 'part': 3, 'letter': 't'},
+            4: {'id': 7, 'parts': 4, 'part': 4, 'letter': 't'},
+        }
+    }
+
+    def get_period(self, part: int, parts: int) -> dict:
+        return self.__periods[parts][part]
 
     def get_building_set(self) -> {models.Building}:
-        if self.__caching__:
-            return set(self.__buildings__.values())
-        else:
-            return set(self.session.query(models.Building).all())
+        return set(self.session.query(models.Building).all())
 
     def get_room_set(self) -> {models.Building}:
         return set(self.session.query(models.Room).all())
 
     def get_department_set(self) -> {models.Department}:
-        if self.__caching__:
-            return set(self.__departments__.values())
-        else:
-            return set(self.session.query(models.Department).all())
+        return set(self.session.query(models.Department).all())
 
     def get_degree_set(self) -> {models.Degree}:
         if self.__caching__:
@@ -263,58 +190,37 @@ class Controller:
         return set(self.session.query(models.Period).all())
 
     def get_course(self, identifier: int = None, abbreviation: str = None, year: int = None,
-                   institution: models.Institution = None) -> Optional[models.Course]:
-        if self.__caching__:  # Fetch it from the caches
-            if identifier is not None:  # FIXME this does not consider entries with the same internal_id
-                if identifier in self.__courses__:
-                    return self.__courses__[identifier]
-            elif abbreviation is not None:
-                if abbreviation not in self.__course_abbrs__:
-                    return None
-                matches = self.__course_abbrs__[abbreviation]
-                if len(matches) == 0:
-                    return None
-                elif len(matches) == 1:
-                    return matches[0]
-                else:
-                    if year is None:
-                        raise Exception("Multiple matches. Year unspecified")
-
-                    for match in matches:
-                        if match.initial_year <= year <= match.last_year:
-                            return match
-        else:  # Query it from the db (with the provided parameters)
-            if identifier is not None:
-                if institution is not None:
-                    matches = self.session.query(models.Course).filter_by(id=identifier, institution=institution).all()
-                else:
-                    matches = self.session.query(models.Course).filter_by(id=identifier).all()
-            elif abbreviation is not None:
-                if institution is not None:
-                    matches = self.session.query(models.Course) \
-                        .filter_by(abbreviation=abbreviation, institution=institution).all()
-                else:
-                    matches = self.session.query(models.Course).filter_by(abbreviation=abbreviation).all()
+                   institution: int = None) -> Optional[models.Course]:
+        if identifier is not None:
+            if institution is not None:
+                matches = self.session.query(models.Course).filter_by(id=identifier, institution_id=institution).all()
             else:
-                log.warning(f"Unable to determine course with id {identifier}, abbr {abbreviation} on year {year}")
-                return None
+                matches = self.session.query(models.Course).filter_by(id=identifier).all()
+        elif abbreviation is not None:
+            if institution is not None:
+                matches = self.session.query(models.Course).filter_by(abbreviation=abbreviation).all()
+            else:
+                matches = self.session.query(models.Course).filter_by(abbreviation=abbreviation).all()
+        else:
+            log.warning(f"Unable to determine course with id {identifier}, abbr {abbreviation} on year {year}")
+            return None
 
-            if len(matches) == 1:
-                return matches[0]
-            elif len(matches) > 1:
-                if year is None:
-                    raise exceptions.MultipleMatches("Multiple matches. Year unspecified")
+        if len(matches) == 1:
+            return matches[0]
+        elif len(matches) > 1:
+            if year is None:
+                raise exceptions.MultipleMatches("Multiple matches. Year unspecified")
 
-                # Year filter
-                if year is not None:
-                    year_matches = []
-                    for course in matches:
-                        if course.contains(year):
-                            year_matches.append(course)
-                    if len(year_matches) == 1:
-                        return year_matches[0]
-                    elif len(matches) > 1:
-                        raise exceptions.MultipleMatches("Multiple matches. Unable to determine the correct one.")
+            # Year filter
+            if year is not None:
+                year_matches = []
+                for course in matches:
+                    if course.contains(year):
+                        year_matches.append(course)
+                if len(year_matches) == 1:
+                    return year_matches[0]
+                elif len(matches) > 1:
+                    raise exceptions.MultipleMatches("Multiple matches. Unable to determine the correct one.")
 
     def get_courses(self) -> [models.Course]:
         return self.session.query(models.Course).all()
@@ -397,59 +303,6 @@ class Controller:
                     models.ClassInstance.period == period) \
             .first()
 
-    def add_institutions(self, institutions: [candidates.Institution]):
-        """
-        Adds institutions to the database. It updates then in case they already exist but details differ.
-
-        :param institutions: An iterable collection of institution candidates
-        """
-        new_count = 0
-        updated_count = 0
-        try:
-            for candidate in institutions:
-                # Lookup for existing institutions matching the new candidate
-                institution = None
-                if self.__caching__:
-                    if candidate.id in self.__institutions__:
-                        institution = self.__institutions__[candidate.id]
-                else:
-                    institution = self.session.query(models.Institution).filter_by(id=candidate.id).first()
-
-                if institution is None:  # Create a new institution
-                    self.session.add(models.Institution(
-                        id=candidate.id,
-                        name=candidate.name,
-                        abbreviation=candidate.abbreviation,
-                        first_year=candidate.first_year,
-                        last_year=candidate.last_year))
-                    new_count += 1
-                else:  # Update the existing one accordingly
-                    updated = False
-                    if candidate.name is not None and institution.name != candidate.name:
-                        institution.name = candidate.name
-                        updated = True
-
-                    if candidate.abbreviation is not None:
-                        institution.abbreviation = candidate.abbreviation
-                        updated = True
-
-                    first, last = institution.first_year, institution.last_year
-                    institution.add_year(candidate.first_year)
-                    institution.add_year(candidate.last_year)
-                    if (institution.first_year, institution.last_year) != (first, last):
-                        updated = True
-
-                    if updated:
-                        updated_count += 1
-
-            self.session.commit()
-            log.info(f"{new_count} institutions added and {updated_count} updated!")
-            if self.__caching__:
-                self.__load_institutions__()
-        except Exception:
-            log.error("Failed to add the institutions\n" + traceback.format_exc())
-            self.session.rollback()
-
     def add_departments(self, departments: [candidates.Department]):
         """
         Adds departments to the database. It updates then in case they already exist but details differ.
@@ -461,20 +314,14 @@ class Controller:
         try:
             for candidate in departments:
                 # Lookup for existing departments matching the new candidate
-                department = None
-                if self.__caching__:
-                    if candidate.id in self.__departments__:
-                        department = self.__departments__[candidate.id]
-                else:
-                    department = self.session.query(models.Department).filter_by(id=candidate.id).first()
+                department = self.session.query(models.Department).filter_by(id=candidate.id).first()
 
                 if department is None:  # Create a new department
                     self.session.add(models.Department(
                         id=candidate.id,
                         name=candidate.name,
                         first_year=candidate.first_year,
-                        last_year=candidate.last_year,
-                        institution=candidate.institution))
+                        last_year=candidate.last_year))
                     new_count += 1
                 else:  # Update the existing one accordingly
                     updated = False
@@ -492,8 +339,6 @@ class Controller:
 
             log.info(f"{new_count} departments added and {updated_count} updated!")
             self.session.commit()
-            if self.__caching__:
-                self.__load_departments__()
         except Exception:
             log.error("Failed to add the departments\n" + traceback.format_exc())
             self.session.rollback()
@@ -538,32 +383,13 @@ class Controller:
         self.session.commit()
         return db_class
 
-    def add_department_classes(self, department, class_time_range):
-        for class_id, year_range in class_time_range.items():
-            first_year, last_year = year_range
-            current = self.session.query(models.DepartmentClass) \
-                .filter_by(department_id=department.id, class_id=class_id) \
-                .first()
-            if current is None:
-                self.session.add(
-                    models.DepartmentClass(
-                        department_id=department.id,
-                        class_id=class_id,
-                        first_year=first_year,
-                        last_year=last_year))
-                self.session.commit()
-            else:
-                current.first_year = first_year
-                current.last_year = last_year
-                self.session.commit()
-
     def add_class_instances(self, instances: [candidates.ClassInstance]):
         ignored = 0
         for instance in instances:
             db_class_instance = self.session.query(models.ClassInstance).filter_by(
                 parent=instance.parent,
                 year=instance.year,
-                period=instance.period
+                period_id=instance.period
             ).first()
             if db_class_instance is not None:
                 ignored += 1
@@ -571,78 +397,35 @@ class Controller:
                 self.session.add(models.ClassInstance(
                     parent=instance.parent,
                     year=instance.year,
-                    period=instance.period,
+                    period_id=instance.period,
                     department=instance.department
                 ))
                 self.session.commit()
         if len(instances) - ignored > 0:
             log.info(f"{len(instances) - ignored} class instances added successfully! ({ignored} ignored)")
 
-    def update_class_instance_info(self, instance: models.ClassInstance, info):
-        if 'description' in info:
-            instance.description_pt = info['description'][0]
-            instance.description_en = info['description'][1]
-            instance.description_edited_datetime = info['description'][2]
-            instance.description_editor = info['description'][3]
-        if 'objectives' in info:
-            instance.objectives_pt = info['objectives'][0]
-            instance.objectives_en = info['objectives'][1]
-            instance.objectives_edited_datetime = info['objectives'][2]
-            instance.objectives_editor = info['objectives'][3]
-        if 'requirements' in info:
-            instance.requirements_pt = info['requirements'][0]
-            instance.requirements_en = info['requirements'][1]
-            instance.requirements_edited_datetime = info['requirements'][2]
-            instance.requirements_editor = info['requirements'][3]
-        if 'competences' in info:
-            instance.competences_pt = info['competences'][0]
-            instance.competences_en = info['competences'][1]
-            instance.competences_edited_datetime = info['competences'][2]
-            instance.competences_editor = info['competences'][3]
-        if 'program' in info:
-            instance.program_pt = info['program'][0]
-            instance.program_en = info['program'][1]
-            instance.program_edited_datetime = info['program'][2]
-            instance.program_editor = info['program'][3]
-        if 'bibliography' in info:
-            instance.bibliography_pt = info['bibliography'][0]
-            instance.bibliography_en = info['bibliography'][1]
-            instance.bibliography_edited_datetime = info['bibliography'][2]
-            instance.bibliography_editor = info['bibliography'][3]
-        if 'assistance' in info:
-            instance.assistance_pt = info['assistance'][0]
-            instance.assistance_en = info['assistance'][1]
-            instance.assistance_edited_datetime = info['assistance'][2]
-            instance.assistance_editor = info['assistance'][3]
-        if 'teaching_methods' in info:
-            instance.teaching_methods_pt = info['teaching_methods'][0]
-            instance.teaching_methods_en = info['teaching_methods'][1]
-            instance.teaching_methods_edited_datetime = info['teaching_methods'][2]
-            instance.teaching_methods_editor = info['teaching_methods'][3]
-        if 'evaluation_methods' in info:
-            instance.evaluation_methods_pt = info['evaluation_methods'][0]
-            instance.evaluation_methods_en = info['evaluation_methods'][1]
-            instance.evaluation_methods_edited_datetime = info['evaluation_methods'][2]
-            instance.evaluation_methods_editor = info['evaluation_methods'][3]
-        if 'extra_info' in info:
-            instance.extra_info_pt = info['extra_info'][0]
-            instance.extra_info_en = info['extra_info'][1]
-            instance.extra_info_edited_datetime = info['extra_info'][2]
-            instance.extra_info_editor = info['extra_info'][3]
-        if 'working_hours' in info:
-            instance.working_hours = json.dumps(info['working_hours'])
-
+    def update_class_instance_info(self, instance: models.ClassInstance, upstream_info):
+        information = dict()
+        for attribute in ('description', 'objectives', 'requirements', 'competences', 'program',
+                          'bibliography', 'assistance', 'teaching_methods', 'evaluation_methods', 'extra_info'):
+            if attribute in upstream_info:
+                portuguese, english, time, editor = upstream_info[attribute]
+                information[attribute] = {
+                    'pt': portuguese,
+                    'en': portuguese,
+                    'time': time,
+                    'editor': editor,
+                }
+        if 'working_hours' in upstream_info:
+            information['working_hours'] = upstream_info['working_hours']
+        instance.information = json.dumps(information, default=json_util.default)
         self.session.commit()
 
     def add_courses(self, courses: [candidates.Course]):
         updated = 0
         try:
             for course in courses:
-                db_course = self.session.query(models.Course).filter_by(
-                    id=course.id,
-                    institution=course.institution
-                ).first()
-
+                db_course = self.session.query(models.Course).filter_by(id=course.id).first()
                 if db_course is None:
                     self.session.add(models.Course(
                         id=course.id,
@@ -650,8 +433,7 @@ class Controller:
                         abbreviation=course.abbreviation,
                         first_year=course.first_year,
                         last_year=course.last_year,
-                        degree=course.degree,
-                        institution=course.institution))
+                        degree=course.degree))
                     self.session.commit()
                 else:
                     changed = False
@@ -681,9 +463,6 @@ class Controller:
         except Exception:
             self.session.rollback()
             raise Exception("Failed to add courses.\n%s" % traceback.format_exc())
-        finally:
-            if self.__caching__:
-                self.__load_courses__()
 
     def add_student(self, candidate: candidates.Student) -> models.Student:
         if candidate.name is None or candidate.name == '':
@@ -696,29 +475,19 @@ class Controller:
             raise Exception("Year not provided")
 
         year = candidate.last_year
+        student = self.session.query(models.Student).filter_by(id=candidate.id).first()
 
-        if candidate.course is not None:
-            # Search for institution instead of course since a transfer could have happened
-            institution = candidate.course.institution
-        elif candidate.institution is not None:
-            institution = candidate.institution
-        else:
-            raise Exception("Neither course nor institution provided")
-
-        students: List[models.Student] = self.session.query(models.Student) \
-            .filter_by(iid=candidate.id, institution=institution).all()
-        count = len(students)
-
-        if count == 0:  # new student, add him
+        if student is None:  # new student, add him
             student = models.Student(
-                iid=candidate.id,
+                id=candidate.id,
                 name=candidate.name,
+                course=candidate.course,
                 abbreviation=candidate.abbreviation,
-                institution=institution,
                 first_year=candidate.first_year,
                 last_year=candidate.last_year)
             self.session.add(student)
             self.session.commit()
+            log.info(f"Added student {student}")
             if candidate.course is not None:
                 try:  # Hackish race condition prevention. Not pretty but works (most of the time)
                     self.add_student_course(student=student, course=candidate.course, year=year)
@@ -726,9 +495,7 @@ class Controller:
                     sleep(3)
                     self.session.rollback()
                     self.add_student_course(student=student, course=candidate.course, year=year)
-        elif count == 1:  # that student is present in the db
-            student = students[0]
-
+        else:
             if student.name != candidate.name:
                 if unidecode(student.name.lower()) == unidecode(candidate.name.lower()):
                     if unidecode(candidate.name.lower()) == student.name.lower():
@@ -754,17 +521,18 @@ class Controller:
                         student.abbreviation = candidate.abbreviation
                         self.session.commit()
                 elif candidate.abbreviation is not None and candidate.abbreviation != student.abbreviation:
+                    log.warning("Attempted to change the student abbreviation to another one\n"
+                                "Student:{}\n"
+                                "Candidate{}".format(student, candidate))
                     student.abbreviation = candidate.abbreviation
                     self.session.commit()
-                    log.critical("Attempted to change the student abbreviation to another one\n"
-                                 "Student:{}\n"
-                                 "Candidate{}".format(student, candidate))
-                    # raise Exception(
-                    #     "Attempted to change the student abbreviation to another one\n"
-                    #     "Student:{}\n"
-                    #     "Candidate{}".format(student, candidate))
+                    raise Exception(
+                        "Attempted to change the student abbreviation to another one\n"
+                        "Student:{}\n"
+                        "Candidate{}".format(student, candidate))
 
             if candidate.course is not None:
+                student.course_id = candidate.course.id
                 try:  # Hackish race condition prevention. Not pretty but works (most of the time)
                     self.add_student_course(student=student, course=candidate.course, year=year)
                 except IntegrityError:
@@ -779,25 +547,10 @@ class Controller:
                 if student.last_year != candidate.last_year:
                     student.add_year(candidate.last_year)
 
-        else:  # database inconsistency
-            students_str = ""
-            for candidate in students:
-                students_str += ("%s," % candidate)
-            raise Exception(f"Duplicated students found:\n{students_str}")
-
         return student
 
     def get_student(self, identifier: int, name: str = None) -> Optional[models.Student]:
-        matches = self.session.query(models.Student).filter_by(iid=identifier).all()
-        if len(matches) == 1:
-            return matches[0]
-        elif len(matches) > 1:
-            if name is not None:
-                log.warning(f"Multiple matches for the IID {identifier}\n{matches}\nTrying to guess.")
-                for match in matches:
-                    if match.name == name:
-                        return match
-            raise Exception("Multiple students with this ID")
+        return self.session.query(models.Student).filter_by(id=identifier).first()
 
     def get_students(self, year=None):
         if year is None:
@@ -872,9 +625,6 @@ class Controller:
             teacher.turns.append(new_turn)
 
         self.session.commit()
-        if self.__caching__:
-            self.__load_teachers__()
-
         return teacher
 
     def add_turn(self, turn: candidates.Turn) -> models.Turn:
@@ -900,6 +650,7 @@ class Controller:
                 state=turn.restrictions)
             self.session.add(db_turn)
             self.session.commit()
+            log.info(f"Added turn {db_turn}")
         else:
             changed = False
             if turn.minutes is not None and turn.minutes != 0:
@@ -1315,7 +1066,7 @@ class Controller:
                 instances = self.session.query(models.ClassInstance).filter_by(year=year).order_by(order).all()
             else:
                 instances = self.session.query(models.ClassInstance). \
-                    filter_by(year=year, period_id=period).order_by(order).all()
+                    filter_by(year=year, period_id=period['id']).order_by(order).all()
         return list(instances)
 
     def find_student(self, name: str, course=None) -> [models.Student]:

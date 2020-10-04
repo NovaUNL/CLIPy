@@ -125,22 +125,21 @@ CLASS = ROOT + \
 #: List of students enrolled to a class. Can be used to extract student names, identifiers, courses,
 #: number of enrollments to this class, student year as of the enrollment and special statuses.
 CLASS_ENROLLED = ROOT + \
-    "/utente/institui%E7%E3o_sede/unidade_organica/ensino/ano_lectivo/sector/ano_lectivo/unidade_curricular/actividade/inscri%E7%F5es/pautas" \
-    "?tipo_de_per%EDodo_lectivo={period_type}&sector={department}&ano_lectivo={year}" \
-    "&per%EDodo_lectivo={period}&institui%E7%E3o={institution}&unidade_curricular={class_id}&modo=pauta" \
-    "&aux=ficheiro"
+    "/utente/institui%E7%E3o_sede/unidade_organica/unidade_curricular/edi%E7%E3o/actividade/inscri%E7%F5es/pautas" \
+    "?tipo_de_per%EDodo_lectivo={period_type}&ano_lectivo={year}&per%EDodo_lectivo={period}" \
+    "&institui%E7%E3o={institution}&unidade_curricular={class_id}&modo=pauta&aux=ficheiro"
 
 #: Types of documents uploaded to a class page and number of documents by type.
 CLASS_FILE_TYPES = ROOT + \
-    "/utente/institui%E7%E3o_sede/unidade_organica/ensino/sector/ano_lectivo/unidade_curricular/actividade/documentos" \
-    "?tipo_de_per%EDodo_lectivo={period_type}&sector={department}&ano_lectivo={year}" \
+    "/utente/institui%E7%E3o_sede/unidade_organica/unidade_curricular/edi%E7%E3o/actividade/documentos" \
+    "?tipo_de_per%EDodo_lectivo={period_type}&ano_lectivo={year}" \
     "&per%EDodo_lectivo={period}&institui%E7%E3o={institution}&unidade_curricular={class_id}"
 
 #: Files of a given category uploaded to this class.
 #: Can be used to extract the file id, name, upload date, size and uploader
 CLASS_FILES = ROOT + \
-    "/utente/institui%E7%E3o_sede/unidade_organica/ensino/sector/ano_lectivo/unidade_curricular/actividade/documentos" \
-    "?tipo_de_per%EDodo_lectivo={period_type}&sector={department}&ano_lectivo={year}" \
+    "/utente/institui%E7%E3o_sede/unidade_organica/unidade_curricular/edi%E7%E3o/actividade/documentos" \
+    "?tipo_de_per%EDodo_lectivo={period_type}&ano_lectivo={year}" \
     "&per%EDodo_lectivo={period}&institui%E7%E3o={institution}&unidade_curricular={class_id}" \
     "&tipo_de_documento_de_unidade={file_type}"
 
@@ -189,110 +188,106 @@ CLASS_SUMMARIES = ROOT + \
 
 #: A description of what happens in this class
 CLASS_DESCRIPTION = ROOT + \
-    "/utente/institui%E7%E3o_sede/unidade_organica/ensino/ano_lectivo/sector/ano_lectivo/unidade_curricular/caracteriza%E7%E3o/descri%E7%E3o" \
-    "?unidade_curricular={class_id}&institui%E7%E3o={institution}&ano_lectivo={year}" \
-    "&tipo_de_per%EDodo_lectivo={period_type}&per%EDodo_lectivo={period}&sector={department}"
+    "/utente/institui%E7%E3o_sede/unidade_organica/unidade_curricular/edi%E7%E3o/caracteriza%E7%E3o/descri%E7%E3o" \
+    "?tipo_de_per%EDodo_lectivo={period_type}&ano_lectivo={year}&per%EDodo_lectivo={period}" \
+    "&institui%E7%E3o={institution}&unidade_curricular={class_id}"
 
 #: Class planned student competence acquisition. And what's the difference from CLASS_COMPETENCES you ask? No clue!
 CLASS_OBJECTIVES = ROOT + \
-    "/utente/institui%E7%E3o_sede/unidade_organica/ensino/sector/ano_lectivo/unidade_curricular/caracteriza%E7%E3o/objectivos" \
-    "?tipo_de_per%EDodo_lectivo={period_type}&sector={department}&ano_lectivo={year}" \
+    "/utente/institui%E7%E3o_sede/unidade_organica/unidade_curricular/caracteriza%E7%E3o/objectivos" \
+    "?tipo_de_per%EDodo_lectivo={period_type}&ano_lectivo={year}" \
     "&per%EDodo_lectivo={period}&institui%E7%E3o={institution}&unidade_curricular={class_id}"
 
 #: Requirements to participate in this class
 CLASS_REQUIREMENTS = ROOT + \
-    "/utente/institui%E7%E3o_sede/unidade_organica/ensino/ano_lectivo/sector/ano_lectivo/unidade_curricular/caracteriza%E7%E3o/requisitos" \
-    "?tipo_de_per%EDodo_lectivo={period_type}&sector={department}&ano_lectivo={year}" \
+    "/utente/institui%E7%E3o_sede/unidade_organica/unidade_curricular/edi%E7%E3o/caracteriza%E7%E3o/requisitos" \
+    "?tipo_de_per%EDodo_lectivo={period_type}&ano_lectivo={year}" \
     "&per%EDodo_lectivo={period}&institui%E7%E3o={institution}&unidade_curricular={class_id}"
 
 #: Class planned student competence acquisition. And what's the difference from CLASS_OBJECTIVES you ask? No clue!
 CLASS_COMPETENCES = ROOT + \
-    "/utente/institui%E7%E3o_sede/unidade_organica/ensino/ano_lectivo/sector/ano_lectivo/unidade_curricular/caracteriza%E7%E3o/compet%EAncias" \
-    "?tipo_de_per%EDodo_lectivo={period_type}&sector={department}&ano_lectivo={year}" \
+    "/utente/institui%E7%E3o_sede/unidade_organica/unidade_curricular/edi%E7%E3o/caracteriza%E7%E3o/compet%EAncias" \
+    "?tipo_de_per%EDodo_lectivo={period_type}&ano_lectivo={year}" \
     "&per%EDodo_lectivo={period}&institui%E7%E3o={institution}&unidade_curricular={class_id}"
 
 #: Class planned teachings
 CLASS_PROGRAM = ROOT + \
-    "/utente/institui%E7%E3o_sede/unidade_organica/ensino/ano_lectivo/sector/ano_lectivo/unidade_curricular/caracteriza%E7%E3o/programa" \
-    "?tipo_de_per%EDodo_lectivo={period_type}&sector={department}&ano_lectivo={year}" \
+    "/utente/institui%E7%E3o_sede/unidade_organica/unidade_curricular/edi%E7%E3o/caracteriza%E7%E3o/programa" \
+    "?tipo_de_per%EDodo_lectivo={period_type}&ano_lectivo={year}" \
     "&per%EDodo_lectivo={period}&institui%E7%E3o={institution}&unidade_curricular={class_id}"
 
 #: Class teaching sources / bibliography
 CLASS_BIBLIOGRAPHY = ROOT + \
-    "/utente/institui%E7%E3o_sede/unidade_organica/ensino/ano_lectivo/sector/ano_lectivo/unidade_curricular/caracteriza%E7%E3o/bibliografia" \
-    "?tipo_de_per%EDodo_lectivo={period_type}&sector={department}&ano_lectivo={year}" \
+    "/utente/institui%E7%E3o_sede/unidade_organica/unidade_curricular/edi%E7%E3o/caracteriza%E7%E3o/bibliografia" \
+    "?tipo_de_per%EDodo_lectivo={period_type}&ano_lectivo={year}" \
     "&per%EDodo_lectivo={period}&institui%E7%E3o={institution}&unidade_curricular={class_id}"
 
 #: Class teaching methods verbosely explained
 CLASS_TEACHING_METHODS = ROOT + \
-    "/utente/institui%E7%E3o_sede/unidade_organica/ensino/ano_lectivo/sector/ano_lectivo/unidade_curricular/funcionamento/m%E9todos_de_ensino" \
-    "?tipo_de_per%EDodo_lectivo={period_type}&sector={department}&ano_lectivo={year}" \
+    "/utente/institui%E7%E3o_sede/unidade_organica/unidade_curricular/edi%E7%E3o/funcionamento/m%E9todos_de_ensino" \
+    "?tipo_de_per%EDodo_lectivo={period_type}&ano_lectivo={year}" \
     "&per%EDodo_lectivo={period}&institui%E7%E3o={institution}&unidade_curricular={class_id}"
 
 #: Class evaluation methods verbosely explained
 CLASS_EVALUATION_METHODS = ROOT + \
-    "/utente/institui%E7%E3o_sede/unidade_organica/ensino/sector/ano_lectivo/unidade_curricular/funcionamento/m%E9todos_de_avalia%E7%E3o" \
-    "?tipo_de_per%EDodo_lectivo={period_type}&sector={department}&ano_lectivo={year}" \
+    "/utente/institui%E7%E3o_sede/unidade_organica/unidade_curricular/funcionamento/m%E9todos_de_avalia%E7%E3o" \
+    "?tipo_de_per%EDodo_lectivo={period_type}&ano_lectivo={year}" \
     "&per%EDodo_lectivo={period}&institui%E7%E3o={institution}&unidade_curricular={class_id}"
 
 #: Work hours distribution for this class.
 CLASS_HOURS = ROOT + \
-    "/utente/institui%E7%E3o_sede/unidade_organica/ensino/ano_lectivo/sector/ano_lectivo/unidade_curricular/funcionamento/trabalho_do_aluno" \
-    "?tipo_de_per%EDodo_lectivo={period_type}&sector={department}&ano_lectivo={year}" \
+    "/utente/institui%E7%E3o_sede/unidade_organica/unidade_curricular/edi%E7%E3o/funcionamento/trabalho_do_aluno" \
+    "?tipo_de_per%EDodo_lectivo={period_type}&ano_lectivo={year}" \
     "&per%EDodo_lectivo={period}&institui%E7%E3o={institution}&unidade_curricular={class_id}"
 
 #: Schedules for individual teacher assistance
 CLASS_ASSISTANCE = ROOT + \
     "/utente/institui%E7%E3o_sede/unidade_organica/ensino/ano_lectivo/sector/ano_lectivo/unidade_curricular/organiza%E7%E3o/calend%E1rio/atendimento" \
-    "?tipo_de_per%EDodo_lectivo={period_type}&sector={department}&ano_lectivo={year}" \
+    "?tipo_de_per%EDodo_lectivo={period_type}&ano_lectivo={year}" \
     "&per%EDodo_lectivo={period}&institui%E7%E3o={institution}&unidade_curricular={class_id}"
 
 #: Class instance turn list. Can be used to extract number of turns and their types.
 CLASS_TURNS = ROOT + \
-    "/utente/institui%E7%E3o_sede/unidade_organica/ensino/ano_lectivo/sector/ano_lectivo/unidade_curricular/actividade/turnos" \
+    "/utente/institui%E7%E3o_sede/unidade_organica/unidade_curricular/edi%E7%E3o/actividade/turnos" \
     "?unidade_curricular={class_id}&institui%E7%E3o={institution}&ano_lectivo={year}" \
-    "&tipo_de_per%EDodo_lectivo={period_type}&per%EDodo_lectivo={period}&sector={department}"
+    "&tipo_de_per%EDodo_lectivo={period_type}&per%EDodo_lectivo={period}"
 
 #: Class turn info. Can be used to obtain turn students, teacher(s), location and times.
 CLASS_TURN = ROOT + \
-    "/utente/institui%E7%E3o_sede/unidade_organica/ensino/ano_lectivo/sector/ano_lectivo/unidade_curricular/actividade/turnos" \
-    "?tipo_de_per%EDodo_lectivo={period_type}&sector={department}&ano_lectivo={year}" \
-    "&per%EDodo_lectivo={period}&institui%E7%E3o={institution}&unidade_curricular={class_id}" \
-    "&tipo={turn_type}&n%BA={turn}"
+    "/utente/institui%E7%E3o_sede/unidade_organica/unidade_curricular/edi%E7%E3o/actividade/turnos" \
+    "?tipo_de_per%EDodo_lectivo={period_type}&ano_lectivo={year}&per%EDodo_lectivo={period}" \
+    "&institui%E7%E3o={institution}&unidade_curricular={class_id}&tipo={turn_type}&n%BA={turn}"
 
 # These next three have pretty much the same URL & query strings except for "tipo_de_avalia%E7%E3o_curricular" ,
 # but keeping them this way prevents conditionals for a few bytes of constants.
 
 #: Final class results. Can be used to determine student gender.
 CLASS_RESULTS = ROOT + \
-    "/utente/institui%E7%E3o_sede/unidade_organica/ensino/ano_lectivo/sector/ano_lectivo/unidade_curricular/actividade/resultados/pautas" \
-    "?tipo_de_per%EDodo_lectivo={period_type}&sector={department}&ano_lectivo={year}" \
-    "&per%EDodo_lectivo={period}&institui%E7%E3o={institution}&unidade_curricular={class_id}" \
-    "&tipo_de_avalia%E7%E3o_curricular=a"
+    "/utente/institui%E7%E3o_sede/unidade_organica/unidade_curricular/edi%E7%E3o/actividade/resultados/pautas" \
+    "?tipo_de_per%EDodo_lectivo={period_type}&ano_lectivo={year}&per%EDodo_lectivo={period}" \
+    "&institui%E7%E3o={institution}&unidade_curricular={class_id}&tipo_de_avalia%E7%E3o_curricular=a"
 
 #: Class attendance results. Can also be used to determine student gender.
 CLASS_ATTENDANCE = ROOT + \
-    "/utente/institui%E7%E3o_sede/unidade_organica/ensino/ano_lectivo/sector/ano_lectivo/unidade_curricular/actividade/resultados/pautas" \
-    "?tipo_de_per%EDodo_lectivo={period_type}&sector={department}&ano_lectivo={year}" \
-    "&per%EDodo_lectivo={period}&institui%E7%E3o={institution}" \
-    "&unidade_curricular={class_id}&tipo_de_avalia%E7%E3o_curricular=f"
+    "/utente/institui%E7%E3o_sede/unidade_organica/unidade_curricular/edi%E7%E3o/actividade/resultados/pautas" \
+    "?tipo_de_per%EDodo_lectivo={period_type}&ano_lectivo={year}&per%EDodo_lectivo={period}" \
+    "&institui%E7%E3o={institution}&unidade_curricular={class_id}&tipo_de_avalia%E7%E3o_curricular=f"
 
 #: Class grade improvement results.
 CLASS_IMPROVEMENTS = ROOT + \
-    "/utente/institui%E7%E3o_sede/unidade_organica/ensino/ano_lectivo/sector/ano_lectivo/unidade_curricular/actividade/resultados/pautas" \
-    "?tipo_de_per%EDodo_lectivo={period_type}&sector={department}&ano_lectivo={year}" \
-    "&per%EDodo_lectivo={period}&institui%E7%E3o={institution}&unidade_curricular={class_id}" \
-    "&tipo_de_avalia%E7%E3o_curricular=m"
+    "/utente/institui%E7%E3o_sede/unidade_organica/unidade_curricular/edi%E7%E3o/actividade/resultados/pautas" \
+    "?tipo_de_per%EDodo_lectivo={period_type}&ano_lectivo={year}&per%EDodo_lectivo={period}" \
+    "&institui%E7%E3o={institution}&unidade_curricular={class_id}&tipo_de_avalia%E7%E3o_curricular=m"
 
 #: Additional information such as start date and moodle pages
 CLASS_EXTRA = ROOT + \
-    "/utente/institui%E7%E3o_sede/unidade_organica/ensino/ano_lectivo/sector/ano_lectivo/unidade_curricular/actividade/informa%E7%E3o_adicional" \
+    "/utente/institui%E7%E3o_sede/unidade_organica/unidade_curricular/edi%E7%E3o/actividade/informa%E7%E3o_adicional" \
     "?unidade_curricular={class_id}&institui%E7%E3o={institution}&ano_lectivo={year}" \
-    "&tipo_de_per%EDodo_lectivo={period_type}&per%EDodo_lectivo={period}&sector={department}"
+    "&tipo_de_per%EDodo_lectivo={period_type}&per%EDodo_lectivo={period}"
 
 #: Messages teachers broadcast to students of a class.
 CLASS_MESSAGES = ROOT + \
-    "/utente/institui%E7%E3o_sede/unidade_organica/ensino/sector/ano_lectivo/unidade_curricular/actividade/contacto" \
+    "/utente/institui%E7%E3o_sede/unidade_organica/unidade_curricular/actividade/contacto" \
     "?tipo_de_per%EDodo_lectivo={period_type}&sector={department}&ano_lectivo={year}" \
     "&per%EDodo_lectivo={period}&institui%E7%E3o={institution}&unidade_curricular={class_id}"
 
@@ -315,12 +310,12 @@ LIBRARY_GROUP_ROOMS = ROOT + \
     "?tipo_de_espa%E7o=gabtg&tipo_de_responsabilidade_sobre_espa%E7o=1&institui%E7%E3o=97747"
 
 COURSE_EXP = re.compile("\\bcurso=(\d+)\\b")
-PERIOD_EXP = re.compile('\\bper%EDodo_lectivo=(\d)\\b')
+PERIOD_EXP = re.compile('\\bper%EDodo_lectivo=(?P<period>\d+)\\b')
 PERIOD_TYPE_EXP = re.compile('\\btipo_de_per%EDodo_lectivo=(\w+)\\b')
 CLASS_EXP = re.compile('\\bunidade_curricular=(\d+)\\b')
 CLASS_ALT_EXP = re.compile('\\bunidadec=(\d+)\\b')
-YEAR_EXP = re.compile("\\bano_lectivo=(\d+)\\b")
-TURN_LINK_EXP = re.compile("\\b&tipo=(?P<type>\\w+)&n%BA=(?P<number>\\d+)\\b")
+YEAR_EXP = re.compile("\\bano_lectivo=(?P<year>\d+)\\b")
+TURN_LINK_EXP = re.compile("\\b&ano_lectivo=(?P<year>\\d+)&per%EDodo_lectivo=(?P<period>\\d+).*&tipo=(?P<type>\\w+)&n%BA=(?P<number>\\d+)\\b")
 DEPARTMENT_EXP = re.compile('\\bsector=(\d+)\\b')
 TEACHER_EXP = re.compile('\\bdocente=(\d+)\\b')
 BUILDING_EXP = re.compile('\\bedif%EDcio=(\d+)\\b')
