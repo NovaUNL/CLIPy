@@ -192,7 +192,10 @@ def get_turn_info(page):
     enrolled = None
     capacity = None
 
-    info_table_root = page.find('th', colspan="2", bgcolor="#aaaaaa").parent.parent
+    try:
+        info_table_root = page.find('th', colspan="2", bgcolor="#aaaaaa").parent.parent
+    except AttributeError:
+        raise LookupError("Couldn't find the table root")
 
     for tag in info_table_root.find_all('th'):  # for every table header
         if tag.parent is not None:
@@ -632,12 +635,6 @@ def get_files(page):
         file_upload_date = datetime.strptime(file_upload_date, "%Y-%m-%d %H:%M")
         file_size = int(table_row_children[7].text.strip().rstrip('Kb')) << 10
         file_uploader_name = table_row_children[9].text.strip()
-        file_name_alt = unquote(link_match.group('name'), encoding='iso8859-1')
-
-        if file_name != file_name_alt:
-            log.warning("Something silly happened parsing the file name.\t"
-                        f"Row: {file_name}\t URL: {file_name_alt}\t"
-                        "Proceeding with the first name")
         files.append((file_id, file_name, file_size, file_upload_date, file_uploader_name))
     return files
 
@@ -715,12 +712,11 @@ def get_results(page):
                     special_result = 0
                     special_date = datetime.strptime(special_date, "%Y-%m-%d").date()
             final_result = columns[17].text.strip()
-            approved = 'Aprovad' in final_result
-
             result = ((normal_result, normal_date),
                       (recourse_result, recourse_date),
                       (special_result, special_date))
 
+        approved = 'Aprovad' in final_result
         gender = None
         if final_result in ('Aprovado', 'Não avaliado', 'Reprovado'):
             gender = 'm'
