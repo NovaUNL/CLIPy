@@ -534,9 +534,9 @@ def crawl_class_turns(session: WebSession, database: db.Controller, class_instan
     turn_pages = []  # pages for turn parsing
     if single_turn:  # if the loaded page is the only turn
         if turn_count > 1:
-            raise Exception("Class instance though to have one single turn now has many!")
+            raise Exception(f"Class instance {class_instance}, previously though to have one single turn now has many!")
         if turn_count == 0:
-            log.warning("Turn page without any turn. Skipping")
+            log.info("Turn page without any turn. Skipping")
             return
         turn_pages.append((page, turn_type, turn_number))  # save it, avoid requesting it again
     else:  # if there are multiple turns then request them
