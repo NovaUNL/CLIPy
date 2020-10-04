@@ -744,14 +744,19 @@ class Controller:
                         weekday=instance.weekday))
             self.session.commit()
 
-    def add_turn_students(self, turn: models.Turn, students: [candidates.Student]):
-        count = len(students)
-        old_count = len(turn.students)
-        if count > 0:
-            [turn.students.append(student) for student in students]
+    def add_turn_students(self, turn: models.Turn, students: [models.Student]):
+        old_students = set(turn.students)
+        new_students = set(students)
+        deleted_students = old_students.difference(new_students)
+        new_students = new_students.difference(old_students)
+        new_count = len(new_students)
+        deleted_count = len(deleted_students)
+        [turn.students.append(student) for student in new_students]
+        if deleted_count > 0:
+            [turn.students.remove(student) for student in deleted_students]
+        if new_count > 0 or deleted_count > 0:
+            log.info(f"{new_count} students added and {deleted_count} removed from the turn {turn}.")
             self.session.commit()
-            if count - old_count > 0:
-                log.info(f"{count - old_count} students added successfully to the turn {turn}!")
 
     def add_admissions(self, admissions: [candidates.Admission]):
         admissions = list(map(lambda admission: models.Admission(
@@ -772,14 +777,33 @@ class Controller:
     def add_enrollments(self, enrollments: [candidates.Enrollment]):
         added = 0
         updated = 0
+        deleted = 0
+
         class_instance = None
         for enrollment in enrollments:
             if class_instance is None:
                 class_instance = enrollment.class_instance
-            db_enrollment: models.Enrollment = self.session.query(models.Enrollment).filter_by(
-                student=enrollment.student,
-                class_instance=enrollment.class_instance
-            ).first()
+            elif class_instance != enrollment.class_instance:
+                raise Exception('Enrollments belong to multiple classes')
+
+        db_enrollments = self.session.query(models.Enrollment).filter_by(class_instance=class_instance).all()
+        for db_enrollment in db_enrollments:
+            matched = False
+            for enrollment in enrollments[:]:
+                if db_enrollment.student == enrollment.student:
+                    matched = True
+                    # TODO update data here
+                    enrollments.remove(enrollment)
+                    break
+            if not matched:
+                log.info(f'An enrollment ceased to exist ({db_enrollment.student} to {db_enrollment.class_instance})')
+                deleted += 1
+                self.session.delete(db_enrollment)
+
+        for enrollment in enrollments:
+            db_enrollment: models.Enrollment = self.session.query(models.Enrollment) \
+                .filter_by(student=enrollment.student, class_instance=enrollment.class_instance) \
+                .first()
             if db_enrollment:
                 changed = False
                 if db_enrollment.observation is None and enrollment.observation is not None:
@@ -809,15 +833,18 @@ class Controller:
                 self.session.add(enrollment)
                 self.session.commit()
 
-        if added > 0 or updated > 0:
-            log.info("{} enrollments added to {} and {} updated ({} ignored)!".format(
-                added, class_instance, updated, len(enrollments) - added - updated))
+        if added > 0 or updated > 0 or deleted > 0:
+            log.info("Enrollments in {} changed.  {} new, {} updated and {} deleted ({} ignored)!".format(
+                class_instance, added, updated, deleted, len(enrollments) - added - updated - deleted))
 
     def update_enrollment_results(self, student: models.Student, class_instance: models.ClassInstance, results,
                                   approved: bool):
         enrollment: models.Enrollment = self.session.query(models.Enrollment) \
             .filter_by(student=student, class_instance=class_instance).first()
 
+        if enrollment is None:
+            log.error("Enrollment is missing")
+            return
         result_count = len(results)
         if result_count < 1 or result_count > 3:
             raise Exception("Invalid result format")
