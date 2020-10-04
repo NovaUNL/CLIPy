@@ -1021,7 +1021,7 @@ class Controller:
                 id=candidate.id,
                 size=candidate.size,
                 hash=candidate.hash,
-                location=candidate.location)
+                downloaded=False)
             log.info(f"Adding file {file}")
             self.session.add(file)
             class_file = models.ClassFile(
@@ -1049,7 +1049,7 @@ class Controller:
     def update_downloaded_file(self, file: models.File, mime: str, path: str, hash: str):
         file.mime = mime
         file.hash = hash
-        file.location = path
+        file.downloaded = True
         self.session.commit()
 
     def fetch_class_instances(self, year_asc=True, year=None, period=None) -> [models.ClassInstance]:

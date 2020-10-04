@@ -659,7 +659,7 @@ def download_files(session: WebSession, database: db.Controller, class_instance:
         save_path = './files'
 
     for class_file in class_files:
-        if not class_file.file.downloaded():
+        if not class_file.file.downloaded:
             file_type = class_file.file_type
             if file_type not in poked_file_types:
                 poked_file_types.add(file_type)
