@@ -226,7 +226,6 @@ class Class(Base):
             'name': self.name,
             'abbr': self.abbreviation,
             'ects': self.ects,
-            'dept': self.department_id,
             'instances': [instance.id for instance in self.instances]}
 
 
@@ -360,7 +359,6 @@ class ClassInstance(Base):
             'period': self.period_id,
             'year': self.year,
             'info': self.information,
-            'working_hours': self.working_hours,
             'enrollments': [enrollment.id for enrollment in self.enrollments],
             'turns': [turn.id for turn in self.turns],
             'evaluations': [evaluation.id for evaluation in self.evaluations]}
