@@ -203,7 +203,7 @@ def crawl_teachers(session: WebSession, database: db.Controller, department: db.
         teachers = {}  # id -> Candidate
         for period in periods:
             page = session.get_simplified_soup(urls.DEPARTMENT_TEACHERS.format(
-                institution=department.institution.id,
+                institution=INSTITUTION_ID,
                 department=department.id,
                 year=year,
                 period=period.part,

@@ -189,18 +189,11 @@ class Controller:
     def get_period_set(self) -> {models.Period}:
         return set(self.session.query(models.Period).all())
 
-    def get_course(self, identifier: int = None, abbreviation: str = None, year: int = None,
-                   institution: int = None) -> Optional[models.Course]:
+    def get_course(self, identifier: int = None, abbreviation: str = None, year: int = None) -> Optional[models.Course]:
         if identifier is not None:
-            if institution is not None:
-                matches = self.session.query(models.Course).filter_by(id=identifier, institution_id=institution).all()
-            else:
-                matches = self.session.query(models.Course).filter_by(id=identifier).all()
+            matches = self.session.query(models.Course).filter_by(id=identifier).all()
         elif abbreviation is not None:
-            if institution is not None:
-                matches = self.session.query(models.Course).filter_by(abbreviation=abbreviation).all()
-            else:
-                matches = self.session.query(models.Course).filter_by(abbreviation=abbreviation).all()
+            matches = self.session.query(models.Course).filter_by(abbreviation=abbreviation).all()
         else:
             log.warning(f"Unable to determine course with id {identifier}, abbr {abbreviation} on year {year}")
             return None
