@@ -659,7 +659,7 @@ def get_results(page):
         if col_count == 0:
             log.warning("No grade table")
             return
-        if col_count not in (10, 14, 18, 22):
+        if col_count not in (10, 14, 18, 22, 26):
             log.warning(f"Found a strange row. It has {col_count} columns:\n{columns}")
             break
 
@@ -675,7 +675,11 @@ def get_results(page):
                 normal_result = int(normal_result)
             except ValueError:
                 normal_result = 0
-            normal_date = datetime.strptime(normal_date, "%Y-%m-%d").date()
+            try:
+                normal_date = datetime.strptime(normal_date, "%Y-%m-%d").date()
+            except ValueError:
+                normal_date = None
+
 
         if col_count >= 14:
             recourse_result = columns[9].text.strip()
@@ -692,14 +696,13 @@ def get_results(page):
         else:
             recourse_result, recourse_date = None, None  # Not needed, just to avoid having the linter complain
 
+        final_result = columns[col_count-1].text.strip()
         if col_count == 10:
-            final_result = columns[9].text.strip()
             result = ((normal_result, normal_date),)
         elif col_count == 14:
-            final_result = columns[13].text.strip()
             result = ((normal_result, normal_date),
                       (recourse_result, recourse_date))
-        else:  # col_count == 16 or 22
+        else:  # col_count == 18, 22, 26
             special_result = columns[13].text.strip()
             special_date = columns[15].text.strip()
             if special_result in ('', '?'):
@@ -711,10 +714,10 @@ def get_results(page):
                 except ValueError:
                     special_result = 0
                     special_date = datetime.strptime(special_date, "%Y-%m-%d").date()
-            final_result = columns[17].text.strip()
             result = ((normal_result, normal_date),
                       (recourse_result, recourse_date),
                       (special_result, special_date))
+            # TODO special, and "avulso" (whatever that is)
 
         approved = 'Aprovad' in final_result
         gender = None
@@ -795,14 +798,25 @@ def get_improvements(page) -> ((int, str, str), bool, int, datetime.date):
         if col_count == 0:
             log.warning("No admission table")
             return
-        if col_count != 10:
+        if col_count not in (10, 14):
             log.warning(f"Found a strange row. It has {col_count} columns:\n{columns}")
-            break
+            continue
 
         student_number = int(columns[1].text.strip())
         student_name = columns[3].text.strip()
-        grade = columns[5].text.strip()
-        improvement_date = columns[7].text.strip()
+        if col_count == 10:
+            grade = columns[5].text.strip()
+            improvement_date = columns[7].text.strip()
+            final_result = columns[9].text.strip()
+        elif col_count == 14:
+            grade = columns[5].text.strip()
+            improvement_date = columns[7].text.strip()
+            if grade == '':
+                grade = columns[9].text.strip()
+                improvement_date = columns[11].text.strip()
+            final_result = columns[13].text.strip()
+
+
         if grade in ('', '?'):
             grade = None
             improvement_date = None
@@ -813,7 +827,6 @@ def get_improvements(page) -> ((int, str, str), bool, int, datetime.date):
                 grade = 0
             improvement_date = datetime.strptime(improvement_date, "%Y-%m-%d").date()
 
-        final_result = columns[9].text.strip()
         improved = final_result == 'Melhorou'
 
         student = (student_number, student_name)

@@ -1,12 +1,15 @@
+import logging
 import os
 from datetime import datetime
 
 from . import database as db, processors, crawler
 from .config import INSTITUTION_FIRST_YEAR, INSTITUTION_LAST_YEAR
 from .session import Session
-from .utils import populate
 
 from .database import models as m
+
+logging.basicConfig(level=logging.INFO)
+log = logging.getLogger(__name__)
 
 
 class CacheStorage:
@@ -72,6 +75,9 @@ class Clip:
     def get_department(self, id):
         obj = self.cache.controller.session.query(m.Department).get(id)
         return None if obj is None else obj.serialize_related()
+
+    def get_classes(self):
+        return [department.serialize() for department in self.cache.controller.session.query(m.Class).all()]
 
     def get_class(self, id):
         obj = self.cache.controller.session.query(m.Class).get(id)
