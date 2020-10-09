@@ -165,18 +165,18 @@ def get_enrollments(page):
     return enrollments
 
 
-#: Generic turn scheduling string. Looks something like 'Segunda-Feira  XX:00 - YY:00  Ed Z: Lab 123 A/Ed.Z'
-TURN_SCHEDULING_EXP = re.compile(
+#: Generic shift scheduling string. Looks something like 'Segunda-Feira  XX:00 - YY:00  Ed Z: Lab 123 A/Ed.Z'
+SHIFT_SCHEDULING_EXP = re.compile(
     '(?P<weekday>[\w-]+) {2}(?P<init_hour>\d{2}):(?P<init_min>\d{2}) - (?P<end_hour>\d{2}):(?P<end_min>\d{2})(?: {2})?'
     '(?:E[dD] .*: (?P<computer_lab>Lab Computadores )?(?P<lab>Lab[.]? )?(?P<room>[\w\b. ]+)/(?P<building>[\w\d. ]+))?')
 
 
-def get_turn_info(page):
+def get_shift_info(page):
     """
-    Parses the turn details table from the turn page.
+    Parses the shift details table from the shift page.
 
-    :param page: A page fetched from :py:const:`CLIPy.urls.CLASS_TURN`
-    :return: | Turn information tuple with
+    :param page: A page fetched from :py:const:`CLIPy.urls.CLASS_SHIFT`
+    :return: | Shift information tuple with
              | ``instances, routes, teachers, restrictions, weekly_minutes, state, enrolled, capacity``
              | With instances, routes and teachers being lists
              | Instances has the following structure ``weekday, start, end, building, room``
@@ -219,7 +219,7 @@ def get_turn_info(page):
     for field, content in fields.items():
         if field == "marcação":
             for row in content:
-                information = TURN_SCHEDULING_EXP.search(row)
+                information = SHIFT_SCHEDULING_EXP.search(row)
                 if information is None:
                     raise Exception("Bad schedule:" + str(information))
 
@@ -273,11 +273,11 @@ def get_turn_info(page):
     return instances, routes, teachers, restrictions, weekly_minutes, state, enrolled, capacity
 
 
-def get_turn_students(page):
+def get_shift_students(page):
     """
-    Parses the students list from the turn page.
+    Parses the students list from the shift page.
 
-    :param page: A page fetched from :py:const:`CLIPy.urls.CLASS_TURN`
+    :param page: A page fetched from :py:const:`CLIPy.urls.CLASS_SHIFT`
     :return: List of tuples with student details (``name, identifier, abbreviation, course abbreviation``)
     """
     students = []
@@ -377,7 +377,7 @@ def get_class_summaries(page):
 
     :param page: A page fetched from :py:const:`CLIPy.urls.CLASS_SUMMARIES`
     :return: List of
-        ``(turn, teacher, start_datetime, duration, room, building, attendance, message, edited_datetime)`` tuples
+        ``(shift, teacher, start_datetime, duration, room, building, attendance, message, edited_datetime)`` tuples
     """
     summaries = []
     tbody = page.find('th', class_="center", colspan="8", bgcolor="#dddddd").parent.parent
@@ -389,7 +389,7 @@ def get_class_summaries(page):
         return None
     for title, message, edited_datetime in zip(titles, messages, edited_datetimes):
         # Title content
-        turn = title.contents[3].text.strip()
+        shift = title.contents[3].text.strip()
         teacher = title.contents[7].text.strip()
         date = title.contents[9].text.strip()
         start = title.contents[13].text.strip()
@@ -411,7 +411,7 @@ def get_class_summaries(page):
         edited_datetime = datetime.strptime(edited_datetime.text.strip(), "Alterado em: %Y-%m-%d %H:%M")
 
         summaries.append(
-            (turn, teacher, start_datetime, duration, room, building, attendance, message, edited_datetime))
+            (shift, teacher, start_datetime, duration, room, building, attendance, message, edited_datetime))
 
     return summaries
 

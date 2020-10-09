@@ -57,8 +57,8 @@ class Controller:
         if self.session.query(models.Period).count() == 0:
             self.__insert_default_periods__()
 
-        if self.session.query(models.TurnType).count() == 0:
-            self.__insert_default_turn_types__()
+        if self.session.query(models.ShiftType).count() == 0:
+            self.__insert_default_shift_types__()
 
         self.__weekdays__ = {'segunda': 0,
                              'terça': 1,
@@ -76,7 +76,7 @@ class Controller:
         log.debug("Building cached collections")
         self.__load_degrees__()
         self.__load_periods__()
-        self.__load_turn_types__()
+        self.__load_shift_types__()
         log.debug("Finished building cache")
 
     def __load_degrees__(self):
@@ -98,12 +98,12 @@ class Controller:
             periods[period.parts][period.part] = period
         self.__periods__ = periods
 
-    def __load_turn_types__(self):
-        log.debug("Building turn types cache")
-        turn_types = {}
-        for turn_type in self.session.query(models.TurnType).all():
-            turn_types[turn_type.abbreviation] = turn_type
-        self.__turn_types__ = turn_types
+    def __load_shift_types__(self):
+        log.debug("Building shift types cache")
+        shift_types = {}
+        for shift_type in self.session.query(models.ShiftType).all():
+            shift_types[shift_type.abbreviation] = shift_type
+        self.__shift_types__ = shift_types
 
     def __insert_default_periods__(self):
         self.session.add_all(
@@ -127,17 +127,17 @@ class Controller:
              models.Degree(id=7, iid='pG', name="Pré-Graduação")])
         self.session.commit()
 
-    def __insert_default_turn_types__(self):
+    def __insert_default_shift_types__(self):
         self.session.add_all(
-            [models.TurnType(id=1, name="Theoretical", abbreviation="t"),
-             models.TurnType(id=2, name="Practical", abbreviation="p"),
-             models.TurnType(id=3, name="Practical-Theoretical", abbreviation="tp"),
-             models.TurnType(id=4, name="Seminar", abbreviation="s"),
-             models.TurnType(id=5, name="Tutorial Orientation", abbreviation="ot"),
-             models.TurnType(id=6, name="Field Work", abbreviation="tc"),
-             models.TurnType(id=7, name="Online Theoretical", abbreviation="to"),
-             models.TurnType(id=8, name="Online Practical", abbreviation="po"),
-             models.TurnType(id=9, name="Online Practical-Theoretical", abbreviation="op")])
+            [models.ShiftType(id=1, name="Theoretical", abbreviation="t"),
+             models.ShiftType(id=2, name="Practical", abbreviation="p"),
+             models.ShiftType(id=3, name="Practical-Theoretical", abbreviation="tp"),
+             models.ShiftType(id=4, name="Seminar", abbreviation="s"),
+             models.ShiftType(id=5, name="Tutorial Orientation", abbreviation="ot"),
+             models.ShiftType(id=6, name="Field Work", abbreviation="tc"),
+             models.ShiftType(id=7, name="Online Theoretical", abbreviation="to"),
+             models.ShiftType(id=8, name="Online Practical", abbreviation="po"),
+             models.ShiftType(id=9, name="Online Practical-Theoretical", abbreviation="op")])
         self.session.commit()
 
     def get_department(self, identifier: int) -> Optional[models.Department]:
@@ -225,12 +225,12 @@ class Controller:
     def get_courses(self) -> [models.Course]:
         return self.session.query(models.Course).all()
 
-    def get_turn_type(self, abbreviation: str) -> Optional[models.TurnType]:
+    def get_shift_type(self, abbreviation: str) -> Optional[models.ShiftType]:
         if self.__caching__:
-            if abbreviation in self.__turn_types__:
-                return self.__turn_types__[abbreviation]
+            if abbreviation in self.__shift_types__:
+                return self.__shift_types__[abbreviation]
         else:
-            return self.session.query(models.TurnType).filter_by(abbreviation=abbreviation).first()
+            return self.session.query(models.ShiftType).filter_by(abbreviation=abbreviation).first()
 
     def get_teacher(self, name: str, department: models.Department) -> Optional[models.Teacher]:
         """
@@ -250,7 +250,7 @@ class Controller:
         | - There are two different teachers with the same name in the same department.
         | TODO A workaround which is ridiculously CPU/time intensive unless implemented properly is to use
             :py:const:`CLIPy.urls.TEACHER_SCHEDULE` to check if results match.
-        | An idea is to ignore unmatched teachers (leave turns without the teacher) and then crawl
+        | An idea is to ignore unmatched teachers (leave shifts without the teacher) and then crawl
             :py:const:`CLIPy.urls.TEACHER_SCHEDULE` once and fill the gaps.
         | TODO 2 Add `year` to the equation in hope of better guessing which `teacher` is the correct in the
             `multiple but all the same` scenario.
@@ -609,153 +609,154 @@ class Controller:
                 log.warning(f"Changing teacher {teacher.name} to {candidate.name}")
                 teacher.name = candidate.name
 
-        # Handle the newly known turns and remove the old ones if they disappeared
-        new_turns = {turn for turn_year in candidate.schedule_entries.values() for turn in turn_year}
+        # Handle the newly known shifts and remove the old ones if they disappeared
+        new_shifts = {shift for shift_year in candidate.schedule_entries.values() for shift in shift_year}
         year_period_set = {y_p for y_p in candidate.schedule_entries.keys()}
-        for existing_turn in teacher.turns:
-            if existing_turn in new_turns:
-                new_turns.remove(existing_turn)
+        for existing_shift in teacher.shifts:
+            if existing_shift in new_shifts:
+                new_shifts.remove(existing_shift)
                 continue
 
-            class_instance = existing_turn.class_instance
+            class_instance = existing_shift.class_instance
             if (class_instance.year, class_instance.period) in year_period_set:
-                log.warning("Teacher stopped lecturing a turn")
-                # teacher.turns.remove(existing_turn)
-        for new_turn in new_turns:
-            teacher.turns.append(new_turn)
+                log.warning("Teacher stopped lecturing a shift")
+                # teacher.shifts.remove(existing_shift)
+        for new_shift in new_shifts:
+            teacher.shifts.append(new_shift)
 
         self.session.commit()
         return teacher
 
-    def add_turn(self, turn: candidates.Turn) -> models.Turn:
-        if turn.type is None:
-            raise Exception("Typeless turn found")
+    def add_shift(self, shift: candidates.Shift) -> models.Shift:
+        if shift.type is None:
+            raise Exception("Typeless shift found")
 
-        db_turn: models.Turn = self.session.query(models.Turn).filter_by(
-            number=turn.number,
-            class_instance=turn.class_instance,
-            type=turn.type
+        db_shift: models.Shift = self.session.query(models.Shift).filter_by(
+            number=shift.number,
+            class_instance=shift.class_instance,
+            type=shift.type
         ).first()
 
-        if db_turn is None:
-            db_turn = models.Turn(
-                class_instance=turn.class_instance,
-                number=turn.number,
-                type=turn.type,
-                enrolled=turn.enrolled,
-                capacity=turn.capacity,
-                minutes=turn.minutes,
-                routes=turn.routes,
-                restrictions=turn.restrictions,
-                state=turn.restrictions)
-            self.session.add(db_turn)
+        if db_shift is None:
+            db_shift = models.Shift(
+                class_instance=shift.class_instance,
+                number=shift.number,
+                type=shift.type,
+                enrolled=shift.enrolled,
+                capacity=shift.capacity,
+                minutes=shift.minutes,
+                routes=shift.routes,
+                restrictions=shift.restrictions,
+                state=shift.restrictions)
+            self.session.add(db_shift)
             self.session.commit()
-            log.info(f"Added turn {db_turn}")
+            log.info(f"Added shift {db_shift}")
         else:
             changed = False
-            if turn.minutes is not None and turn.minutes != 0:
-                db_turn.minutes = turn.minutes
+            if shift.minutes is not None and shift.minutes != 0:
+                db_shift.minutes = shift.minutes
                 changed = True
-            if turn.enrolled is not None:
-                db_turn.enrolled = turn.enrolled
+            if shift.enrolled is not None:
+                db_shift.enrolled = shift.enrolled
                 changed = True
-            if turn.capacity is not None:
-                db_turn.capacity = turn.capacity
+            if shift.capacity is not None:
+                db_shift.capacity = shift.capacity
                 changed = True
-            if turn.routes is not None:
-                db_turn.routes = turn.routes
+            if shift.routes is not None:
+                db_shift.routes = shift.routes
                 changed = True
-            if turn.restrictions is not None:
-                db_turn.restrictions = turn.restrictions
+            if shift.restrictions is not None:
+                db_shift.restrictions = shift.restrictions
                 changed = True
-            if turn.state is not None:
-                db_turn.state = turn.state
+            if shift.state is not None:
+                db_shift.state = shift.state
                 changed = True
             if changed:
                 self.session.commit()
 
-        return db_turn
+        return db_shift
 
-    def get_turn(self, class_instance: models.ClassInstance, turn_type: models.TurnType, number: int) -> models.Turn:
-        return self.session.query(models.Turn) \
+    def get_shift(self, class_instance: models.ClassInstance, shift_type: models.ShiftType,
+                  number: int) -> models.Shift:
+        return self.session.query(models.Shift) \
             .filter_by(
             class_instance=class_instance,
-            type=turn_type,
+            type=shift_type,
             number=number) \
             .first()
 
-    # Reconstructs the instances of a turn.
+    # Reconstructs the instances of a shift.
     # Destructive is faster because it doesn't worry about checking instance by instance,
     # it'll delete em' all and rebuilds
-    def add_turn_instances(self, instances: List[candidates.TurnInstance], destructive=False):
-        turn = None
+    def add_shift_instances(self, instances: List[candidates.ShiftInstance], destructive=False):
+        shift = None
         for instance in instances:
-            if turn is None:
-                turn = instance.turn
-            elif turn != instance.turn:
-                raise Exception('Instances belong to multiple turns')
-        if turn is None:
+            if shift is None:
+                shift = instance.shift
+            elif shift != instance.shift:
+                raise Exception('Instances belong to multiple shifts')
+        if shift is None:
             return
 
         if destructive:
             try:
-                deleted = self.session.query(models.TurnInstance).filter_by(turn=turn).delete()
+                deleted = self.session.query(models.ShiftInstance).filter_by(shift=shift).delete()
                 if deleted > 0:
-                    log.info(f"Deleted {deleted} turn instances from the turn {turn}")
+                    log.info(f"Deleted {deleted} shift instances from the shift {shift}")
             except Exception:
                 self.session.rollback()
-                raise Exception("Error deleting turn instances for turn {}\n{}".format(turn, traceback.format_exc()))
+                raise Exception("Error deleting shift instances for shift {}\n{}".format(shift, traceback.format_exc()))
 
             for instance in instances:
-                turn.instances.append(models.TurnInstance(
-                    turn=turn,
+                shift.instances.append(models.ShiftInstance(
+                    shift=shift,
                     start=instance.start,
                     end=instance.end,
                     room=instance.room,
                     weekday=instance.weekday))
 
             if len(instances) > 0:
-                log.info(f"Added {len(instances)} turn instances to the turn {turn}")
+                log.info(f"Added {len(instances)} shift instances to the shift {shift}")
                 self.session.commit()
         else:
-            db_turn_instances = self.session.query(models.TurnInstance).filter_by(turn=turn).all()
-            for db_turn_instance in db_turn_instances:
+            db_shift_instances = self.session.query(models.ShiftInstance).filter_by(shift=shift).all()
+            for db_shift_instance in db_shift_instances:
                 matched = False
                 for instance in instances[:]:
-                    if db_turn_instance.start == instance.start and db_turn_instance.end == instance.end and \
-                            db_turn_instance.weekday == instance.weekday:
+                    if db_shift_instance.start == instance.start and db_shift_instance.end == instance.end and \
+                            db_shift_instance.weekday == instance.weekday:
                         matched = True
-                        if db_turn_instance.room != instance.room:  # Update the room
-                            log.warning(f'An instance of {turn} changed the room from '
-                                        f'{db_turn_instance.room} to {instance.room}')
-                            db_turn_instance.room = instance.room
+                        if db_shift_instance.room != instance.room:  # Update the room
+                            log.warning(f'An instance of {shift} changed the room from '
+                                        f'{db_shift_instance.room} to {instance.room}')
+                            db_shift_instance.room = instance.room
                         instances.remove(instance)
                         break
                 if not matched:
-                    log.info(f'An instance of {turn} ceased to exist ({db_turn_instance})')
-                    self.session.delete(db_turn_instance)
+                    log.info(f'An instance of {shift} ceased to exist ({db_shift_instance})')
+                    self.session.delete(db_shift_instance)
             for instance in instances:
-                turn.instances.append(
-                    models.TurnInstance(
-                        turn=turn,
+                shift.instances.append(
+                    models.ShiftInstance(
+                        shift=shift,
                         start=instance.start,
                         end=instance.end,
                         room=instance.room,
                         weekday=instance.weekday))
             self.session.commit()
 
-    def add_turn_students(self, turn: models.Turn, students: [models.Student]):
-        old_students = set(turn.students)
+    def add_shift_students(self, shift: models.Shift, students: [models.Student]):
+        old_students = set(shift.students)
         new_students = set(students)
         deleted_students = old_students.difference(new_students)
         new_students = new_students.difference(old_students)
         new_count = len(new_students)
         deleted_count = len(deleted_students)
-        [turn.students.append(student) for student in new_students]
+        [shift.students.append(student) for student in new_students]
         if deleted_count > 0:
-            [turn.students.remove(student) for student in deleted_students]
+            [shift.students.remove(student) for student in deleted_students]
         if new_count > 0 or deleted_count > 0:
-            log.info(f"{new_count} students added and {deleted_count} removed from the turn {turn}.")
+            log.info(f"{new_count} students added and {deleted_count} removed from the shift {shift}.")
             self.session.commit()
 
     def add_admissions(self, admissions: [candidates.Admission]):

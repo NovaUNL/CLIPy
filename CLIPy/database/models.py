@@ -1,8 +1,10 @@
+import json
 from datetime import datetime
 from enum import Enum
 
 import sqlalchemy as sa
 import sqlalchemy.orm as orm
+from bson import json_util
 from sqlalchemy.ext.associationproxy import association_proxy
 from sqlalchemy.ext.declarative import declarative_base
 
@@ -105,8 +107,8 @@ class Period(Base):
         return "{} out of {}({})".format(self.part, self.parts, self.letter)
 
 
-class TurnType(Base):
-    __tablename__ = 'turn_types'
+class ShiftType(Base):
+    __tablename__ = 'shift_types'
     #: Identifier
     id = sa.Column(sa.Integer, primary_key=True)
     #: Verbose name
@@ -115,8 +117,8 @@ class TurnType(Base):
     abbreviation = sa.Column(sa.String(5), nullable=False)
 
     # Relation
-    # TODO sort by turn number too
-    instances = orm.relationship("Turn", order_by="Turn.class_instance_id", back_populates="type")
+    # TODO sort by shift number too
+    instances = orm.relationship("Shift", order_by="Shift.class_instance_id", back_populates="type")
 
     def __str__(self):
         return self.name
@@ -242,7 +244,7 @@ class Room(Base):
 
     # Relations and constraints
     building = orm.relationship(Building, back_populates="rooms")
-    turn_instances = orm.relationship("TurnInstance", order_by="TurnInstance.weekday", back_populates='room')
+    shift_instances = orm.relationship("ShiftInstance", order_by="ShiftInstance.weekday", back_populates='room')
     __table_args__ = (sa.UniqueConstraint('building_id', 'name', 'room_type', name='un_room'),)
 
     def __str__(self):
@@ -341,7 +343,7 @@ class ClassInstance(Base):
     period = orm.relationship(Period, back_populates="class_instances")
     file_relations = orm.relationship(ClassFile, back_populates="class_instance")
     enrollments = orm.relationship("Enrollment", order_by="Enrollment.id", back_populates="class_instance")
-    turns = orm.relationship("Turn", order_by="Turn.number", back_populates="class_instance")
+    shifts = orm.relationship("Shift", order_by="Shift.number", back_populates="class_instance")
     files = association_proxy('file_relations', 'file')
     evaluations = orm.relationship("ClassEvaluations", order_by="ClassEvaluations.datetime",
                                    back_populates="class_instance")
@@ -358,9 +360,11 @@ class ClassInstance(Base):
             'class_id': self.class_id,
             'period': self.period_id,
             'year': self.year,
-            'info': self.information,
+            'info': None if self.information is None
+            else json.loads(self.information, object_hook=json_util.object_hook),
+            'department_id': self.department_id,
             'enrollments': [enrollment.id for enrollment in self.enrollments],
-            'turns': [turn.id for turn in self.turns],
+            'shifts': [shift.id for shift in self.shifts],
             'evaluations': [evaluation.id for evaluation in self.evaluations]}
         return data
 
@@ -425,14 +429,14 @@ class Course(Base, TemporalEntity):
         }
 
 
-turn_students = sa.Table(
-    'turn_students', Base.metadata,
-    sa.Column('turn_id', sa.ForeignKey('turns.id'), primary_key=True),
+shift_students = sa.Table(
+    'shift_students', Base.metadata,
+    sa.Column('shift_id', sa.ForeignKey('shifts.id'), primary_key=True),
     sa.Column('student_id', sa.ForeignKey('students.id'), primary_key=True))
 
-turn_teachers = sa.Table(
-    'turn_teachers', Base.metadata,
-    sa.Column('turn_id', sa.ForeignKey('turns.id'), primary_key=True),
+shift_teachers = sa.Table(
+    'shift_teachers', Base.metadata,
+    sa.Column('shift_id', sa.ForeignKey('shifts.id'), primary_key=True),
     sa.Column('teacher_id', sa.ForeignKey('teachers.id'), primary_key=True))
 
 
@@ -453,7 +457,7 @@ class Teacher(Base, TemporalEntity):
     name = sa.Column(sa.String)
     # Relations and constraints
     departments = orm.relationship(Department, secondary=department_teachers, back_populates="teachers")
-    turns = orm.relationship('Turn', secondary=turn_teachers, back_populates='teachers')
+    shifts = orm.relationship('Shift', secondary=shift_teachers, back_populates='teachers')
     class_messages = orm.relationship('ClassMessages')
 
     def __str__(self):
@@ -494,7 +498,7 @@ class Student(Base, TemporalEntity):
     # Relations and constraints
     course = orm.relationship(Course, back_populates="students")  # TODO remove
     enrollments = orm.relationship("Enrollment", order_by="Enrollment.student_year", back_populates="student")
-    turns = orm.relationship('Turn', secondary=turn_students, back_populates='students')
+    shifts = orm.relationship('Shift', secondary=shift_students, back_populates='students')
     course_relations = orm.relationship(StudentCourse, back_populates="student")
     admission_records = orm.relationship("Admission", order_by="Admission.check_date", back_populates="student")
     courses = association_proxy('course_relations', 'course')
@@ -661,45 +665,45 @@ class Enrollment(Base):
             'approved': self.approved}
 
 
-class Turn(Base):
+class Shift(Base):
     """
-    | The generic concept of a :py:class:`Class` turn, which students enroll to.
-    | It has corresponding :py:class:`TurnInstance` entities to represent the physical/temporal existence of this turn.
+    | The generic concept of a :py:class:`Class` shift, which students enroll to.
+    | It has corresponding :py:class:`ShiftInstance` entities to represent the physical/temporal existence of this shift.
     """
-    __tablename__ = 'turns'
+    __tablename__ = 'shifts'
     #: Identifier
-    id = sa.Column(sa.Integer, sa.Sequence('turn_id_seq'), primary_key=True)
-    #: Parent :py:class:`ClassInstance` for this turn
+    id = sa.Column(sa.Integer, sa.Sequence('shift_id_seq'), primary_key=True)
+    #: Parent :py:class:`ClassInstance` for this shift
     class_instance_id = sa.Column(sa.Integer, sa.ForeignKey(ClassInstance.id))
-    #: number out of n turns that the parent :py:class:`ClassInstance` has
+    #: number out of n shifts that the parent :py:class:`ClassInstance` has
     number = sa.Column(sa.Integer)
-    #: The type of this turn (theoretical, practical, ...)
-    type_id = sa.Column(sa.Integer, sa.ForeignKey(TurnType.id))
-    #: Number of students enrolled to this turn TODO remove, is redundant
+    #: The type of this shift (theoretical, practical, ...)
+    type_id = sa.Column(sa.Integer, sa.ForeignKey(ShiftType.id))
+    #: Number of students enrolled to this shift TODO remove, is redundant
     enrolled = sa.Column(sa.Integer)
-    #: Turn capacity TODO remove, is redundant
+    #: Shift capacity TODO remove, is redundant
     capacity = sa.Column(sa.Integer)
-    #: Turn duration TODO remove, is redundant
+    #: Shift duration TODO remove, is redundant
     minutes = sa.Column(sa.Integer)
     #: sa.String representation of the routes
     routes = sa.Column(sa.String(5000))  # TODO do this properly with relationships
-    #: Restrictions to this turn's admission
+    #: Restrictions to this shift's admission
     restrictions = sa.Column(sa.String(200))  # FIXME enum?
-    #: Turn current state (opened, closed, these are left unchanged once the class ends)
+    #: Shift current state (opened, closed, these are left unchanged once the class ends)
     state = sa.Column(sa.String(200))  # FIXME enum?
 
     # Relations and constraints
-    teachers = orm.relationship(Teacher, secondary=turn_teachers, back_populates='turns')
-    students = orm.relationship(Student, secondary=turn_students, back_populates='turns')
-    class_instance = orm.relationship("ClassInstance", back_populates="turns")
+    teachers = orm.relationship(Teacher, secondary=shift_teachers, back_populates='shifts')
+    students = orm.relationship(Student, secondary=shift_students, back_populates='shifts')
+    class_instance = orm.relationship("ClassInstance", back_populates="shifts")
     instances = orm.relationship(
-        "TurnInstance",
-        order_by="TurnInstance.weekday",
-        back_populates='turn',
+        "ShiftInstance",
+        order_by="ShiftInstance.weekday",
+        back_populates='shift',
         cascade="save-update, merge, delete")
-    type = orm.relationship("TurnType", back_populates="instances")
+    type = orm.relationship("ShiftType", back_populates="instances")
     __table_args__ = (
-        sa.UniqueConstraint('class_instance_id', 'number', 'type_id', name='un_turn'),)
+        sa.UniqueConstraint('class_instance_id', 'number', 'type_id', name='un_shift'),)
 
     def __str__(self):
         return "{} {}.{}".format(self.class_instance, self.type, self.number)
@@ -719,16 +723,16 @@ class Turn(Base):
         }
 
 
-class TurnInstance(Base):
+class ShiftInstance(Base):
     """
-    | An instance of a :py:class:`Turn`.
-    | This represents the physical and temporal presences a turn.
+    | An instance of a :py:class:`Shift`.
+    | This represents the physical and temporal presences a shift.
     """
-    __tablename__ = 'turn_instances'
+    __tablename__ = 'shift_instances'
     #: Identifier
-    id = sa.Column(sa.Integer, sa.Sequence('turn_instance_id_seq'), primary_key=True)
-    #: Parent :py:class:`Turn`
-    turn_id = sa.Column(sa.Integer, sa.ForeignKey(Turn.id))
+    id = sa.Column(sa.Integer, sa.Sequence('shift_instance_id_seq'), primary_key=True)
+    #: Parent :py:class:`Shift`
+    shift_id = sa.Column(sa.Integer, sa.ForeignKey(Shift.id))
     #: Starting time (in minutes counting from the midnight)
     start = sa.Column(sa.Integer)
     #: Ending time (in minutes, counting from the midnight)
@@ -739,9 +743,9 @@ class TurnInstance(Base):
     weekday = sa.Column(sa.SMALLINT)
 
     # Relations and constraints
-    turn = orm.relationship(Turn, back_populates='instances')
-    room = orm.relationship(Room, back_populates="turn_instances")
-    __table_args__ = (sa.UniqueConstraint('turn_id', 'start', 'weekday', name='un_turn_instance'),)
+    shift = orm.relationship(Shift, back_populates='instances')
+    room = orm.relationship(Room, back_populates="shift_instances")
+    __table_args__ = (sa.UniqueConstraint('shift_id', 'start', 'weekday', name='un_shift_instance'),)
 
     @staticmethod
     def minutes_to_str(minutes: int):
@@ -750,11 +754,11 @@ class TurnInstance(Base):
     def serialize(self):
         return {
             'id': self.id,
-            'turn': self.turn_id,
+            'shift': self.shift_id,
             'start': self.start,
             'end': self.end,
             'room': self.room_id,
             'weekday': self.weekday}
 
     def __str__(self):
-        return "{}, weekday {}, hour {}".format(self.turn, self.weekday, self.minutes_to_str(self.start))
+        return "{}, weekday {}, hour {}".format(self.shift, self.weekday, self.minutes_to_str(self.start))

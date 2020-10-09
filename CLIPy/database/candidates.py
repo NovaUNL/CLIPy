@@ -103,12 +103,12 @@ class Teacher(TemporalEntity):
     def __str__(self):
         return f'{self.name} ({self.id}, {self.department.name})'
 
-    def add_turn(self, turn: models.Turn):
-        key = (turn.class_instance.year, turn.class_instance.period)
+    def add_shift(self, shift: models.Shift):
+        key = (shift.class_instance.year, shift.class_instance.period)
         if key in self.schedule_entries:
-            self.schedule_entries[key].add(turn)
+            self.schedule_entries[key].add(shift)
         else:
-            self.schedule_entries[key] = {turn, }
+            self.schedule_entries[key] = {shift, }
 
 
 class Admission:
@@ -183,12 +183,12 @@ class Room:
             return self.id == other.id and self.name == other.name and self.type == other.type
 
 
-class Turn:
-    def __init__(self, class_instance: models.ClassInstance, number: int, turn_type: models.TurnType, enrolled: int,
+class Shift:
+    def __init__(self, class_instance: models.ClassInstance, number: int, shift_type: models.ShiftType, enrolled: int,
                  capacity: int, minutes=None, routes=None, restrictions=None, state=None):
         self.class_instance = class_instance
         self.number = number
-        self.type = turn_type
+        self.type = shift_type
         self.enrolled = enrolled
         self.capacity = capacity
         self.minutes = minutes
@@ -197,7 +197,7 @@ class Turn:
         self.state = state
 
     def __str__(self):
-        return "turn {}.{} of {} {}/{} students, {} hours, {} routes, state: {}".format(
+        return "shift {}.{} of {} {}/{} students, {} hours, {} routes, state: {}".format(
             self.type, self.number, self.class_instance, self.enrolled, self.capacity,
             self.minutes / 60, self.routes, self.state)
 
@@ -205,9 +205,9 @@ class Turn:
         return self.class_instance.id.__hash__() + self.type.id.__hash__() + (self.number + 100).__hash__()
 
 
-class TurnInstance:
-    def __init__(self, turn: models.Turn, start: int, end: int, weekday: int, room=None):
-        self.turn = turn
+class ShiftInstance:
+    def __init__(self, shift: models.Shift, start: int, end: int, weekday: int, room=None):
+        self.shift = shift
         self.start = start
         self.end = end
         self.weekday = weekday
@@ -218,8 +218,8 @@ class TurnInstance:
         return "{}:{}".format(time / 60, time % 60)
 
     def __str__(self):
-        return "{} to {}, day:{}, turn{}".format(
-            self.time_str(self.start), self.time_str(self.end), self.weekday, self.turn)
+        return "{} to {}, day:{}, shift{}".format(
+            self.time_str(self.start), self.time_str(self.end), self.weekday, self.shift)
 
 
 class File:

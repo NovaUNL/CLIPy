@@ -89,12 +89,12 @@ class Clip:
         obj = self.cache.controller.session.query(m.ClassInstance).get(id)
         return None if obj is None else [file.serialize() for file in obj.file_relations]
 
-    def get_turn(self, id):
-        obj = self.cache.controller.session.query(m.Turn).get(id)
+    def get_shift(self, id):
+        obj = self.cache.controller.session.query(m.Shift).get(id)
         return None if obj is None else obj.serialize()
 
-    def get_turn_instance(self, id):
-        obj = self.cache.controller.session.query(m.TurnInstance).get(id)
+    def get_shift_instance(self, id):
+        obj = self.cache.controller.session.query(m.ShiftInstance).get(id)
         return None if obj is None else obj.serialize()
 
     def get_enrollment(self, id):
@@ -124,9 +124,9 @@ class Clip:
         processors.class_task(self.session, self.cache.registry, crawler.crawl_class_enrollments, year=year,
                               period=period)
 
-    def update_turns(self, year: int, period_part: int, period_parts: int):
+    def update_shifts(self, year: int, period_part: int, period_parts: int):
         period = self._get_period(period_part, period_parts)
-        processors.class_task(self.session, self.cache.registry, crawler.crawl_class_turns, year=year, period=period)
+        processors.class_task(self.session, self.cache.registry, crawler.crawl_class_shifts, year=year, period=period)
 
     def update_class_files(self, year: int, period_part: int, period_parts: int):
         period = self._get_period(period_part, period_parts)
@@ -187,10 +187,10 @@ class Clip:
         # Find class information such as objectives
         processors.class_task(self.session, self.cache.registry, crawler.crawl_class_info, year=year, period=period)
 
-        # Finds class instance turns and updates their data if needed.
-        processors.class_task(self.session, self.cache.registry, crawler.crawl_class_turns, year=year, period=period)
+        # Finds class instance shifts and updates their data if needed.
+        processors.class_task(self.session, self.cache.registry, crawler.crawl_class_shifts, year=year, period=period)
 
-        # Find teachers (depends on up-to-date departments and turns).
+        # Find teachers (depends on up-to-date departments and shifts).
         processors.department_task(self.session, self.cache.registry, crawler.crawl_teachers)
 
         # Finds uploaded file listings for every class

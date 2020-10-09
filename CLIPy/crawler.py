@@ -232,26 +232,26 @@ def crawl_teachers(session: WebSession, database: db.Controller, department: db.
 
                 schedule_page = session.get_simplified_soup(urls.TEACHER_SCHEDULE.format(
                     teacher=identifier,
-                    institution=department.institution.id,
+                    institution=INSTITUTION_ID,
                     department=department.id,
                     year=year,
                     period=period.part,
                     period_type=period.letter))
 
-                for turn_link_tag in schedule_page.find_all(href=urls.TURN_LINK_EXP):
-                    turn_link = turn_link_tag.attrs['href']
-                    class_match = urls.CLASS_ALT_EXP.search(turn_link)
+                for shift_link_tag in schedule_page.find_all(href=urls.SHIFT_LINK_EXP):
+                    shift_link = shift_link_tag.attrs['href']
+                    class_match = urls.CLASS_ALT_EXP.search(shift_link)
                     if class_match is None:
-                        raise Exception(f"Failed to match a class identifier in {turn_link}")
+                        raise Exception(f"Failed to match a class identifier in {shift_link}")
                     class_id = int(class_match.group(1))
-                    turn_match = urls.TURN_LINK_EXP.search(turn_link)
+                    shift_match = urls.SHIFT_LINK_EXP.search(shift_link)
                     if class_match is None:
-                        raise Exception(f"Failed to match a turn in {turn_link}")
-                    turn_type = database.get_turn_type(turn_match.group('type'))
-                    if turn_type is None:
-                        logging.error("Unknown turn type %s" % turn_match.group('type'))
+                        raise Exception(f"Failed to match a shift in {shift_link}")
+                    shift_type = database.get_shift_type(shift_match.group('type'))
+                    if shift_type is None:
+                        logging.error("Unknown shift type %s" % shift_match.group('type'))
                         continue
-                    turn_number = turn_match.group('number')
+                    shift_number = shift_match.group('number')
                     class_instance_key = (class_id, year, period)
                     if class_instance_key in classes_instances_cache:
                         class_instance = classes_instances_cache[class_instance_key]
@@ -261,11 +261,11 @@ def crawl_teachers(session: WebSession, database: db.Controller, department: db.
                             logging.error("Teacher schedule has unknown class")
                             continue
                         classes_instances_cache[class_instance_key] = class_instance
-                    turn = database.get_turn(class_instance, turn_type, turn_number)
-                    if turn is None:
-                        logging.error("Unknown turn")
+                    shift = database.get_shift(class_instance, shift_type, shift_number)
+                    if shift is None:
+                        logging.error("Unknown shift")
                         continue
-                    teacher.add_turn(turn)
+                    teacher.add_shift(shift)
 
         for candidate in teachers.values():
             database.add_teacher(candidate)
@@ -490,19 +490,19 @@ def crawl_class_info(session: WebSession, database: db.Controller, class_instanc
     database.update_class_instance_info(class_instance, class_info)
 
 
-def crawl_class_turns(session: WebSession, database: db.Controller, class_instance: db.models.ClassInstance):
+def crawl_class_shifts(session: WebSession, database: db.Controller, class_instance: db.models.ClassInstance):
     """
-    Updates information on turns belonging to a given class instance.
+    Updates information on shifts belonging to a given class instance.
     :param session: Browsing session
     :param database: Database controller
     :param class_instance: ClassInstance object to look after
     """
-    log.debug("Crawling turns class instance ID %s" % class_instance.id)
+    log.debug("Crawling shifts class instance ID %s" % class_instance.id)
     class_instance: db.models.ClassInstance = database.session.merge(class_instance)
     year = class_instance.year
 
-    # --- Prepare the list of turns to crawl ---
-    page = session.get_simplified_soup(urls.CLASS_TURNS.format(
+    # --- Prepare the list of shifts to crawl ---
+    page = session.get_simplified_soup(urls.CLASS_SHIFTS.format(
         institution=INSTITUTION_ID,
         year=class_instance.year,
         class_id=class_instance.parent.id,
@@ -513,44 +513,44 @@ def crawl_class_turns(session: WebSession, database: db.Controller, class_instan
     except AttributeError:
         print()
 
-    # When there is only one turn, the received page is the turn itself. (CLASS_TURN instead of CLASS_TURNS)
-    single_turn = False
-    turn_count = 0  # consistency check
+    # When there is only one shift, the received page is the shift itself. (CLASS_SHIFT instead of CLASS_SHIFTS)
+    single_shift = False
+    shift_count = 0  # consistency check
 
-    turn_type = None
-    turn_number = None
+    shift_type = None
+    shift_number = None
 
-    turn_links = page.find_all(href=urls.TURN_LINK_EXP)
-    for turn_link in turn_links:
-        if "aux=ficheiro" in turn_link.attrs['href'].lower():
-            # there are no file links in turn lists, but they do exist on turn pages
-            single_turn = True
+    shift_links = page.find_all(href=urls.SHIFT_LINK_EXP)
+    for shift_link in shift_links:
+        if "aux=ficheiro" in shift_link.attrs['href'].lower():
+            # there are no file links in shift lists, but they do exist on shift pages
+            single_shift = True
         else:
-            turn_count += 1
-            turn_link_matches = urls.TURN_LINK_EXP.search(turn_link.attrs['href'])
-            turn_type = turn_link_matches.group("type")
-            turn_number = int(turn_link_matches.group("number"))
+            shift_count += 1
+            shift_link_matches = urls.SHIFT_LINK_EXP.search(shift_link.attrs['href'])
+            shift_type = shift_link_matches.group("type")
+            shift_number = int(shift_link_matches.group("number"))
 
-    turn_pages = []  # pages for turn parsing
-    if single_turn:  # if the loaded page is the only turn
-        if turn_count > 1:
-            raise Exception(f"Class instance {class_instance}, previously though to have one single turn now has many!")
-        if turn_count == 0:
-            log.info("Turn page without any turn. Skipping")
+    shift_pages = []  # pages for shift parsing
+    if single_shift:  # if the loaded page is the only shift
+        if shift_count > 1:
+            raise Exception(f"Class instance {class_instance}, previously though to have one single shift now has many!")
+        if shift_count == 0:
+            log.info("Shift page without any shift. Skipping")
             return
-        turn_pages.append((page, turn_type, turn_number))  # save it, avoid requesting it again
-    else:  # if there are multiple turns then request them
-        for turn_link in turn_links:
-            turn_page = session.get_simplified_soup(urls.ROOT + turn_link.attrs['href'])
-            turn_link_matches = urls.TURN_LINK_EXP.search(turn_link.attrs['href'])
-            turn_type = turn_link_matches.group("type")
-            turn_number = int(turn_link_matches.group("number"))
-            turn_pages.append((turn_page, turn_type, turn_number))  # and save them with their metadata
+        shift_pages.append((page, shift_type, shift_number))  # save it, avoid requesting it again
+    else:  # if there are multiple shifts then request them
+        for shift_link in shift_links:
+            shift_page = session.get_simplified_soup(urls.ROOT + shift_link.attrs['href'])
+            shift_link_matches = urls.SHIFT_LINK_EXP.search(shift_link.attrs['href'])
+            shift_type = shift_link_matches.group("type")
+            shift_number = int(shift_link_matches.group("number"))
+            shift_pages.append((shift_page, shift_type, shift_number))  # and save them with their metadata
 
-    # --- Crawl found turns ---
-    for page, turn_type, turn_number in turn_pages:  # for every turn in this class instance
-        # Create turn
-        instances, routes, teachers_names, restrictions, minutes, state, enrolled, capacity = parser.get_turn_info(page)
+    # --- Crawl found shifts ---
+    for page, shift_type, shift_number in shift_pages:  # for every shift in this class instance
+        # Create shift
+        instances, routes, teachers_names, restrictions, minutes, state, enrolled, capacity = parser.get_shift_info(page)
         routes_str = None  # TODO get rid of this pseudo-array after the curricular plans are done.
         for route in routes:
             if routes_str is None:
@@ -558,15 +558,15 @@ def crawl_class_turns(session: WebSession, database: db.Controller, class_instan
             else:
                 routes_str += (';' + route)
 
-        turn_type = database.get_turn_type(turn_type)
-        if turn_type is None:
-            log.error(f"Unable to resolve turn type {turn_pages[1]}.\n\tWas crawling {class_instance}, skipping!")
+        shift_type = database.get_shift_type(shift_type)
+        if shift_type is None:
+            log.error(f"Unable to resolve shift type {shift_pages[1]}.\n\tWas crawling {class_instance}, skipping!")
             continue
-        turn = database.add_turn(
-            db.candidates.Turn(
+        shift = database.add_shift(
+            db.candidates.Shift(
                 class_instance=class_instance,
-                number=turn_number,
-                turn_type=turn_type,
+                number=shift_number,
+                shift_type=shift_type,
                 enrolled=enrolled,
                 capacity=capacity,
                 minutes=minutes,
@@ -574,7 +574,7 @@ def crawl_class_turns(session: WebSession, database: db.Controller, class_instan
                 restrictions=restrictions,
                 state=state))
 
-        # Create instances of this turn
+        # Create instances of this shift
         instances_aux = instances
         instances = []
         for weekday, start, end, building, room in instances_aux:
@@ -583,15 +583,15 @@ def crawl_class_turns(session: WebSession, database: db.Controller, class_instan
                 if room:
                     room = database.get_room(room[0], building, room_type=room[1])
                     if room is None:
-                        log.warning(f"{turn_type}{turn_number} of {class_instance} couldn't be matched against a room.")
-            instances.append(db.candidates.TurnInstance(turn, start, end, weekday, room=room))
+                        log.warning(f"{shift_type}{shift_number} of {class_instance} couldn't be matched against a room.")
+            instances.append(db.candidates.ShiftInstance(shift, start, end, weekday, room=room))
         del instances_aux
-        database.add_turn_instances(instances)
+        database.add_shift_instances(instances)
 
-        # Assign students to this turn
+        # Assign students to this shift
         students = []
-        for name, student_id, abbreviation, course_abbreviation in parser.get_turn_students(page):
-            course = database.get_course(abbreviation=course_abbreviation, year=year, institution=INSTITUTION_ID)
+        for name, student_id, abbreviation, course_abbreviation in parser.get_shift_students(page):
+            course = database.get_course(abbreviation=course_abbreviation, year=year)
             student = database.add_student(
                 db.candidates.Student(
                     identifier=student_id,
@@ -601,7 +601,7 @@ def crawl_class_turns(session: WebSession, database: db.Controller, class_instan
                     first_year=year,
                     last_year=year))
             students.append(student)
-        database.add_turn_students(turn, students)
+        database.add_shift_students(shift, students)
 
 
 def crawl_files(session: WebSession, database: db.Controller, class_instance: db.models.ClassInstance):

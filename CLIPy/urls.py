@@ -104,7 +104,7 @@ STATISTICS = ROOT + \
     "/utente/institui%E7%E3o_sede/unidade_organica/ensino/estat%EDstica/alunos/evolu%E7%E3o" \
     "?institui%E7%E3o={institution}&n%EDvel_acad%E9mico={degree}"
 
-#: A teacher's schedule for a given period. It can be used to confirm teachers turns.
+#: A teacher's schedule for a given period. It can be used to confirm teachers shifts.
 TEACHER_SCHEDULE = ROOT + \
     "/utente/institui%E7%E3o_sede/unidade_organica/ensino/ano_lectivo/hor%E1rio/unidade_de_ensino/Docente" \
     "?tipo_de_per%EDodo_lectivo={period_type}&sector={department}&ano_lectivo={year}" \
@@ -246,14 +246,14 @@ CLASS_ASSISTANCE = ROOT + \
     "?tipo_de_per%EDodo_lectivo={period_type}&ano_lectivo={year}" \
     "&per%EDodo_lectivo={period}&institui%E7%E3o={institution}&unidade_curricular={class_id}"
 
-#: Class instance turn list. Can be used to extract number of turns and their types.
-CLASS_TURNS = ROOT + \
+#: Class instance shift list. Can be used to extract number of shifts and their types.
+CLASS_SHIFTS = ROOT + \
     "/utente/institui%E7%E3o_sede/unidade_organica/unidade_curricular/edi%E7%E3o/actividade/turnos" \
     "?unidade_curricular={class_id}&institui%E7%E3o={institution}&ano_lectivo={year}" \
     "&tipo_de_per%EDodo_lectivo={period_type}&per%EDodo_lectivo={period}"
 
-#: Class turn info. Can be used to obtain turn students, teacher(s), location and times.
-CLASS_TURN = ROOT + \
+#: Class shift info. Can be used to obtain shift students, teacher(s), location and times.
+CLASS_SHIFT = ROOT + \
     "/utente/institui%E7%E3o_sede/unidade_organica/unidade_curricular/edi%E7%E3o/actividade/turnos" \
     "?tipo_de_per%EDodo_lectivo={period_type}&ano_lectivo={year}&per%EDodo_lectivo={period}" \
     "&institui%E7%E3o={institution}&unidade_curricular={class_id}&tipo={turn_type}&n%BA={turn}"
@@ -315,7 +315,7 @@ PERIOD_TYPE_EXP = re.compile('\\btipo_de_per%EDodo_lectivo=(\w+)\\b')
 CLASS_EXP = re.compile('\\bunidade_curricular=(\d+)\\b')
 CLASS_ALT_EXP = re.compile('\\bunidadec=(\d+)\\b')
 YEAR_EXP = re.compile("\\bano_lectivo=(?P<year>\d+)\\b")
-TURN_LINK_EXP = re.compile("\\b&ano_lectivo=(?P<year>\\d+)&per%EDodo_lectivo=(?P<period>\\d+).*&tipo=(?P<type>\\w+)&n%BA=(?P<number>\\d+)\\b")
+SHIFT_LINK_EXP = re.compile("\\b&ano_lectivo=(?P<year>\\d+)&per%EDodo_lectivo=(?P<period>\\d+).*&tipo=(?P<type>\\w+)&n%BA=(?P<number>\\d+)\\b")
 DEPARTMENT_EXP = re.compile('\\bsector=(\d+)\\b')
 TEACHER_EXP = re.compile('\\bdocente=(\d+)\\b')
 BUILDING_EXP = re.compile('\\bedif%EDcio=(\d+)\\b')

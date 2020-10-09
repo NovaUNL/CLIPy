@@ -64,19 +64,20 @@ def get_class(class_id):
 def get_class_instance(instance_id):
     return jsonify(clip.get_class_instance(instance_id))
 
+
 @bp.route('/files/<int:instance_id>', methods=['GET'])
 def get_files(instance_id):
     return jsonify(clip.get_class_instance_files(instance_id))
 
 
-@bp.route('/turn/<int:turn_id>', methods=['GET'])
-def get_turn(turn_id):
-    return jsonify(clip.get_turn(turn_id))
+@bp.route('/shift/<int:shift_id>', methods=['GET'])
+def get_shift(shift_id):
+    return jsonify(clip.get_shift(shift_id))
 
 
-@bp.route('/turn_inst/<int:turn_inst_id>', methods=['GET'])
-def get_turn_instance(turn_inst_id):
-    return jsonify(clip.get_turn_instance(turn_inst_id))
+@bp.route('/shift_inst/<int:shift_inst_id>', methods=['GET'])
+def get_shift_instance(shift_inst_id):
+    return jsonify(clip.get_shift_instance(shift_inst_id))
 
 
 @bp.route('/enrollment/<int:enrollment_id>', methods=['GET'])
@@ -134,7 +135,7 @@ def update_class_files(year, year_parts, part):
     return "Success"
 
 
-@bp.route('/update/turns/<int:year>/<int:year_parts>/<int:part>', methods=['GET'])
-def update_turns(year, year_parts, part):
-    clip.update_turns(year, year_parts, part)
+@bp.route('/update/shifts/<int:year>/<int:year_parts>/<int:part>', methods=['GET'])
+def update_shifts(year, year_parts, part):
+    clip.update_shifts(year, year_parts, part)
     return "Success"
