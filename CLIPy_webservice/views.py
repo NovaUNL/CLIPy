@@ -55,6 +55,10 @@ def get_department(department_id):
     return jsonify(clip.get_department(department_id))
 
 
+@bp.route('/classes/', methods=['GET'])
+def get_classes():
+    return jsonify(clip.get_classes())
+
 @bp.route('/class/<int:class_id>', methods=['GET'])
 def get_class(class_id):
     return jsonify(clip.get_class(class_id))
@@ -99,21 +103,21 @@ def get_library_info(day):
     })
 
 
-@bp.route('/update/classes/<int:institution_id>', methods=['GET'])
-def update_classes(institution_id):
-    clip.update_classes(institution_id)
+@bp.route('/update/classes/', methods=['GET'])
+def update_classes():
+    clip.update_classes()
     return "Success"
 
 
-@bp.route('/update/teachers/<int:institution_id>', methods=['GET'])
-def update_teachers(institution_id):
-    clip.update_teachers(institution_id)
+@bp.route('/update/teachers/', methods=['GET'])
+def update_teachers():
+    clip.update_teachers()
     return "Success"
 
 
-@bp.route('/update/admissions/<int:institution_id>', methods=['GET'])
-def update_admissions(institution_id):
-    clip.update_admissions(institution_id)
+@bp.route('/update/admissions/', methods=['GET'])
+def update_admissions():
+    clip.update_admissions()
     return "Success"
 
 
