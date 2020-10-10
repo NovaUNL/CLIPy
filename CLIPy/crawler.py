@@ -490,6 +490,20 @@ def crawl_class_info(session: WebSession, database: db.Controller, class_instanc
     database.update_class_instance_info(class_instance, class_info)
 
 
+def crawl_class_events(session: WebSession, database: db.Controller, class_instance: db.models.ClassInstance):
+    log.debug("Crawling events from class instance ID %s" % class_instance.id)
+    class_instance = database.session.merge(class_instance)
+
+    page = session.get_broken_simplified_soup(urls.CLASS_EVENTS.format(
+        institution=INSTITUTION_ID,
+        year=class_instance.year,
+        class_id=class_instance.parent.id,
+        period=class_instance.period.part,
+        period_type=class_instance.period.letter))
+    events = parser.get_class_events(page)
+    database.update_class_instance_events(class_instance, events)
+
+
 def crawl_class_shifts(session: WebSession, database: db.Controller, class_instance: db.models.ClassInstance):
     """
     Updates information on shifts belonging to a given class instance.

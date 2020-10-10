@@ -414,6 +414,55 @@ class Controller:
         instance.information = json.dumps(information, default=json_util.default)
         self.session.commit()
 
+    def update_class_instance_events(self, instance: models.ClassInstance, events):
+        db_events = instance.events
+        changed = False
+        new = set(events)
+        disappeared = set()
+        for db_event in db_events:
+            exists = False
+            for event in new:
+                date, from_time, to_time, event_type, season, info, note = event
+                if not (db_event.date == date
+                        and db_event.type == event_type
+                        and db_event.from_time == from_time
+                        and db_event.to_time == to_time
+                        and db_event.season == season
+                        and db_event.info == info
+                        and db_event.note == note):
+                    continue
+
+                # TODO update changed data here
+                new.remove(event)
+                exists = True
+                break
+            if not exists:
+                disappeared.add(db_event)
+
+        for event in disappeared:
+            self.session.delete(event)
+
+        for event in new:
+            date, from_time, to_time, event_type, season, info, note = event
+            event = models.ClassEvent(
+                class_instance=instance,
+                date=date,
+                from_time=from_time,
+                to_time=to_time,
+                type=event_type,
+                season=season,
+                info=info,
+                note=note)
+            self.session.add(event)
+            changed = True
+
+        if changed:
+            log.warning(f"{instance} evaluations changed ({len(new)} new, {len(disappeared)} deleted)")
+            try:
+                self.session.commit()
+            except Exception as e:
+                print()
+
     def add_courses(self, courses: [candidates.Course]):
         updated = 0
         try:

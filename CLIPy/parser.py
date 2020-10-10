@@ -1,6 +1,6 @@
 import logging
 import re
-from datetime import datetime
+from datetime import datetime, timedelta
 from unicodedata import normalize
 from urllib.parse import unquote
 
@@ -10,6 +10,7 @@ from bs4 import NavigableString
 
 from .database import models
 from . import urls
+from .database.models import EvaluationType, EvaluationSeason
 from .utils import weekday_to_id
 
 log = logging.getLogger(__name__)
@@ -350,6 +351,53 @@ def get_bilingual_info(page) -> (str, str, datetime, str):
             log.warning(f"Could not parse a footer with the contents: {footer}")
 
     return portuguese, english, edition_datetime, last_editor
+
+
+def get_class_events(page) -> (str, str, datetime, str):
+    table_root = page.find('table', class_="ldisplay", cellspacing='2', cellpadding='2', border='0')
+    rows = table_root.find_all('tr')
+    events = []
+    for row in rows:
+        columns = list(row.find_all('td'))
+        col_count = len(columns)
+        if col_count == 2:
+            continue
+        if col_count == 5:
+            date = columns[0].text.strip()
+            date = datetime.strptime(date, "%Y-%m-%d")
+            from_time = columns[1].text.strip()
+            from_time = datetime.strptime(from_time, "%H:%M")
+            to_time = columns[3].text.strip()
+            to_time = datetime.strptime(to_time, "%H:%M")
+            duration = (to_time - from_time).seconds // 60
+            date = date + timedelta(hours=from_time.hour, minutes=from_time.minute)
+            color = columns[4].find('span').attrs['style'].split('#')[1]
+            type_str = columns[4].text
+            if color == 'E8A400;':
+                eval_type = EvaluationType.test
+                if 'Exame' in type_str:
+                    eval_type = EvaluationType.exam
+
+                if 'Normal' in type_str:
+                    events.append((date, duration, eval_type, EvaluationSeason.normal))
+                elif 'Recurso' in type_str:
+                    events.append((date, duration, eval_type, EvaluationSeason.recourse))
+                elif 'Especial' in type_str:
+                    events.append((date, duration, eval_type, EvaluationSeason.special))
+                else:
+                    print()
+            elif color == 'DADCFF;':
+                print()
+                pass
+            elif color == 'CC9;':
+                print()
+                pass
+            else:
+                print()
+                pass
+        else:
+            print()
+    return events
 
 
 def get_teachers(page):

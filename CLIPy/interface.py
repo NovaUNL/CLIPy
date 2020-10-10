@@ -95,6 +95,10 @@ class Clip:
         obj = self.cache.controller.session.query(m.ClassInstance).get(id)
         return None if obj is None else [file.serialize() for file in obj.file_relations]
 
+    def get_events(self, id):
+        obj = self.cache.controller.session.query(m.ClassInstance).get(id)
+        return None if obj is None else [event.serialize() for event in obj.events]
+
     def get_shift(self, id):
         obj = self.cache.controller.session.query(m.Shift).get(id)
         return None if obj is None else obj.serialize()
@@ -124,6 +128,10 @@ class Clip:
     def update_class_info(self, year: int, period_part: int, period_parts: int):
         period = self._get_period(period_part, period_parts)
         processors.class_task(self.session, self.cache.registry, crawler.crawl_class_info, year=year, period=period)
+
+    def update_class_events(self, year: int, period_part: int, period_parts: int):
+        period = self._get_period(period_part, period_parts)
+        processors.class_task(self.session, self.cache.registry, crawler.crawl_class_events, year=year, period=period)
 
     def update_class_enrollments(self, year: int, period_part: int, period_parts: int):
         period = self._get_period(period_part, period_parts)
@@ -192,6 +200,9 @@ class Clip:
 
         # Find class information such as objectives
         processors.class_task(self.session, self.cache.registry, crawler.crawl_class_info, year=year, period=period)
+
+        # Find events such as exams dates, replacement classes and work deadlines
+        processors.class_task(self.session, self.cache.registry, crawler.crawl_class_events, year=year, period=period)
 
         # Finds class instance shifts and updates their data if needed.
         processors.class_task(self.session, self.cache.registry, crawler.crawl_class_shifts, year=year, period=period)

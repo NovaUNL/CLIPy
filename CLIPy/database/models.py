@@ -67,10 +67,25 @@ class FileType(Enum):
         return self.name
 
 
-class EvaluationType(Enum):
+class EventType(Enum):
     test = 1
     exam = 2
-    project = 3
+    discussion = 3
+    field_trip = 4
+    project_announcement = 5
+    project_delivery = 6
+    additional_class = 7
+    presentation = 8
+    seminar = 9
+    talk = 10
+    unknown = None
+
+
+class EvaluationSeason(Enum):
+    normal = 1
+    recourse = 2
+    special = 3
+    unknown = None
 
 
 class Degree(Base):
@@ -345,8 +360,7 @@ class ClassInstance(Base):
     enrollments = orm.relationship("Enrollment", order_by="Enrollment.id", back_populates="class_instance")
     shifts = orm.relationship("Shift", order_by="Shift.number", back_populates="class_instance")
     files = association_proxy('file_relations', 'file')
-    evaluations = orm.relationship("ClassEvaluations", order_by="ClassEvaluations.datetime",
-                                   back_populates="class_instance")
+    events = orm.relationship("ClassEvent", back_populates="class_instance")
     messages = orm.relationship("ClassMessages", order_by="ClassMessages.datetime", back_populates="class_instance")
     __table_args__ = (
         sa.UniqueConstraint('class_id', 'year', 'period_id', name='un_class_instance'),)
@@ -363,27 +377,47 @@ class ClassInstance(Base):
             'info': None if self.information is None
             else json.loads(self.information, object_hook=json_util.object_hook),
             'department_id': self.department_id,
+            'events': [event.serialize() for event in self.events],
             'enrollments': [enrollment.id for enrollment in self.enrollments],
-            'shifts': [shift.id for shift in self.shifts],
-            'evaluations': [evaluation.id for evaluation in self.evaluations]}
+            'shifts': [shift.id for shift in self.shifts]}
         return data
 
 
-class ClassEvaluations(Base):
-    __tablename__ = 'class_evaluations'
+class ClassEvent(Base):
+    __tablename__ = 'class_instance_events'
     #: Crawler generated identifier
     id = sa.Column(sa.Integer, sa.Sequence('class_instance_id_seq'), primary_key=True)
     #: Class instance
     class_instance_id = sa.Column(sa.Integer, sa.ForeignKey(ClassInstance.id), nullable=False)
     #: Occasion on which this evaluation will happen/happened
-    datetime = sa.Column(sa.DateTime)
+    date = sa.Column(sa.Date)
+    #: Start of the evaluation
+    from_time = sa.Column(sa.Time)
+    #: End of the evaluation
+    to_time = sa.Column(sa.Time)
     #: Type of evaluation (test, exam, work...)
-    evaluation_type = sa.Column(IntEnum(EvaluationType))
+    type = sa.Column(IntEnum(EventType), nullable=True)
+    #: Season at which the evaluation happens
+    season = sa.Column(IntEnum(EvaluationSeason), nullable=True)
+    #: Event information (possibly generated)
+    info = sa.Column(sa.Text, nullable=True)
+    #: Additional information (handwritten)
+    note = sa.Column(sa.Text, nullable=True)
 
     # Relations and constraints
-    class_instance = orm.relationship(ClassInstance, back_populates="evaluations")
-    __table_args__ = (sa.UniqueConstraint(
-        'class_instance_id', 'datetime', 'evaluation_type', name='un_class_evaluation'),)
+    class_instance = orm.relationship(ClassInstance, back_populates="events")
+
+    def serialize(self):
+        return {
+            'id': self.id,
+            'instance_id': self.class_instance_id,
+            'date': self.date.isoformat(),
+            'from_time': None if self.from_time is None else self.from_time.isoformat(timespec='minutes'),
+            'to_time': None if self.to_time is None else self.to_time.isoformat(timespec='minutes'),
+            'type': self.type.value if self.type else None,
+            'season': self.season.value if self.season else None,
+            'info': self.info,
+            'note': self.note}
 
 
 class StudentCourse(Base, TemporalEntity):
