@@ -1066,7 +1066,7 @@ class Controller:
                 self.session.commit()
         return file
 
-    def update_downloaded_file(self, file: models.File, mime: str, path: str, hash: str):
+    def update_downloaded_file(self, file: models.File, mime: str, hash: str):
         file.mime = mime
         file.hash = hash
         file.downloaded = True

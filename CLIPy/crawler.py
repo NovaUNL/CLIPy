@@ -14,7 +14,7 @@ from sqlalchemy.exc import IntegrityError
 
 from . import parser
 from . import database as db
-from .config import INSTITUTION_FIRST_YEAR, INSTITUTION_LAST_YEAR, INSTITUTION_ID
+from .config import INSTITUTION_FIRST_YEAR, INSTITUTION_LAST_YEAR, INSTITUTION_ID, FILE_SAVE_DIR
 from .database import exceptions
 from .session import Session as WebSession
 from . import urls
@@ -666,12 +666,6 @@ def download_files(session: WebSession, database: db.Controller, class_instance:
     class_files = class_instance.file_relations
     poked_file_types = set()
 
-    if 'CLIPY_SAVE_PATH' in os.environ:
-        save_path = os.environ['CLIPY_SAVE_PATH']
-        assert os.path.isdir(save_path)
-    else:
-        save_path = './files'
-
     for class_file in class_files:
         if not class_file.file.downloaded:
             file_type = class_file.file_type
@@ -697,7 +691,7 @@ def download_files(session: WebSession, database: db.Controller, class_instance:
             sha1 = hasher.hexdigest()
             file: db.models.File
 
-            dir_name = f"{save_path}/{sha1[:2]}"
+            dir_name = f"{FILE_SAVE_DIR}/{sha1[:2]}"
             dir_path = pathlib.Path(dir_name)
             if dir_path.exists():
                 if not dir_path.is_dir():
@@ -713,7 +707,7 @@ def download_files(session: WebSession, database: db.Controller, class_instance:
                 with open(path, 'wb') as fd:
                     fd.write(content)
 
-            database.update_downloaded_file(file=class_file.file, hash=sha1, path=path, mime=mime)
+            database.update_downloaded_file(file=class_file.file, hash=sha1, mime=mime)
 
 
 def crawl_grades(session: WebSession, database: db.Controller, class_instance: db.models.ClassInstance):
