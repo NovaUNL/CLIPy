@@ -886,7 +886,7 @@ class Controller:
             .filter_by(student=student, class_instance=class_instance).first()
 
         if enrollment is None:
-            log.error("Enrollment is missing")
+            log.error(f"Enrollment of {student} to {class_instance} is missing.")
             return
         result_count = len(results)
         if result_count < 1 or result_count > 3:
@@ -927,13 +927,15 @@ class Controller:
         enrollment: models.Enrollment = self.session.query(models.Enrollment) \
             .filter_by(student=student, class_instance=class_instance).first()
 
-        log.debug(f'Adding student {student} data to {class_instance}\n'
-                  f'\tAttendance:{attendance} As of:{date}')
+        if enrollment is None:
+            log.error(f'Unable to update enrollment. {student} to {class_instance} not found.')
+        else:
+            log.debug(f'Adding student {student} data to {class_instance}\n'
+                      f'\tAttendance:{attendance} As of:{date}')
+            enrollment.attendance = attendance
+            enrollment.attendance_date = date
 
-        enrollment.attendance = attendance
-        enrollment.attendance_date = date
-
-        self.session.commit()
+            self.session.commit()
 
     def update_enrollment_improvement(self, student: models.Student, class_instance: models.ClassInstance,
                                       improved: bool, grade: int, date: datetime.date):

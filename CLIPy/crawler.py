@@ -548,7 +548,8 @@ def crawl_class_shifts(session: WebSession, database: db.Controller, class_insta
     shift_pages = []  # pages for shift parsing
     if single_shift:  # if the loaded page is the only shift
         if shift_count > 1:
-            raise Exception(f"Class instance {class_instance}, previously though to have one single shift now has many!")
+            raise Exception(
+                f"Class instance {class_instance}, previously though to have one single shift now has many!")
         if shift_count == 0:
             log.info("Shift page without any shift. Skipping")
             return
@@ -564,7 +565,8 @@ def crawl_class_shifts(session: WebSession, database: db.Controller, class_insta
     # --- Crawl found shifts ---
     for page, shift_type, shift_number in shift_pages:  # for every shift in this class instance
         # Create shift
-        instances, routes, teachers_names, restrictions, minutes, state, enrolled, capacity = parser.get_shift_info(page)
+        instances, routes, teachers_names, restrictions, minutes, state, enrolled, capacity \
+            = parser.get_shift_info(page)
         routes_str = None  # TODO get rid of this pseudo-array after the curricular plans are done.
         for route in routes:
             if routes_str is None:
@@ -597,7 +599,8 @@ def crawl_class_shifts(session: WebSession, database: db.Controller, class_insta
                 if room:
                     room = database.get_room(room[0], building, room_type=room[1])
                     if room is None:
-                        log.warning(f"{shift_type}{shift_number} of {class_instance} couldn't be matched against a room.")
+                        log.warning(f"{shift_type}{shift_number} of {class_instance} "
+                                    "couldn't be matched against a room.")
             instances.append(db.candidates.ShiftInstance(shift, start, end, weekday, room=room))
         del instances_aux
         database.add_shift_instances(instances)
