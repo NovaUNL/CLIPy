@@ -1,7 +1,7 @@
 from datetime import datetime
 from flask import Blueprint, jsonify
 
-from . import config
+from webservice import config
 from CLIPy import Clip, CacheStorage
 
 bp = Blueprint('clipy', __name__, url_prefix='')
@@ -72,6 +72,10 @@ def get_class_instance(instance_id):
 @bp.route('/files/<int:instance_id>', methods=['GET'])
 def get_files(instance_id):
     return jsonify(clip.get_class_instance_files(instance_id))
+
+@bp.route('/events/<int:instance_id>', methods=['GET'])
+def get_events(instance_id):
+    return jsonify(clip.get_events(instance_id))
 
 
 @bp.route('/shift/<int:shift_id>', methods=['GET'])
