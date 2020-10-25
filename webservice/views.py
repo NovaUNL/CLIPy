@@ -59,6 +59,7 @@ def get_department(department_id):
 def get_classes():
     return jsonify(clip.get_classes())
 
+
 @bp.route('/class/<int:class_id>', methods=['GET'])
 def get_class(class_id):
     return jsonify(clip.get_class(class_id))
@@ -72,6 +73,7 @@ def get_class_instance(instance_id):
 @bp.route('/files/<int:instance_id>', methods=['GET'])
 def get_files(instance_id):
     return jsonify(clip.get_class_instance_files(instance_id))
+
 
 @bp.route('/events/<int:instance_id>', methods=['GET'])
 def get_events(instance_id):
@@ -125,25 +127,25 @@ def update_admissions():
     return "Success"
 
 
-@bp.route('/update/class_info/<int:year>/<int:year_parts>/<int:part>', methods=['GET'])
-def update_class_info(year, year_parts, part):
-    clip.update_class_info(year, year_parts, part)
+@bp.route('/update/class_info/<int:class_instance_id>', methods=['GET'])
+def update_class_info(class_instance_id):
+    clip.update_class_info(class_instance_id)
     return "Success"
 
 
-@bp.route('/update/class_enrollments/<int:year>/<int:year_parts>/<int:part>', methods=['GET'])
-def update_class_enrollments(year, year_parts, part):
-    clip.update_class_enrollments(year, year_parts, part)
+@bp.route('/update/class_enrollments/<int:class_instance_id>', methods=['GET'])
+def update_class_enrollments(class_instance_id):
+    clip.update_class_enrollments(class_instance_id)
     return "Success"
 
 
-@bp.route('/update/class_files/<int:year>/<int:year_parts>/<int:part>', methods=['GET'])
-def update_class_files(year, year_parts, part):
-    clip.update_class_files(year, year_parts, part)
+@bp.route('/update/class_files/<int:class_instance_id>', methods=['GET'])
+def update_class_files(class_instance_id):
+    clip.update_files(class_instance_id)
     return "Success"
 
 
-@bp.route('/update/shifts/<int:year>/<int:year_parts>/<int:part>', methods=['GET'])
-def update_shifts(year, year_parts, part):
-    clip.update_shifts(year, year_parts, part)
+@bp.route('/update/shifts/<int:class_instance_id>', methods=['GET'])
+def update_shifts(class_instance_id):
+    clip.update_shifts(class_instance_id)
     return "Success"

@@ -125,27 +125,26 @@ class Clip:
     def update_classes(self):
         processors.department_task(self.session, self.cache.registry, crawler.crawl_classes)
 
-    def update_class_info(self, year: int, period_part: int, period_parts: int):
-        period = self._get_period(period_part, period_parts)
-        processors.class_task(self.session, self.cache.registry, crawler.crawl_class_info, year=year, period=period)
+    def update_class_info(self, class_instance_id: int):
+        class_instance = self.cache.controller.session.query(m.ClassInstance).get(class_instance_id)
+        crawler.crawl_class_info(self.session, self.cache.controller, class_instance)
 
-    def update_class_events(self, year: int, period_part: int, period_parts: int):
-        period = self._get_period(period_part, period_parts)
-        processors.class_task(self.session, self.cache.registry, crawler.crawl_class_events, year=year, period=period)
+    def update_class_events(self, class_instance_id: int):
+        class_instance = self.cache.controller.session.query(m.ClassInstance).get(class_instance_id)
+        crawler.crawl_class_events(self.session, self.cache.controller, class_instance)
 
-    def update_class_enrollments(self, year: int, period_part: int, period_parts: int):
-        period = self._get_period(period_part, period_parts)
-        processors.class_task(self.session, self.cache.registry, crawler.crawl_class_enrollments, year=year,
-                              period=period)
+    def update_class_enrollments(self, class_instance_id: int):
+        class_instance = self.cache.controller.session.query(m.ClassInstance).get(class_instance_id)
+        crawler.crawl_class_enrollments(self.session, self.cache.controller, class_instance)
 
-    def update_shifts(self, year: int, period_part: int, period_parts: int):
-        period = self._get_period(period_part, period_parts)
-        processors.class_task(self.session, self.cache.registry, crawler.crawl_class_shifts, year=year, period=period)
+    def update_shifts(self, class_instance_id: int):
+        class_instance = self.cache.controller.session.query(m.ClassInstance).get(class_instance_id)
+        crawler.crawl_class_shifts(self.session, self.cache.controller, class_instance)
 
-    def update_class_files(self, year: int, period_part: int, period_parts: int):
-        period = self._get_period(period_part, period_parts)
-        processors.class_task(self.session, self.cache.registry, crawler.crawl_files, year=year, period=period)
-        processors.class_task(self.session, self.cache.registry, crawler.download_files, year=year, period=period)
+    def update_files(self, class_instance_id: int):
+        class_instance = self.cache.controller.session.query(m.ClassInstance).get(class_instance_id)
+        crawler.crawl_files(self.session, self.cache.controller, class_instance)
+        crawler.download_files(self.session, self.cache.controller, class_instance)
 
     def bootstrap_database(self, year: int = None, period_part=2, period_parts=None):
         """
