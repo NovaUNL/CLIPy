@@ -112,7 +112,7 @@ class Clip:
         return None if obj is None else obj.serialize()
 
     def get_evaluation(self, id):
-        obj = self.cache.controller.session.query(m.ClassEvaluations).get(id)
+        obj = self.cache.controller.session.query(m.ClassEvent).get(id)
         return None if obj is None else obj.serialize()
 
     def update_admissions(self):
