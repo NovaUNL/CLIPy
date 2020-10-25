@@ -10,7 +10,7 @@ from bs4 import NavigableString
 
 from .database import models
 from . import urls
-from .database.models import EvaluationType, EvaluationSeason
+from .database.models import EventType, EvaluationSeason
 from .utils import weekday_to_id
 
 log = logging.getLogger(__name__)
@@ -353,50 +353,112 @@ def get_bilingual_info(page) -> (str, str, datetime, str):
     return portuguese, english, edition_datetime, last_editor
 
 
+def _get_class_events_extract_date(columns):
+    date = None
+    from_time = None
+    to_time = None
+    try:
+        date = columns[0].text.strip()
+        date = datetime.strptime(date, "%Y-%m-%d").date()
+        from_time_str = columns[1].text.strip()
+        from_time = datetime.strptime(from_time_str, "%H:%M").time()
+        to_time_str = columns[3].text.strip()
+        to_time = datetime.strptime(to_time_str, "%H:%M").time()
+    except ValueError:
+        pass
+    return date, from_time, to_time
+
+
+def _extract_info(column):
+    info_rows = column.find_all('td', {"style": False})
+    first_row = info_rows[0].text.strip()
+    second_row = info_rows[1].text.strip()
+    if second_row == '':
+        return (first_row, None)
+    return (first_row, second_row)
+
+
 def get_class_events(page) -> (str, str, datetime, str):
     table_root = page.find('table', class_="ldisplay", cellspacing='2', cellpadding='2', border='0')
-    rows = table_root.find_all('tr')
+    if table_root is None:
+        return []
+    table_body = table_root.find('tbody')
+    rows = table_body.find_all('tr', recursive=False)
     events = []
     for row in rows:
-        columns = list(row.find_all('td'))
+        columns = list(row.find_all('td', recursive=False))
         col_count = len(columns)
         if col_count == 2:
             continue
-        if col_count == 5:
-            date = columns[0].text.strip()
-            date = datetime.strptime(date, "%Y-%m-%d")
-            from_time = columns[1].text.strip()
-            from_time = datetime.strptime(from_time, "%H:%M")
-            to_time = columns[3].text.strip()
-            to_time = datetime.strptime(to_time, "%H:%M")
-            duration = (to_time - from_time).seconds // 60
-            date = date + timedelta(hours=from_time.hour, minutes=from_time.minute)
-            color = columns[4].find('span').attrs['style'].split('#')[1]
-            type_str = columns[4].text
-            if color == 'E8A400;':
-                eval_type = EvaluationType.test
-                if 'Exame' in type_str:
-                    eval_type = EvaluationType.exam
+        if col_count != 5:
+            print()
+            raise Exception()
 
-                if 'Normal' in type_str:
-                    events.append((date, duration, eval_type, EvaluationSeason.normal))
-                elif 'Recurso' in type_str:
-                    events.append((date, duration, eval_type, EvaluationSeason.recourse))
-                elif 'Especial' in type_str:
-                    events.append((date, duration, eval_type, EvaluationSeason.special))
-                else:
-                    print()
-            elif color == 'DADCFF;':
-                print()
-                pass
-            elif color == 'CC9;':
-                print()
-                pass
+        date, from_time, to_time = _get_class_events_extract_date(columns)
+        color_tag = columns[4].find(True, {"style": True})
+        if color_tag is None:
+            print()
+        color = color_tag.attrs['style'].split('#')[1]
+        type_str = columns[4].text.strip()
+        type_str_lower = type_str.lower()
+        event_type = EventType.unknown
+        if color == 'E8A400;':
+            if 'teste' in type_str_lower:
+                event_type = EventType.test
+            elif 'exame' in type_str_lower:
+                event_type = EventType.exam
             else:
                 print()
-                pass
+
+            if 'normal' in type_str_lower:
+                events.append((date, from_time, to_time, event_type, EvaluationSeason.normal, None, None))
+            elif 'recurso' in type_str_lower:
+                events.append((date, from_time, to_time, event_type, EvaluationSeason.recourse, None, None))
+            elif 'especial' in type_str_lower:
+                events.append((date, from_time, to_time, event_type, EvaluationSeason.special, None, None))
+            else:
+                print()
+        elif color == 'DADCFF;':
+            info, note = _extract_info(columns[4])
+            info_lower = info.lower()
+            if 'test' in info_lower:
+                event_type = EventType.test
+            elif 'exam' in info_lower:
+                event_type = EventType.exam
+            elif 'campo' in info_lower:
+                event_type = EventType.field_trip
+            elif 'entrega' in info_lower or 'deliver' in info_lower or 'deadline' in info_lower:
+                event_type = EventType.project_delivery
+            elif 'discus' in info_lower or 'defesa' in info_lower:
+                event_type = EventType.discussion
+            elif 'enuncia' in info_lower or ('projec' in info_lower and 'defini' in info_lower):
+                event_type = EventType.project_announcement
+            elif 'presenta' in info_lower:
+                event_type = EventType.presentation
+            elif 'visit' in info_lower or 'saída' in info_lower:
+                event_type = EventType.field_trip
+            elif 'semin' in info_lower or (note and 'semin' in note):
+                event_type = EventType.seminar
+            elif 'palestra' in info_lower or (note and 'palestra' in note):
+                event_type = EventType.talk
+            elif 'trabalho' in info_lower and (
+                    (note and 'entrega' in note or 'deliver' in info)
+                    or (note and ('entrega' in note or 'deliver' in note))):
+                event_type = EventType.field_trip
+            else:
+                print(f'{type_str_lower} - {note}')
+            events.append((date, from_time, to_time, event_type, EvaluationSeason.unknown, info, note))
+        elif color == 'CC9;':
+            if 'viagem' in type_str_lower:
+                event_type = EventType.field_trip
+            elif 'aula' in type_str_lower:
+                event_type = EventType.additional_class
+            else:
+                print(type_str_lower)
+
+            events.append((date, from_time, to_time, event_type, EvaluationSeason.unknown, type_str, None))
         else:
-            print()
+            raise Exception()
     return events
 
 
@@ -728,7 +790,6 @@ def get_results(page):
             except ValueError:
                 normal_date = None
 
-
         if col_count >= 14:
             recourse_result = columns[9].text.strip()
             recourse_date = columns[11].text.strip()
@@ -744,7 +805,7 @@ def get_results(page):
         else:
             recourse_result, recourse_date = None, None  # Not needed, just to avoid having the linter complain
 
-        final_result = columns[col_count-1].text.strip()
+        final_result = columns[col_count - 1].text.strip()
         if col_count == 10:
             result = ((normal_result, normal_date),)
         elif col_count == 14:
@@ -863,7 +924,6 @@ def get_improvements(page) -> ((int, str, str), bool, int, datetime.date):
                 grade = columns[9].text.strip()
                 improvement_date = columns[11].text.strip()
             final_result = columns[13].text.strip()
-
 
         if grade in ('', '?'):
             grade = None
