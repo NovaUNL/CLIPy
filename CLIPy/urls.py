@@ -145,20 +145,20 @@ CLASS_FILES = ROOT + \
 
 #: Continuous evaluation moments. Can use to extract test enrollment lists, courses, sometimes grades.
 CLASS_CONTINUOUS_EVALUATION = ROOT + \
-    "/utente/institui%E7%E3o_sede/unidade_organica/ensino/ano_lectivo/sector/ano_lectivo/unidade_curricular/actividade/testes_de_avalia%E7%E3o/inscritos" \
+    "/utente/eu/aluno/ano_lectivo/unidades/unidade_curricular/actividade/testes_de_avalia%E7%E3o/inscritos" \
     "?unidade_curricular={class_id}&institui%E7%E3o={institution}&ano_lectivo={year}" \
-    "&tipo_de_per%EDodo_lectivo={period_type}&per%EDodo_lectivo={period}&sector={department}"
+    "&tipo_de_per%EDodo_lectivo={period_type}&per%EDodo_lectivo={period}"
 
 #: Class exams with extra insights. CLASS_EVENTS is a bit better, but this page includes places.
 CLASS_EXAMS = ROOT + \
-    "/utente/institui%E7%E3o_sede/unidade_organica/ensino/ano_lectivo/sector/ano_lectivo/unidade_curricular/organiza%E7%E3o/calend%E1rio/exames" \
-    "?tipo_de_per%EDodo_lectivo={period_type}&sector={department}&ano_lectivo={year}" \
+    "/utente/eu/aluno/ano_lectivo/unidades/unidade_curricular/organiza%E7%E3o/calend%E1rio/exames" \
+    "?tipo_de_per%EDodo_lectivo={period_type}&ano_lectivo={year}" \
     "&per%EDodo_lectivo={period}&institui%E7%E3o={institution}&unidade_curricular={class_id}"
 
 #: Class evaluation moments. Tests/exams dates,
 CLASS_EVENTS = ROOT + \
-    "/utente/institui%E7%E3o_sede/unidade_organica/ensino/ano_lectivo/sector/ano_lectivo/unidade_curricular/organiza%E7%E3o/calend%E1rio/eventos" \
-    "?tipo_de_per%EDodo_lectivo={period_type}&sector={department}&ano_lectivo={year}" \
+    "/utente/eu/aluno/ano_lectivo/unidades/unidade_curricular/organiza%E7%E3o/calend%E1rio/eventos" \
+    "?tipo_de_per%EDodo_lectivo={period_type}&ano_lectivo={year}" \
     "&per%EDodo_lectivo={period}&institui%E7%E3o={institution}&unidade_curricular={class_id}"
 
 #: List of class students enrolled to a given evaluation moment.
@@ -256,7 +256,7 @@ CLASS_SHIFTS = ROOT + \
 CLASS_SHIFT = ROOT + \
     "/utente/institui%E7%E3o_sede/unidade_organica/unidade_curricular/edi%E7%E3o/actividade/turnos" \
     "?tipo_de_per%EDodo_lectivo={period_type}&ano_lectivo={year}&per%EDodo_lectivo={period}" \
-    "&institui%E7%E3o={institution}&unidade_curricular={class_id}&tipo={turn_type}&n%BA={turn}"
+    "&institui%E7%E3o={institution}&unidade_curricular={class_id}&tipo={shift_type}&n%BA={shift}"
 
 # These next three have pretty much the same URL & query strings except for "tipo_de_avalia%E7%E3o_curricular" ,
 # but keeping them this way prevents conditionals for a few bytes of constants.
