@@ -68,6 +68,9 @@ class Session:
                 log.info('Successfully authenticated with CLIP')
                 self.__last__authentication = datetime.now()
                 self.save()
+            else:
+                self.__last__authentication = datetime.now()
+
         finally:
             __auth_lock__.release()
 
