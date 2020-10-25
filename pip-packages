@@ -1,0 +1,9 @@
+psycopg2-binary
+uWSGI
+Flask
+sqlalchemy
+requests
+beautifulsoup4
+htmlmin
+unidecode
+pymongo
