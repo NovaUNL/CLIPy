@@ -1,6 +1,8 @@
 import os
 from datetime import datetime, timedelta
+from random import random
 from threading import Semaphore
+from time import sleep
 
 import requests
 from http.cookiejar import LWPCookieJar
@@ -58,10 +60,17 @@ class Session:
         try:
             time_limit = datetime.now() - timedelta(minutes=15)
             if self.__last__authentication is None or self.__last__authentication < time_limit:
-                request = self.__requests_session__.post(
-                    urls.ROOT,
-                    headers=http_headers,
-                    data={'identificador': self.__username__, 'senha': self.__password__})
+                while True:
+                    try:
+                        request = self.__requests_session__.post(
+                            urls.ROOT,
+                            headers=http_headers,
+                            data={'identificador': self.__username__, 'senha': self.__password__},
+                            timeout=10)
+                        break
+                    except requests.exceptions.Timeout:
+                        log.warning(f"Request timed out: {urls.ROOT}")
+                        sleep(5)
                 if "password" in request.text:
                     raise AuthenticationFailure("CLIP authentication failed")
                 self.authenticated = True
@@ -82,7 +91,7 @@ class Session:
         """
         log.debug('Fetching:' + url)
         self.authenticate()
-        return self.__requests_session__.get(url, headers=http_headers)
+        return self.__requests_session__.get(url, headers=http_headers, timeout=10)
 
     def post(self, url: str, data: {str: str}) -> requests.Response:
         """
@@ -93,7 +102,7 @@ class Session:
         """
         log.debug(f'Fetching: {url} with params {data}')
         self.authenticate()
-        return self.__requests_session__.post(url, data=data, headers=http_headers)
+        return self.__requests_session__.post(url, data=data, headers=http_headers, timeout=10)
 
     def get_simplified_soup(self, url: str, post_data=None) -> BeautifulSoup:
         """
