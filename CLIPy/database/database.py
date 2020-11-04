@@ -167,9 +167,21 @@ class Controller:
             4: {'id': 7, 'parts': 4, 'part': 4, 'letter': 't'},
         }
     }
+    __period_set = [
+        {'id': 1, 'parts': 1, 'part': 1, 'letter': 'a'},
+        {'id': 2, 'parts': 2, 'part': 1, 'letter': 's'},
+        {'id': 3, 'parts': 2, 'part': 2, 'letter': 's'},
+        {'id': 4, 'parts': 4, 'part': 1, 'letter': 't'},
+        {'id': 5, 'parts': 4, 'part': 2, 'letter': 't'},
+        {'id': 6, 'parts': 4, 'part': 3, 'letter': 't'},
+        {'id': 7, 'parts': 4, 'part': 4, 'letter': 't'}
+    ]
 
     def get_period(self, part: int, parts: int) -> dict:
         return self.__periods[parts][part]
+
+    def get_period_set(self) -> {dict}:
+        return self.__period_set
 
     def get_building_set(self) -> {models.Building}:
         return set(self.session.query(models.Building).all())
@@ -185,9 +197,6 @@ class Controller:
             return set(self.__degrees__.values())
         else:
             return set(self.session.query(models.Degree).all())
-
-    def get_period_set(self) -> {models.Period}:
-        return set(self.session.query(models.Period).all())
 
     def get_course(self, identifier: int = None, abbreviation: str = None, year: int = None) -> Optional[models.Course]:
         if identifier is not None:
@@ -253,47 +262,25 @@ class Controller:
         :param department: Teacher department
         :return: Matching teacher
         """
-        if self.__caching__:  # FIXME this isn't going to work. Fix the cache code.
-            if name in self.__teachers__:
-                return self.__teachers__[name]
-        else:
-            matches = self.session.query(models.Teacher).filter_by(name=name).all()
-            if len(matches) == 1:
-                return matches[0]
-            if len(matches) == 0:
-                return None
-
-            filtered_matches = self.session.query(models.Teacher).filter_by(name=name, department=department).all()
-            if len(filtered_matches) == 1:
-                return matches[0]
-
-            # Desperation intensifies:
-            # Check if the unfiltered matches are all the same teacher:
-            same_teacher = True
-            teacher_iid = None
-            for match in matches:
-                if teacher_iid is None:
-                    teacher_iid = match.iid
-                    continue
-
-                if match.iid != teacher_iid:
-                    same_teacher = False
-                    break
-
-            if same_teacher:
-                return matches[0]  # Any of them will do
-
-            log.error(f'Several teachers with the name {name}')  # TODO to exception
+        matches = self.session.query(models.Teacher) \
+            .filter(models.Teacher.name == name, models.Department.id == department.id) \
+            .all()
+        if (match_count := len(matches)) == 1:
+            return matches[0]
+        elif match_count == 0:
             return None
+
+        log.error(f'Several teachers with the name {name}')  # TODO to exception
+        return None
 
     def get_class(self, id: int) -> Optional[models.Class]:
         return self.session.query(models.Class).filter_by(id=id).first()
 
-    def get_class_instance(self, class_id: int, year: int, period: models.Period) -> Optional[models.ClassInstance]:
+    def get_class_instance(self, class_id: int, year: int, period: id) -> Optional[models.ClassInstance]:
         return self.session.query(models.ClassInstance) \
             .filter(models.ClassInstance.class_id == class_id,
                     models.ClassInstance.year == year,
-                    models.ClassInstance.period == period) \
+                    models.ClassInstance.period_id == period) \
             .first()
 
     def add_departments(self, departments: [candidates.Department]):

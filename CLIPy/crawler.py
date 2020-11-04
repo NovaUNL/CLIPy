@@ -104,8 +104,8 @@ def crawl_buildings(session: WebSession, database: db.Controller):
                 urls.BUILDINGS.format(
                     institution=INSTITUTION_ID,
                     year=year,
-                    period=period.part,
-                    period_type=period.letter))
+                    period=period['part'],
+                    period_type=period['letter']))
             page_buildings = parser.get_buildings(page)
             for identifier, name in page_buildings:
                 candidate = db.candidates.Building(identifier=identifier, name=name, first_year=year, last_year=year)
@@ -206,8 +206,8 @@ def crawl_teachers(session: WebSession, database: db.Controller, department: db.
                 institution=INSTITUTION_ID,
                 department=department.id,
                 year=year,
-                period=period.part,
-                period_type=period.letter))
+                period=period['part'],
+                period_type=period['letter']))
             candidates = parser.get_teachers(page)
             for identifier, name in candidates:
                 # If there's a single teacher for a given period, a page with his/her schedule is served instead.
@@ -235,40 +235,76 @@ def crawl_teachers(session: WebSession, database: db.Controller, department: db.
                     institution=INSTITUTION_ID,
                     department=department.id,
                     year=year,
-                    period=period.part,
-                    period_type=period.letter))
+                    period=period['part'],
+                    period_type=period['letter']))
 
-                for shift_link_tag in schedule_page.find_all(href=urls.SHIFT_LINK_EXP):
-                    shift_link = shift_link_tag.attrs['href']
-                    class_match = urls.CLASS_ALT_EXP.search(shift_link)
-                    if class_match is None:
-                        raise Exception(f"Failed to match a class identifier in {shift_link}")
-                    class_id = int(class_match.group(1))
-                    shift_match = urls.SHIFT_LINK_EXP.search(shift_link)
-                    if class_match is None:
-                        raise Exception(f"Failed to match a shift in {shift_link}")
-                    shift_type = database.get_shift_type(shift_match.group('type'))
-                    if shift_type is None:
-                        logging.error("Unknown shift type %s" % shift_match.group('type'))
-                        continue
-                    shift_number = shift_match.group('number')
-                    class_instance_key = (class_id, year, period)
-                    if class_instance_key in classes_instances_cache:
-                        class_instance = classes_instances_cache[class_instance_key]
-                    else:
-                        class_instance = database.get_class_instance(class_id, year, period)
-                        if class_instance is None:
-                            logging.error("Teacher schedule has unknown class")
+                while True:  # Cycle in case classes get added during the first iteration
+                    for shift_link_tag in schedule_page.find_all(href=urls.SHIFT_LINK_EXP):
+                        shift_link = shift_link_tag.attrs['href']
+                        class_match = urls.CLASS_ALT_EXP.search(shift_link)
+                        if class_match is None:
+                            raise Exception(f"Failed to match a class identifier in {shift_link}")
+                        class_id = int(class_match.group(1))
+                        shift_match = urls.SHIFT_LINK_EXP.search(shift_link)
+                        if class_match is None:
+                            raise Exception(f"Failed to match a shift in {shift_link}")
+                        shift_type = database.get_shift_type(shift_match.group('type'))
+                        if shift_type is None:
+                            logging.error("Unknown shift type %s" % shift_match.group('type'))
                             continue
-                        classes_instances_cache[class_instance_key] = class_instance
-                    shift = database.get_shift(class_instance, shift_type, shift_number)
-                    if shift is None:
-                        logging.error(f"Unknown shift {class_instance} - {shift_type} {shift_number}")
-                        continue
-                    teacher.add_shift(shift)
+                        shift_number = shift_match.group('number')
+                        class_instance_key = (class_id, year, period['id'])
+                        if class_instance_key in classes_instances_cache:
+                            class_instance = classes_instances_cache[class_instance_key]
+                        else:
+                            class_instance = database.get_class_instance(class_id, year, period['id'])
+                            if class_instance is None:
+                                logging.error("Teacher schedule has unknown class")
+                                crawl_class_instance(session, database, class_id, year, period)
+                                continue
+                            classes_instances_cache[class_instance_key] = class_instance
+                        shift = database.get_shift(class_instance, shift_type, shift_number)
+                        if shift is None:
+                            logging.error(f"Unknown shift {class_instance} - {shift_type} {shift_number}")
+                            crawl_class_shifts(session, database, class_instance)
+                            continue
+                        teacher.add_shift(shift)
+                    break
 
         for candidate in teachers.values():
             database.add_teacher(candidate)
+
+
+def _crawl_class(session: WebSession, database: db.Controller, class_id, year, period,
+                 name=None, department=None):
+    # Fetch abbreviation and number of ECTSs
+    page = session.get_simplified_soup(urls.CLASS.format(
+        institution=INSTITUTION_ID,
+        year=year,
+        period=period['part'],
+        period_type=period['letter'],
+        class_id=class_id))
+    instance_name, abbr, ects = parser.get_class_instance(page, class_id)
+    if name is not None and name != instance_name:
+        raise Exception(f"Class name and instance name don't match {instance_name}/{name} ({class_id})")
+
+    return database.add_class(
+        db.candidates.Class(
+            identifier=class_id,
+            name=instance_name,
+            department=department,
+            abbreviation=abbr,
+            ects=ects))
+
+
+def crawl_class_instance(session: WebSession, database: db.Controller, class_id: int, year: int, period):
+    klass = _crawl_class(session, database, class_id, year, period)
+    new_class_instances = database.add_class_instances([db.candidates.ClassInstance(klass, period['id'], year)])
+    if len(new_class_instances) > 0:
+        _populate_new_class_instances(session, database, new_class_instances)
+
+
+period_exp = re.compile('&tipo_de_per%EDodo_lectivo=(?P<type>\w)&per%EDodo_lectivo=(?P<stage>\d)$')
 
 
 def crawl_classes(session: WebSession, database: db.Controller, department: db.models.Department):
@@ -276,10 +312,6 @@ def crawl_classes(session: WebSession, database: db.Controller, department: db.m
     log.debug("Crawling classes in department %s" % department.id)
     classes = {}
     class_instances = []
-
-    period_exp = re.compile('&tipo_de_per%EDodo_lectivo=(?P<type>\w)&per%EDodo_lectivo=(?P<stage>\d)$')
-    abbr_exp = re.compile('\(.+\) .* \((?P<abbr>.+)\)$')
-    ects_exp = re.compile('(?P<ects>\d|\d.\d)\s?ECTS.*')
 
     # for each year this department operated
     for year in range(department.first_year, department.last_year + 1):
@@ -323,43 +355,19 @@ def crawl_classes(session: WebSession, database: db.Controller, department: db.m
                 class_id = int(urls.CLASS_EXP.findall(class_link.attrs['href'])[0])
                 class_name = class_link.contents[0].strip()
                 if class_id not in classes:
-                    # Fetch abbreviation and number of ECTSs
-                    page = session.get_simplified_soup(urls.CLASS.format(
-                        institution=INSTITUTION_ID,
-                        year=year,
-                        department=department.id,
-                        period=period['part'],
-                        period_type=period['letter'],
-                        class_id=class_id))
-                    elements = page.find_all('td', attrs={'class': 'subtitulo'})
-                    abbr = None
-                    ects = None
-                    try:
-                        abbr_matches = abbr_exp.search(elements[0].text)
-                        abbr = str(abbr_matches.group('abbr')).strip()
-                    except:
-                        log.warning(f'Class {class_name}({class_id}) has no abbreviation')
-
-                    try:
-                        ects_matches = ects_exp.search(elements[1].text)
-                        ects_s = str(ects_matches.group('ects')).strip()
-                        # ECTSs are stored in halves. Someone decided it would be cool to award half ECTS...
-                        ects = int(float(ects_s) * 2)
-                    except:
-                        log.warning(f'Class {class_name}({class_id}) has no ECTS information')
-
-                    classes[class_id] = database.add_class(
-                        db.candidates.Class(
-                            identifier=class_id,
-                            name=class_name,
-                            department=department,
-                            abbreviation=abbr,
-                            ects=ects))
+                    classes[class_id] = _crawl_class(
+                        session, database, class_id, year, period,
+                        name=class_name, department=department)
 
                 if classes[class_id] is None:
                     raise Exception("Null class")
                 class_instances.append(db.candidates.ClassInstance(classes[class_id], period['id'], year, department))
     new_class_instances = database.add_class_instances(class_instances)
+    if len(new_class_instances) > 0:
+        _populate_new_class_instances(session, database, new_class_instances)
+
+
+def _populate_new_class_instances(session: WebSession, database: db.Controller, new_class_instances):
     for instance in new_class_instances:
         crawl_class_info(session, database, instance)
         crawl_class_shifts(session, database, instance)

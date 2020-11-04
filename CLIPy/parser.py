@@ -123,6 +123,38 @@ def get_admissions(page):
     return admitted
 
 
+class_title_exp = re.compile('\(.+\) (?P<name>.*) \((?P<abbr>.+)\)$')
+ects_exp = re.compile('(?P<ects>\d|\d.\d)\s?ECTS.*')
+
+
+def get_class_instance(page, class_id):
+    elements = page.find_all('td', attrs={'class': 'subtitulo'})
+
+    title_matches = class_title_exp.search(elements[0].text)
+    name = None
+    try:
+        name = str(title_matches.group('name')).strip()
+    except:
+        log.warning(f'Class {class_id} has no name.')
+
+    abbr = None
+    try:
+        abbr = str(title_matches.group('abbr')).strip()
+    except:
+        log.warning(f'Class {name}({class_id}) has no abbreviation')
+
+    ects = None
+    try:
+        ects_matches = ects_exp.search(elements[1].text)
+        ects_s = str(ects_matches.group('ects')).strip()
+        # ECTSs are stored in halves. Someone decided it would be cool to award half ECTS...
+        ects = int(float(ects_s) * 2)
+    except:
+        log.warning(f'Class {name}({class_id}) has no ECTS information')
+
+    return name, abbr, ects
+
+
 def get_enrollments(page):
     """
     Reads students enrollments from a file
