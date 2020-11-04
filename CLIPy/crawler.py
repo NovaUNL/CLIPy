@@ -263,7 +263,7 @@ def crawl_teachers(session: WebSession, database: db.Controller, department: db.
                         classes_instances_cache[class_instance_key] = class_instance
                     shift = database.get_shift(class_instance, shift_type, shift_number)
                     if shift is None:
-                        logging.error("Unknown shift")
+                        logging.error(f"Unknown shift {class_instance} - {shift_type} {shift_number}")
                         continue
                     teacher.add_shift(shift)
 
@@ -359,7 +359,14 @@ def crawl_classes(session: WebSession, database: db.Controller, department: db.m
                 if classes[class_id] is None:
                     raise Exception("Null class")
                 class_instances.append(db.candidates.ClassInstance(classes[class_id], period['id'], year, department))
-    database.add_class_instances(class_instances)
+    new_class_instances = database.add_class_instances(class_instances)
+    for instance in new_class_instances:
+        crawl_class_info(session, database, instance)
+        crawl_class_shifts(session, database, instance)
+        crawl_class_enrollments(session, database, instance)
+        crawl_class_events(session, database, instance)
+        crawl_grades(session, database, instance)
+        crawl_files(session, database, instance)
 
 
 def crawl_admissions(session: WebSession, database: db.Controller, year):

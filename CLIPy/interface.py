@@ -174,11 +174,12 @@ class Clip:
         # Find rooms (depends on up-to-date institutions and buildings).
         processors.building_task(self.session, self.cache.registry, crawler.crawl_rooms)
 
+        # Find courses.
+        crawler.crawl_courses(self.session, main_thread_db_controller)
+
         # Find classes (depends on up-to-date departments).
         processors.department_task(self.session, self.cache.registry, crawler.crawl_classes)
 
-        # Find courses.
-        crawler.crawl_courses(self.session, main_thread_db_controller)
 
         # Looks up the national access contest admission tables looking for students current statuses.
         # Depends on up-to-date institutions.
@@ -189,34 +190,11 @@ class Clip:
             from_year=INSTITUTION_FIRST_YEAR,
             to_year=INSTITUTION_LAST_YEAR)
 
-        # Finds student enrollments to class instances.
-        processors.class_task(
-            self.session,
-            self.cache.registry,
-            crawler.crawl_class_enrollments,
-            year=year,
-            period=period)
-
-        # Find class information such as objectives
-        processors.class_task(self.session, self.cache.registry, crawler.crawl_class_info, year=year, period=period)
-
-        # Find events such as exams dates, replacement classes and work deadlines
-        processors.class_task(self.session, self.cache.registry, crawler.crawl_class_events, year=year, period=period)
-
-        # Finds class instance shifts and updates their data if needed.
-        processors.class_task(self.session, self.cache.registry, crawler.crawl_class_shifts, year=year, period=period)
-
         # Find teachers (depends on up-to-date departments and shifts).
         processors.department_task(self.session, self.cache.registry, crawler.crawl_teachers)
 
-        # Finds uploaded file listings for every class
-        processors.class_task(self.session, self.cache.registry, crawler.crawl_files, year=year, period=period)
-
         # Downloads known files
         processors.class_task(self.session, self.cache.registry, crawler.download_files, year=year, period=period)
-
-        # Finds class instance grades
-        processors.class_task(self.session, self.cache.registry, crawler.crawl_grades, year=year, period=period)
 
     def _get_period(self, period_part, period_parts):
         if period_part is None or period_parts is None:

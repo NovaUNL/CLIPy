@@ -378,24 +378,28 @@ class Controller:
 
     def add_class_instances(self, instances: [candidates.ClassInstance]):
         ignored = 0
+        new = []
         for instance in instances:
             db_class_instance = self.session.query(models.ClassInstance).filter_by(
                 parent=instance.parent,
                 year=instance.year,
                 period_id=instance.period
             ).first()
-            if db_class_instance is not None:
-                ignored += 1
-            else:
-                self.session.add(models.ClassInstance(
+            if db_class_instance is None:
+                db_class_instance = models.ClassInstance(
                     parent=instance.parent,
                     year=instance.year,
                     period_id=instance.period,
                     department=instance.department
-                ))
+                )
+                self.session.add(db_class_instance)
+                new.append(db_class_instance)
                 self.session.commit()
+            else:
+                ignored += 1
         if len(instances) - ignored > 0:
             log.info(f"{len(instances) - ignored} class instances added successfully! ({ignored} ignored)")
+        return new
 
     def update_class_instance_info(self, instance: models.ClassInstance, upstream_info):
         information = dict()
