@@ -106,16 +106,16 @@ class ParsingMethods(unittest.TestCase):
                               (90124, 'Jjj', 'j.jj', 'basmgd', 'MIEI', 1, 2),
                               (90125, 'Kkk', 'k.kk', 'mgd', 'MIEI', 1, 2)])
 
-    def test_turn_info_parsing(self):
+    def test_shift_info_parsing(self):
         """
-        | Tests :py:func:`CLIPy.parser.get_turn_info` against a :py:const:`CLIPy.urls.CLASS_TURN` page snapshot.
-        | Asserts that the correct turn info is found.
+        | Tests :py:func:`CLIPy.parser.get_shift_info` against a :py:const:`CLIPy.urls.CLASS_SHIFT` page snapshot.
+        | Asserts that the correct shift info is found.
         """
-        with open("snapshots/class_turn.html", mode='r') as page:
+        with open("snapshots/class_shift.html", mode='r') as page:
             page = BeautifulSoup(page, 'html.parser')
-            info = parser.get_turn_info(page)
+            info = parser.get_shift_info(page)
             self.assertEqual(info, (
-                [  # Turn instances
+                [  # Shift instances
                     (1,  # Weekday
                      480,  # Start
                      660,  # End
@@ -130,14 +130,14 @@ class ParsingMethods(unittest.TestCase):
                 26,  # Enrolled
                 25))  # Capacity
 
-    def test_turn_students_parsing(self):
+    def test_shift_students_parsing(self):
         """
-        | Tests :py:func:`CLIPy.parser.get_turn_students` against a :py:const:`CLIPy.urls.CLASS_TURN` page snapshot.
+        | Tests :py:func:`CLIPy.parser.get_shift_students` against a :py:const:`CLIPy.urls.CLASS_SHIFT` page snapshot.
         | Asserts that every student and his/her details are found.
         """
-        with open("snapshots/class_turn.html", mode='r') as page:
+        with open("snapshots/class_shift.html", mode='r') as page:
             page = BeautifulSoup(page, 'html.parser')
-            students = parser.get_turn_students(page)
+            students = parser.get_shift_students(page)
             self.assertEqual(students,
                              [('Aàá bcd', 12345, 'a.bcd', 'MIEI'),
                               ('Efgh', 23456, 'e.fgh', 'MIEMat'),
