@@ -36,7 +36,6 @@ class RoomType(Enum):
 
 
 class FileType(Enum):
-    #: A room without a specific purpose
     image = (1, None)
     #: AKA "acetatos"
     slides = (2, '0ac')
@@ -216,7 +215,6 @@ class Department(Base, TemporalEntity):
         return {
             'id': self.id,
             'name': self.name,
-            'classes': [class_.id for class_ in self.classes],
             'teachers': [teacher.id for teacher in self.teachers]}
 
 

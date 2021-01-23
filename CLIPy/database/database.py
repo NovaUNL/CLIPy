@@ -340,7 +340,7 @@ class Controller:
 
                 elif db_class.abbreviation != candidate.abbreviation:
                     if SequenceMatcher(None, db_class.abbreviation, candidate.abbreviation).ratio() < 0.3:
-                        raise Exception("Class abbreviation change attempt."
+                        log.error("Class abbreviation change prevented. "
                                         f"{db_class.abbreviation} to {candidate.abbreviation} (id {candidate.id})")
                     else:
                         log.warning("Class abbreviation change."

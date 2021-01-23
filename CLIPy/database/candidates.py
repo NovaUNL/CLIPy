@@ -59,7 +59,7 @@ class Class:
 
 
 class ClassInstance:
-    def __init__(self, parent: Class, period: int, year: int, department: models.Department):
+    def __init__(self, parent: Class, period: int, year: int, department=None):
         self.parent = parent
         self.period = period
         self.year = year
