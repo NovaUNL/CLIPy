@@ -9,5 +9,4 @@ Utils auxiliary to the clip module
 
 """
 
-from .utils import weekday_to_id, get_month_periods
-from . import populate
+from .utils import weekday_to_id
