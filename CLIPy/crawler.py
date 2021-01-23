@@ -121,6 +121,7 @@ def crawl_buildings(session: WebSession, database: db.Controller):
         log.debug(f"Adding building {building} to the database.")
         database.add_building(building)
 
+integrated_master_name_exp = re.compile("Mestrado Integrado.*")
 
 def crawl_courses(session: WebSession, database: db.Controller):
     """
@@ -141,6 +142,7 @@ def crawl_courses(session: WebSession, database: db.Controller):
         courses[identifier] = candidate
 
     # fetch course abbreviation from the statistics page
+    # TODO redo degrees, make them a static entity
     integrated_master_degree = list(filter(lambda deg: deg.id == 4, database.get_degree_set()))[0]
     for degree in database.get_degree_set():
         if degree.id == 4:  # Skip integrated masters
@@ -152,8 +154,8 @@ def crawl_courses(session: WebSession, database: db.Controller):
                 courses[identifier].abbreviation = abbreviation
                 if degree.id == 2 and abbreviation.startswith('MI'):  # Distinguish masters from integrated masters
                     course_page = session.get_simplified_soup(
-                        urls.COURSES.format(institution=INSTITUTION_ID, course=course.id))
-                    if course_page.find(text=re.compile(".*Mestrado Integrado.*")):
+                        urls.COURSE.format(institution=INSTITUTION_ID, course=course.id))
+                    if course_page.find(text=integrated_master_name_exp):
                         courses[identifier].degree = integrated_master_degree
                     else:
                         courses[identifier].degree = degree
