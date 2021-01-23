@@ -36,34 +36,34 @@ class PageCrawler(Thread):
     def run(self):
         db_session = self.db_registry.get_session()
         db_controller = db.Controller(self.db_registry)
-        while True:
-            self.queue_lock.acquire()
-            if not self.work_queue.empty():
-                work_unit = self.work_queue.get()
-                self.queue_lock.release()
-                exception_count = 0
-                while True:
-                    try:
-                        self.crawl_function(self.web_session, db_controller, work_unit)
-                        exception_count = 0
-                        break
-                    except Exception:
-                        db_session.rollback()
-                        exception_count += 1
-                        log.error(f'Failed to complete the job for the work unit with the ID {work_unit.id}.'
-                                  f'Error: \n{traceback.format_exc()}\n'
-                                  f'Retrying in {5 + min(exception_count, 55)} seconds...')
+        try:
+            while True:
+                self.queue_lock.acquire()
+                if not self.work_queue.empty():
+                    work_unit = self.work_queue.get()
+                    self.queue_lock.release()
+                    exception_count = 0
+                    while True:
+                        try:
+                            self.crawl_function(self.web_session, db_controller, work_unit)
+                            exception_count = 0
+                            break
+                        except Exception:
+                            db_session.rollback()
+                            exception_count += 1
+                            log.error(f'Failed to complete the job for the work unit with the ID {work_unit.id}.'
+                                      f'Error: \n{traceback.format_exc()}\n'
+                                      f'Retrying in {5 + min(exception_count, 55)} seconds...')
 
-                    if exception_count > 10:
-                        log.critical(f"Thread failed for more than 10 times. Skipping work unit {work_unit.id}")
-                        break
-                    sleep(5 + min(exception_count, 55))
-            else:
-                self.queue_lock.release()
-                break
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        self.db_registry.remove()
+                        if exception_count > 10:
+                            log.critical(f"Thread failed for more than 10 times. Skipping work unit {work_unit.id}")
+                            break
+                        sleep(5 + min(exception_count, 55))
+                else:
+                    self.queue_lock.release()
+                    break
+        finally:
+            self.db_registry.remove()
 
 
 def crawl_departments(session: WebSession, database: db.Controller):

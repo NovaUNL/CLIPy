@@ -24,7 +24,7 @@ def create_db_engine(backend: str, username=None, password=None, schema='CLIPy',
         return sa.create_engine(f"sqlite:///{file}?check_same_thread=False")  # , echo=True)
     elif backend == 'postgresql' and username is not None and password is not None and schema is not None:
         log.debug("Establishing a database connection to file:'{}'".format(file))
-        return sa.create_engine(f"postgresql://{username}:{password}@{host}/{schema}")
+        return sa.create_engine(f"postgresql://{username}:{password}@{host}/{schema}", pool_size=10, max_overflow=30)
     else:
         raise ValueError('Unsupported database backend or not enough arguments supplied')
 
@@ -46,7 +46,6 @@ class SessionRegistry:
 # NOT thread-safe. Each thread must instantiate its own controller from the registry.
 class Controller:
     def __init__(self, database_registry: SessionRegistry, cache: bool = False):
-        self.registry = database_registry
         self.session: orm.Session = database_registry.get_session()
 
         self.__caching__ = cache
@@ -833,6 +832,7 @@ class Controller:
                 log.info(f'An enrollment ceased to exist ({db_enrollment.student} to {db_enrollment.class_instance})')
                 deleted += 1
                 self.session.delete(db_enrollment)
+                self.session.commit()
 
         for enrollment in enrollments:
             db_enrollment: models.Enrollment = self.session.query(models.Enrollment) \
