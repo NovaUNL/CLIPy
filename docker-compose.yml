@@ -1,0 +1,65 @@
+version: '3.7'
+services:
+  clipy:
+    container_name: cl_flask
+    image: hotglue:65456/clipy:latest
+    ports:
+      - "127.0.0.1:893:893"
+    environment:
+      CONFIG: /conf/settings.json
+      FILE_SAVE_DIR: /files
+    volumes:
+      - ./conf/flask/:/conf/:ro
+      - /s/clipy/files:/files:rw
+    restart: unless-stopped
+
+  nginx:
+    container_name: cl_nginx
+    image: nginx
+    ports:
+      - "127.0.0.1:6776:80"
+    volumes:
+      - /http:/http:ro
+      - ./conf/nginx:/etc/nginx:ro
+    restart: unless-stopped
+
+  postgres:
+    container_name: cl_postgres
+    image: "postgres:13.0"
+    environment:
+      POSTGRES_DB: clipy
+      POSTGRES_USER: clipy
+      POSTGRES_PASSWORD: changeme
+    networks:
+      default:
+        aliases:
+          - postgres
+    ports:
+      - "127.0.0.1:5438:5438"
+    volumes:
+      - ./conf/postgres:/etc/postgresql:ro
+      - postgres_data:/var/lib/postgresql/data:rw
+    restart: unless-stopped
+    command: postgres -c 'config_file=/etc/postgresql/postgresql.conf'
+
+
+#  logstash:
+#    container_name: cl_logstash
+#    image: "logstash:7.9.3"
+#    volumes:
+#      - ./conf/logstash:/usr/share/logstash/config:ro
+#    entrypoint: logstash -f /usr/share/logstash/config/logstash.conf
+#    networks:
+#      default:
+#        aliases:
+#          - logstash
+#    restart: unless-stopped
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  default:
+    name: clipy
+    driver: bridge

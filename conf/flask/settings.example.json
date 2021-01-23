@@ -1,0 +1,10 @@
+{
+  "DB_HOST": "cl_postgres:5432",
+  "DB_NAME": "clipy",
+  "DB_USER": "clipy",
+  "DB_PASSWORD": "changeme",
+  "CLIP_USER": "j.smith",
+  "CLIP_PASSWORD": "foobarbaz",
+  "THREADS": 10,
+  "FILE_SAVE_DIR": "/files"
+}
