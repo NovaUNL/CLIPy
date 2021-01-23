@@ -123,14 +123,14 @@ def get_admissions(page):
     return admitted
 
 
-class_title_exp = re.compile('\(.+\) (?P<name>.*) \((?P<abbr>.+)\)$')
+class_title_exp = re.compile('^\(\d+\) (?P<name>.*) \((?P<abbr>.+)\)$')
 ects_exp = re.compile('(?P<ects>\d|\d.\d)\s?ECTS.*')
 
 
 def get_class_instance(page, class_id):
     elements = page.find_all('td', attrs={'class': 'subtitulo'})
 
-    title_matches = class_title_exp.search(elements[0].text)
+    title_matches = class_title_exp.search(elements[0].text.strip())
     name = None
     try:
         name = str(title_matches.group('name')).strip()
@@ -151,6 +151,41 @@ def get_class_instance(page, class_id):
         ects = int(float(ects_s) * 2)
     except:
         log.warning(f'Class {name}({class_id}) has no ECTS information')
+
+    return name, abbr, ects
+
+
+def get_class_identity(page, class_id):
+    table = page.find('table', class_='vdisplay')
+
+    name = None
+    abbr = None
+    ects = None
+
+    for row in table.find_all('tr'):
+        key = row.find('th').text.strip()
+        if key == 'Nome':
+            name = row.find('td').text.strip()
+        elif key == 'Abreviatura' or key == 'Sigla':
+            abbr = row.find('td').text.strip()
+
+    ects_table = page.find('table', class_='ldisplay')
+    ects_text = None
+    try:
+        ects_label = ects_table.find(text='ECTS')
+        if ects_label is not None:
+            ects_text = ects_label.parent.parent \
+                .find('td', align="right") \
+                .text \
+                .strip() \
+                .replace(',', '.')
+            # ECTSs are stored in halves. Someone decided it would be cool to award half ECTS...
+            ects = int(float(ects_text) * 2)
+    except:
+        if ects_text == '':
+            log.warning(f'Class {name}({class_id}) has no ECTS information')
+        else:
+            log.error(f'Unable to read class {name}({class_id}) ECTS information: {ects_text}')
 
     return name, abbr, ects
 

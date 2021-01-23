@@ -118,8 +118,14 @@ TEACHER_ACTIVITIES = ROOT + \
 
 #: Class main page
 CLASS = ROOT + \
-    "/utente/institui%E7%E3o_sede/unidade_organica/ensino/ano_lectivo/sector/ano_lectivo/unidade_curricular" \
-    "?tipo_de_per%EDodo_lectivo={period_type}&sector={department}&ano_lectivo={year}&per%EDodo_lectivo={period}" \
+    "/utente/institui%E7%E3o_sede/unidade_organica/unidade_curricular/edi%E7%E3o" \
+    "?tipo_de_per%EDodo_lectivo={period_type}&ano_lectivo={year}&per%EDodo_lectivo={period}" \
+    "&institui%E7%E3o={institution}&unidade_curricular={class_id}"
+
+#: Class identity page
+CLASS_IDENTITY = ROOT + \
+    "/utente/institui%E7%E3o_sede/unidade_organica/unidade_curricular/edi%E7%E3o/caracteriza%E7%E3o/identidade" \
+    "?tipo_de_per%EDodo_lectivo={period_type}&ano_lectivo={year}&per%EDodo_lectivo={period}" \
     "&institui%E7%E3o={institution}&unidade_curricular={class_id}"
 
 #: List of students enrolled to a class. Can be used to extract student names, identifiers, courses,

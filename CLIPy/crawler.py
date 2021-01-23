@@ -14,7 +14,7 @@ from sqlalchemy.exc import IntegrityError
 
 from . import parser
 from . import database as db
-from .config import INSTITUTION_FIRST_YEAR, INSTITUTION_LAST_YEAR, INSTITUTION_ID, FILE_SAVE_DIR
+from .config import INSTITUTION_FIRST_YEAR, INSTITUTION_ID, FILE_SAVE_DIR
 from .database import exceptions
 from .session import Session as WebSession
 from . import urls
@@ -278,15 +278,27 @@ def crawl_teachers(session: WebSession, database: db.Controller, department: db.
 def _crawl_class(session: WebSession, database: db.Controller, class_id, year, period,
                  name=None, department=None):
     # Fetch abbreviation and number of ECTSs
-    page = session.get_simplified_soup(urls.CLASS.format(
+    page = session.get_simplified_soup(urls.CLASS_IDENTITY.format(
         institution=INSTITUTION_ID,
         year=year,
         period=period['part'],
         period_type=period['letter'],
         class_id=class_id))
-    instance_name, abbr, ects = parser.get_class_instance(page, class_id)
+    instance_name, abbr, ects = parser.get_class_identity(page, class_id)
+
+    # Alternative
+    # page = session.get_simplified_soup(urls.CLASS.format(
+    #     institution=INSTITUTION_ID,
+    #     year=year,
+    #     period=period['part'],
+    #     period_type=period['letter'],
+    #     class_id=class_id))
+    # instance_name, abbr, ects = parser.get_class_instance(page, class_id)
+
     if name is not None and name != instance_name:
-        raise Exception(f"Class name and instance name don't match {instance_name}/{name} ({class_id})")
+        log.error(f"Class name and instance name don't match {instance_name}/{name} ({class_id})")
+        if instance_name is None:
+            instance_name = name
 
     return database.add_class(
         db.candidates.Class(
