@@ -109,6 +109,18 @@ def get_library_info(day):
     })
 
 
+@bp.route('/update/courses/', methods=['GET'])
+def update_courses():
+    clip.update_courses()
+    return "Success"
+
+
+@bp.route('/update/rooms/', methods=['GET'])
+def update_rooms():
+    clip.update_rooms()
+    return "Success"
+
+
 @bp.route('/update/classes/', methods=['GET'])
 def update_classes():
     clip.update_classes()
@@ -139,13 +151,24 @@ def update_class_enrollments(class_instance_id):
     return "Success"
 
 
-@bp.route('/update/class_files/<int:class_instance_id>', methods=['GET'])
-def update_class_files(class_instance_id):
-    clip.update_files(class_instance_id)
+@bp.route('/update/shifts/<int:class_instance_id>', methods=['GET'])
+def update_shifts(class_instance_id):
+    clip.update_class_shifts(class_instance_id)
     return "Success"
 
 
-@bp.route('/update/shifts/<int:class_instance_id>', methods=['GET'])
-def update_shifts(class_instance_id):
-    clip.update_shifts(class_instance_id)
+@bp.route('/update/events/<int:class_instance_id>', methods=['GET'])
+def update_events(class_instance_id):
+    clip.update_class_events(class_instance_id)
+    return "Success"
+
+
+@bp.route('/update/class_files/<int:class_instance_id>', methods=['GET'])
+def update_class_files(class_instance_id):
+    clip.update_class_files(class_instance_id)
+    return "Success"
+
+@bp.route('/update/class_grades/<int:class_instance_id>', methods=['GET'])
+def update_class_grades(class_instance_id):
+    clip.update_class_grades(class_instance_id)
     return "Success"

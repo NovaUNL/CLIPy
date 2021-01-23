@@ -55,7 +55,8 @@ class Clip:
         return crawler.crawl_library_group_room_availability(self.session, date)
 
     def list_buildings(self):
-        return list(map(lambda building: building.serialize(), self.cache.controller.get_building_set()))
+        controller = db.Controller(self.cache.registry)
+        return list(map(lambda building: building.serialize(), controller.get_building_set()))
 
     def list_rooms(self):
         return list(map(lambda building: building.serialize(), self.cache.controller.get_room_set()))
@@ -115,36 +116,60 @@ class Clip:
         obj = self.cache.controller.session.query(m.ClassEvent).get(id)
         return None if obj is None else obj.serialize()
 
-    def update_admissions(self):
-        processors.year_task(self.session, self.cache.registry, crawler.crawl_admissions,
-                             from_year=INSTITUTION_FIRST_YEAR, to_year=INSTITUTION_LAST_YEAR)
-
     def update_teachers(self):
         processors.department_task(self.session, self.cache.registry, crawler.crawl_teachers)
 
     def update_classes(self):
         processors.department_task(self.session, self.cache.registry, crawler.crawl_classes)
 
-    def update_class_info(self, class_instance_id: int):
-        class_instance = self.cache.controller.session.query(m.ClassInstance).get(class_instance_id)
-        crawler.crawl_class_info(self.session, self.cache.controller, class_instance)
+    def update_courses(self):
+        controller = db.Controller(self.cache.registry)
+        crawler.crawl_courses(self.session, controller)
+        self.cache.registry.remove()
 
-    def update_class_events(self, class_instance_id: int):
-        class_instance = self.cache.controller.session.query(m.ClassInstance).get(class_instance_id)
-        crawler.crawl_class_events(self.session, self.cache.controller, class_instance)
+    def update_rooms(self):
+        processors.building_task(self.session, self.cache.registry, crawler.crawl_rooms)
+
+    def update_admissions(self):
+        processors.year_task(self.session, self.cache.registry, crawler.crawl_admissions,
+                             from_year=INSTITUTION_FIRST_YEAR, to_year=INSTITUTION_LAST_YEAR)
+
+    def update_class_info(self, class_instance_id: int):
+        controller = db.Controller(self.cache.registry)
+        class_instance = controller.session.query(m.ClassInstance).get(class_instance_id)
+        crawler.crawl_class_info(self.session, controller, class_instance)
+        self.cache.registry.remove()
 
     def update_class_enrollments(self, class_instance_id: int):
-        class_instance = self.cache.controller.session.query(m.ClassInstance).get(class_instance_id)
-        crawler.crawl_class_enrollments(self.session, self.cache.controller, class_instance)
+        controller = db.Controller(self.cache.registry)
+        class_instance = controller.session.query(m.ClassInstance).get(class_instance_id)
+        crawler.crawl_class_enrollments(self.session, controller, class_instance)
+        self.cache.registry.remove()
 
-    def update_shifts(self, class_instance_id: int):
-        class_instance = self.cache.controller.session.query(m.ClassInstance).get(class_instance_id)
-        crawler.crawl_class_shifts(self.session, self.cache.controller, class_instance)
+    def update_class_shifts(self, class_instance_id: int):
+        controller = db.Controller(self.cache.registry)
+        class_instance = controller.session.query(m.ClassInstance).get(class_instance_id)
+        crawler.crawl_class_shifts(self.session, controller, class_instance)
+        self.cache.registry.remove()
 
-    def update_files(self, class_instance_id: int):
+    def update_class_events(self, class_instance_id: int):
+        controller = db.Controller(self.cache.registry)
+        class_instance = controller.session.query(m.ClassInstance).get(class_instance_id)
+        crawler.crawl_class_events(self.session, controller, class_instance)
+        self.cache.registry.remove()
+
+    def update_class_files(self, class_instance_id: int):
         class_instance = self.cache.controller.session.query(m.ClassInstance).get(class_instance_id)
-        crawler.crawl_files(self.session, self.cache.controller, class_instance)
-        crawler.download_files(self.session, self.cache.controller, class_instance)
+        controller = db.Controller(self.cache.registry)
+        crawler.crawl_files(self.session, controller, class_instance)
+        crawler.download_files(self.session, controller, class_instance)
+        self.cache.registry.remove()
+
+    def update_class_grades(self, class_instance_id: int):
+        class_instance = self.cache.controller.session.query(m.ClassInstance).get(class_instance_id)
+        controller = db.Controller(self.cache.registry)
+        crawler.crawl_grades(self.session, controller, class_instance)
+        self.cache.registry.remove()
 
     def bootstrap_database(self, year: int = None, period_part=2, period_parts=None):
         """
@@ -179,7 +204,6 @@ class Clip:
 
         # Find classes (depends on up-to-date departments).
         processors.department_task(self.session, self.cache.registry, crawler.crawl_classes)
-
 
         # Looks up the national access contest admission tables looking for students current statuses.
         # Depends on up-to-date institutions.
