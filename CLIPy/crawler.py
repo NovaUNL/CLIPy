@@ -575,6 +575,7 @@ def crawl_class_shifts(session: WebSession, database: db.Controller, class_insta
     log.debug("Crawling shifts class instance ID %s" % class_instance.id)
     class_instance: db.models.ClassInstance = database.session.merge(class_instance)
     year = class_instance.year
+    missing_shifts = {(shift.type.abbreviation, shift.number): shift.id for shift in class_instance.shifts}
 
     # --- Prepare the list of shifts to crawl ---
     page = session.get_simplified_soup(urls.CLASS_SHIFTS.format(
@@ -605,6 +606,20 @@ def crawl_class_shifts(session: WebSession, database: db.Controller, class_insta
             shift_link_matches = urls.SHIFT_LINK_EXP.search(shift_link.attrs['href'])
             shift_type = shift_link_matches.group("type")
             shift_number = int(shift_link_matches.group("number"))
+            missing_shifts.pop((shift_type, shift_number), None)
+
+    missing_shift_count = len(missing_shifts)
+    if missing_shift_count > 0:
+        if shift_count == 0:
+            # Not an error, but a very risky scenario.
+            # Also, if true, wouldn't harm leaving the turns intact as it implies that the class does not exist
+            log.error("Every shift was deleted upstream in class instance "
+                      f"{class_instance.id} ({class_instance.parent.abbreviation})")
+        else:
+            database.delete_shifts(missing_shifts.values())
+            log.info(f"Deleted {missing_shift_count} shifts "
+                     f"from {class_instance.id} ({class_instance.parent.abbreviation})")
+    del missing_shift_count
 
     shift_pages = []  # pages for shift parsing
     if single_shift:  # if the loaded page is the only shift

@@ -708,6 +708,10 @@ class Controller:
 
         return db_shift
 
+    def delete_shifts(self, shift_ids):
+        self.session.query(models.Shift).filter(models.Shift.id.in_(shift_ids)).delete(synchronize_session=False)
+        self.session.commit()
+
     def get_shift(self, class_instance: models.ClassInstance, shift_type: models.ShiftType,
                   number: int) -> models.Shift:
         return self.session.query(models.Shift) \
