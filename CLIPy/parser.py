@@ -393,7 +393,7 @@ def get_bilingual_info(page) -> (str, str, datetime, str):
         log.critical('A problematic page appeared and it couldn\'t be parsed.'
                      'Its contents have been saved to page.html')
         file.write(page.prettify())
-        return None, None, None, None
+        raise ValueError()
     footer = table_root.find_all('small')
 
     portuguese = ''

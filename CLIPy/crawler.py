@@ -497,25 +497,57 @@ def crawl_class_info(session: WebSession, database: db.Controller, class_instanc
         'class_id': class_instance.parent.id
     }
     page = session.get_broken_simplified_soup(urls.CLASS_DESCRIPTION.format(**args))
-    class_info['description'] = parser.get_bilingual_info(page)
+    try:
+        class_info['description'] = parser.get_bilingual_info(page)
+    except ValueError:
+        log.error(f"Failed to parse the description of class inst. {class_instance.id} ({class_instance.parent.name})")
     page = session.get_broken_simplified_soup(urls.CLASS_OBJECTIVES.format(**args))
-    class_info['objectives'] = parser.get_bilingual_info(page)
+    try:
+        class_info['objectives'] = parser.get_bilingual_info(page)
+    except ValueError:
+        log.error(f"Failed to parse the objectives of class inst. {class_instance.id} ({class_instance.parent.name})")
     page = session.get_broken_simplified_soup(urls.CLASS_REQUIREMENTS.format(**args))
-    class_info['requirements'] = parser.get_bilingual_info(page)
+    try:
+        class_info['requirements'] = parser.get_bilingual_info(page)
+    except ValueError:
+        log.error(f"Failed to parse the requirements of class inst. {class_instance.id} ({class_instance.parent.name})")
     page = session.get_broken_simplified_soup(urls.CLASS_COMPETENCES.format(**args))
-    class_info['competences'] = parser.get_bilingual_info(page)
+    try:
+        class_info['competences'] = parser.get_bilingual_info(page)
+    except ValueError:
+        log.error(f"Failed to parse the competences of class inst. {class_instance.id} ({class_instance.parent.name})")
     page = session.get_broken_simplified_soup(urls.CLASS_PROGRAM.format(**args))
-    class_info['program'] = parser.get_bilingual_info(page)
+    try:
+        class_info['program'] = parser.get_bilingual_info(page)
+    except ValueError:
+        log.error(f"Failed to parse the program of class inst. {class_instance.id} ({class_instance.parent.name})")
     page = session.get_broken_simplified_soup(urls.CLASS_BIBLIOGRAPHY.format(**args))
-    class_info['bibliography'] = parser.get_bilingual_info(page)
+    try:
+        class_info['bibliography'] = parser.get_bilingual_info(page)
+    except ValueError:
+        log.error(f"Failed to parse the bibliography of class inst. {class_instance.id} ({class_instance.parent.name})")
     page = session.get_broken_simplified_soup(urls.CLASS_ASSISTANCE.format(**args))
-    class_info['assistance'] = parser.get_bilingual_info(page)
+    try:
+        class_info['assistance'] = parser.get_bilingual_info(page)
+    except ValueError:
+        log.error(f"Failed to parse the assistance of class inst. {class_instance.id} ({class_instance.parent.name})")
     page = session.get_broken_simplified_soup(urls.CLASS_TEACHING_METHODS.format(**args))
-    class_info['teaching_methods'] = parser.get_bilingual_info(page)
+    try:
+        class_info['teaching_methods'] = parser.get_bilingual_info(page)
+    except ValueError:
+        log.error("Failed to parse the teaching methods of class inst. "
+                  f"{class_instance.id} ({class_instance.parent.name})")
     page = session.get_broken_simplified_soup(urls.CLASS_EVALUATION_METHODS.format(**args))
-    class_info['evaluation_methods'] = parser.get_bilingual_info(page)
+    try:
+        class_info['evaluation_methods'] = parser.get_bilingual_info(page)
+    except ValueError:
+        log.error("Failed to parse the evaluation methods of class inst. "
+                  f"{class_instance.id} ({class_instance.parent.name})")
     page = session.get_broken_simplified_soup(urls.CLASS_EXTRA.format(**args))
-    class_info['extra_info'] = parser.get_bilingual_info(page)
+    try:
+        class_info['extra_info'] = parser.get_bilingual_info(page)
+    except ValueError:
+        log.error(f"Failed to parse the extra info of class inst. {class_instance.id} ({class_instance.parent.name})")
     database.update_class_instance_info(class_instance, class_info)
 
 
