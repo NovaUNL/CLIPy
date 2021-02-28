@@ -395,7 +395,7 @@ class Controller:
                 portuguese, english, time, editor = upstream_info[attribute]
                 information[attribute] = {
                     'pt': portuguese,
-                    'en': portuguese,
+                    'en': english,
                     'time': time,
                     'editor': editor,
                 }
