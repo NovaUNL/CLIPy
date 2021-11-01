@@ -258,6 +258,7 @@ class ParsingMethods(unittest.TestCase):
                     Laboratório de Ensino Ed D: Lab 127
                     Laboratório de Ensino Lab. 048B
                     Laboratório de Ensino Lab. 048
+                    Laboratório de Ensino Lab.145
                     Laboratório de Ensino Laboratório
                     Laboratório de Ensino 334
                     Anfiteatro Ed 2: 127
@@ -287,6 +288,8 @@ class ParsingMethods(unittest.TestCase):
                     Laboratório de Ensino Lab.145
                     Sala Multiusos Sala 1.1
                     Laboratório de Ensino Ed 8: Lab Tecn. Industrial
+                    Sala Seminários DCSA
+                    Anfiteatro Ed 1: 1.5 (Manuel Laranjeira)
                     Sala de Computadores Ed 8: Lab Computadores 2.1""".split('\n')
         result = []
         for place in places:
