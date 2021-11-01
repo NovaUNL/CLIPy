@@ -66,11 +66,13 @@ class Session:
             if self.__last__authentication is None or self.__last__authentication < time_limit:
                 while True:
                     try:
+                        log.info("Requesting auth")
                         request = self.__requests_session__.post(
                             urls.ROOT,
                             headers=http_headers,
                             data={'identificador': self.__username__, 'senha': self.__password__},
                             timeout=10)
+                        log.info("Response for auth received")
                         break
                     except requests.exceptions.Timeout:
                         log.warning(f"Request timed out: {urls.ROOT}")
@@ -95,7 +97,7 @@ class Session:
         """
         log.debug('Fetching:' + url)
         self.authenticate()
-        return self.__requests_session__.get(url, headers=http_headers, timeout=10)
+        return self.__requests_session__.get(url, headers=http_headers, timeout=30)
 
     def post(self, url: str, data: {str: str}) -> requests.Response:
         """
@@ -106,7 +108,7 @@ class Session:
         """
         log.debug(f'Fetching: {url} with params {data}')
         self.authenticate()
-        return self.__requests_session__.post(url, data=data, headers=http_headers, timeout=10)
+        return self.__requests_session__.post(url, data=data, headers=http_headers, timeout=30)
 
     def get_simplified_soup(self, url: str, post_data=None) -> BeautifulSoup:
         """
