@@ -128,9 +128,10 @@ def update_classes():
     return "Success"
 
 
-@bp.route('/update/teachers/', methods=['GET'])
-def update_teachers():
-    clip.update_teachers()
+@bp.route('/update/teachers/', methods=['GET'], defaults={'department_id': None})
+@bp.route('/update/teachers/<int:department_id>', methods=['GET'])
+def update_teachers(department_id):
+    clip.update_teachers(department_id)
     return "Success"
 
 
@@ -168,6 +169,7 @@ def update_events(class_instance_id):
 def update_class_files(class_instance_id):
     clip.update_class_files(class_instance_id)
     return "Success"
+
 
 @bp.route('/update/class_grades/<int:class_instance_id>', methods=['GET'])
 def update_class_grades(class_instance_id):

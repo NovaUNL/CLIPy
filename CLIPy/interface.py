@@ -117,8 +117,14 @@ class Clip:
         obj = self.cache.controller.session.query(m.ClassEvent).get(id)
         return None if obj is None else obj.serialize()
 
-    def update_teachers(self):
-        processors.department_task(self.session, self.cache.registry, crawler.crawl_teachers)
+    def update_teachers(self, department_id):
+        if department_id:
+            controller = db.Controller(self.cache.registry)
+            department = controller.session.query(m.Department).get(department_id)
+            crawler.crawl_teachers(self.session, controller, department)
+            self.cache.registry.remove()
+        else:
+            processors.department_task(self.session, self.cache.registry, crawler.crawl_teachers)
 
     def update_classes(self):
         processors.department_task(self.session, self.cache.registry, crawler.crawl_classes)
