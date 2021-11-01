@@ -670,14 +670,16 @@ def crawl_class_shifts(session: WebSession, database: db.Controller, class_insta
         instances_aux = instances
         instances = []
         for weekday, start, end, building, room in instances_aux:
+            db_room = None
             if building:
                 building = database.get_building(building)
                 if room:
-                    room = database.get_room(room[0], building, room_type=room[1])
-                    if room is None:
-                        log.warning(f"{shift_type}{shift_number} of {class_instance} "
+                    db_room = database.get_room(room[0], building, room_type=room[1])
+                    if db_room is None:
+                        log.warning(f"{room[1]} {room[0]}({building}) in "
+                                    f"{class_instance} {shift_type.abbreviation}{shift_number} "
                                     "couldn't be matched against a room.")
-            instances.append(db.candidates.ShiftInstance(shift, start, end, weekday, room=room))
+            instances.append(db.candidates.ShiftInstance(shift, start, end, weekday, room=db_room))
         del instances_aux
         database.add_shift_instances(instances)
 

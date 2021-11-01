@@ -763,7 +763,10 @@ class Controller:
                             db_shift_instance.weekday == instance.weekday:
                         matched = True
                         if db_shift_instance.room != instance.room:  # Update the room
-                            log.warning(f'An instance of {shift} changed the room from '
+                            if instance.room is None:
+                                log.error(f'An instance of {shift} lost its room (from {db_shift_instance.room})')
+                            else:
+                                log.info(f'An instance of {shift} changed the room from '
                                         f'{db_shift_instance.room} to {instance.room}')
                             db_shift_instance.room = instance.room
                         instances.remove(instance)
@@ -971,7 +974,6 @@ class Controller:
             room = self.session \
                 .query(models.Room) \
                 .filter_by(id=candidate.id,
-                           room_type=candidate.type,
                            building=candidate.building) \
                 .first()
             if room is None:
