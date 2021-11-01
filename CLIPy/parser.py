@@ -830,17 +830,17 @@ def get_results(page):
 
     """
     results = []
-    entries = list(page.find_all('tr', bgcolor='#ffffff', align='left'))
-    entries.extend(page.find_all('tr', bgcolor='#f8f8f8', align='left'))
+    entries = list(page.find_all('tr', bgcolor='#f8f8f8', align='left'))
+    entries.extend(page.find_all('tr', bgcolor='#ffffff', align='left'))
     for entry in entries:
         columns = list(entry.children)
         col_count = len(columns)
         if col_count == 0:
             log.warning("No grade table")
             return
-        if col_count not in (10, 14, 18, 22, 26):
+        if col_count not in (8, 10, 14, 18, 22, 26):
             log.warning(f"Found a strange row. It has {col_count} columns:\n{columns}")
-            break
+            continue
 
         student_number = int(columns[1].text.strip())
         student_name = columns[3].text.strip()
@@ -875,7 +875,7 @@ def get_results(page):
             recourse_result, recourse_date = None, None  # Not needed, just to avoid having the linter complain
 
         final_result = columns[col_count - 1].text.strip()
-        if col_count == 10:
+        if col_count in (8, 10):
             result = ((normal_result, normal_date),)
         elif col_count == 14:
             result = ((normal_result, normal_date),
@@ -899,9 +899,9 @@ def get_results(page):
 
         approved = 'Aprovad' in final_result
         gender = None
-        if final_result in ('Aprovado', 'Não avaliado', 'Reprovado'):
+        if final_result in ('Aprovado', 'Não avaliado', 'Reprovado', 'Excluído'):
             gender = 'm'
-        elif final_result in ('Aprovada', 'Não avaliada', 'Reprovada'):
+        elif final_result in ('Aprovada', 'Não avaliada', 'Reprovada', 'Excluída'):
             gender = 'f'
 
         student = (student_number, student_name, gender)
@@ -929,14 +929,22 @@ def get_attendance(page) -> ((int, str, str), bool, datetime.date):
         if col_count == 0:
             log.warning("No admission table")
             return
-        if col_count != 10:
+        if col_count not in (10, 12):
             log.warning(f"Found a strange row. It has {col_count} columns:\n{columns}")
-            break
+            continue
 
         student_number = int(columns[1].text.strip())
         student_name = columns[3].text.strip()
         admission = columns[5].text.strip()
-        admission_date = columns[7].text.strip()
+        if col_count == 12:
+            # numeric_freq = columns[7].text.strip()
+            # if numeric_freq == '':
+            #     numeric_freq = None
+            admission_date = columns[9].text.strip()
+        elif col_count == 10:
+            # numeric_freq = None
+            admission_date = columns[7].text.strip()
+
         if admission in ('', '?'):
             admission = None
             admission_date = None
@@ -944,7 +952,7 @@ def get_attendance(page) -> ((int, str, str), bool, datetime.date):
             admission = admission in ('S', 'Disp')
             admission_date = datetime.strptime(admission_date, "%Y-%m-%d").date()
 
-        final_result = columns[9].text.strip()
+        final_result = columns[11].text.strip()
         gender = None
         if final_result == 'Admitido':
             gender = 'm'
