@@ -236,7 +236,7 @@ def get_enrollments(page):
 #: Generic shift scheduling string. Looks something like 'Segunda-Feira  XX:00 - YY:00  Ed Z: Lab 123 A/Ed.Z'
 SHIFT_SCHEDULING_EXP = re.compile(
     '(?P<weekday>[\w-]+) {2}(?P<init_hour>\d{2}):(?P<init_min>\d{2}) - (?P<end_hour>\d{2}):(?P<end_min>\d{2})(?: {2})?'
-    '(?:E[dD] .*: (?P<computer_lab>Lab Computadores )?(?P<lab>Lab[.]? )?(?P<room>[\w\b. ]+)/(?P<building>[\w\d. ]+))?')
+    '(?:(E[dD] .*: )?(?:Sala )?(?P<computer_lab>Lab Computadores )?(?P<lab>Lab[.]? ?)?(?P<room>[\w\b. ]+)(?:\([\w. ]+\))?/(?P<building>[\w\d. ]+))?')
 
 
 def get_shift_info(page):
@@ -303,6 +303,8 @@ def get_shift_info(page):
                             room = (information['room'].strip(), models.RoomType.computer)
                         elif 'lab' in information and information['lab'] is not None:
                             room = (information['room'].strip(), models.RoomType.laboratory)
+                        # elif 'seminar' in information and information['seminar'] is not None:
+                        #     room = (information['room'].strip(), models.RoomType.???)
                         else:
                             room = (information['room'].strip(), None)
                     else:
