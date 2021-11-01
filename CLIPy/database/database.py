@@ -341,7 +341,7 @@ class Controller:
                 elif db_class.abbreviation != candidate.abbreviation:
                     if SequenceMatcher(None, db_class.abbreviation, candidate.abbreviation).ratio() < 0.3:
                         log.error("Class abbreviation change prevented. "
-                                        f"{db_class.abbreviation} to {candidate.abbreviation} (id {candidate.id})")
+                                  f"{db_class.abbreviation} to {candidate.abbreviation} (id {candidate.id})")
                     else:
                         log.warning("Class abbreviation change."
                                     f"{db_class.abbreviation} to {candidate.abbreviation} (id {candidate.id})")
@@ -553,15 +553,11 @@ class Controller:
                         student.abbreviation = candidate.abbreviation
                         self.session.commit()
                 elif candidate.abbreviation is not None and candidate.abbreviation != student.abbreviation:
-                    log.warning("Attempted to change the student abbreviation to another one\n"
+                    log.warning("Changed the student abbreviation.\n"
                                 "Student:{}\n"
                                 "Candidate{}".format(student, candidate))
                     student.abbreviation = candidate.abbreviation
                     self.session.commit()
-                    raise Exception(
-                        "Attempted to change the student abbreviation to another one\n"
-                        "Student:{}\n"
-                        "Candidate{}".format(student, candidate))
 
             if candidate.course is not None:
                 student.course_id = candidate.course.id
@@ -600,13 +596,13 @@ class Controller:
         if student is None or course is None or year is None:
             raise Exception("Missing details on a student's course assignment.")
 
-        match: models.StudentCourse = self.session.query(models.StudentCourse) \
+        result: models.StudentCourse = self.session.query(models.StudentCourse) \
             .filter_by(student=student, course=course).first()
 
-        if match is None:
+        if result is None:
             self.session.add(models.StudentCourse(student=student, course=course, first_year=year, last_year=year))
         else:
-            match.add_year(year)
+            result.add_year(year)
 
         self.session.commit()
 
@@ -767,7 +763,7 @@ class Controller:
                                 log.error(f'An instance of {shift} lost its room (from {db_shift_instance.room})')
                             else:
                                 log.info(f'An instance of {shift} changed the room from '
-                                        f'{db_shift_instance.room} to {instance.room}')
+                                         f'{db_shift_instance.room} to {instance.room}')
                             db_shift_instance.room = instance.room
                         instances.remove(instance)
                         break
@@ -876,7 +872,7 @@ class Controller:
 
         if added > 0 or updated > 0 or deleted > 0:
             log.info("Enrollments in {} changed.  {} new, {} updated and {} deleted ({} ignored)!".format(
-                class_instance, added, updated, deleted, len(enrollments) - added - updated - deleted))
+                class_instance, added, updated, deleted, len(enrollments) - added - updated))
 
     def update_enrollment_results(self, student: models.Student, class_instance: models.ClassInstance, results,
                                   approved: bool):
@@ -983,6 +979,12 @@ class Controller:
                                    building=candidate.building)
                 self.session.add(room)
                 self.session.commit()
+            elif candidate.type != room.room_type:
+                # raise Exception(f"Room {room} type changed to {candidate.type}")
+                log.warning(f"Room {room} type changed to {candidate.type}")
+                candidate.type = room.room_type
+                self.session.commit()
+
             return room
         except Exception:
             log.error("Failed to add the room\n%s" % traceback.format_exc())
@@ -1014,7 +1016,7 @@ class Controller:
                     return regular_rooms[0]
 
     def add_building(self, building: candidates.Building) -> models.Building:
-        db_building = self.session.query(models.Building).filter_by(name=building.name).first()
+        db_building = self.session.query(models.Building).filter_by(id=building.id).first()
         if db_building is None:
             db_building = models.Building(
                 id=building.id,
@@ -1024,6 +1026,10 @@ class Controller:
             self.session.add(db_building)
             self.session.commit()
         else:
+            if db_building.name != building.name:
+                log.warning(f"Building {building.id} changed name from {db_building.name} to {building.name}")
+                db_building.name = building.name
+
             db_building.first_year = building.first_year
             db_building.last_year = building.last_year
             self.session.commit()
