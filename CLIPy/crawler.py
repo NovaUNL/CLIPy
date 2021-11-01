@@ -121,7 +121,9 @@ def crawl_buildings(session: WebSession, database: db.Controller):
         log.debug(f"Adding building {building} to the database.")
         database.add_building(building)
 
+
 integrated_master_name_exp = re.compile("Mestrado Integrado.*")
+
 
 def crawl_courses(session: WebSession, database: db.Controller):
     """
@@ -178,7 +180,7 @@ def crawl_rooms(session: WebSession, database: db.Controller, building: db.model
             institution=INSTITUTION_ID,
             building=building.id,
             year=year,
-            period=1,
+            period=1,  # FIXME, this is a problem as some buildings only appear on the second period
             period_type='s',
             weekday=2))  # 2 is monday
         candidates = parser.get_places(page)
@@ -216,7 +218,6 @@ def crawl_teachers(session: WebSession, database: db.Controller, department: db.
                 # In those pages only the first match is the teacher, the second and so on aren't relevant.
                 if name == 'Ficheiro':
                     break
-
                 if identifier in teachers:
                     teacher = teachers[identifier]
                     if teacher.name != name:
@@ -708,7 +709,6 @@ def crawl_files(session: WebSession, database: db.Controller, class_instance: db
     """
     log.debug("Crawling class instance ID %s files" % class_instance.id)
     class_instance: db.models.ClassInstance = database.session.merge(class_instance)
-    department = class_instance.department
     known_file_ids = {file.id for file in class_instance.files}
 
     page = session.get_simplified_soup(urls.CLASS_FILE_TYPES.format(
@@ -816,7 +816,9 @@ def crawl_grades(session: WebSession, database: db.Controller, class_instance: d
             db_student = database.get_student(identifier=student_number)
 
             if db_student is None:
-                raise Exception("Student dodged the enrollment search.\n" + student)
+                log.error(f"Student {student[0]} was graded in CI "
+                          f"{class_instance.id} ({class_instance.parent.abbreviation}) yet could not be found.")
+                continue
 
             if db_student.gender is None and gender is not None:
                 if gender == 'f':
@@ -846,7 +848,9 @@ def crawl_grades(session: WebSession, database: db.Controller, class_instance: d
         for student, attendance, date in parser.get_attendance(page):
             db_student = database.get_student(student[0])
             if db_student is None:
-                raise Exception("Student dodged the enrollment search.\n" + student)
+                log.error(f"Student {student[0]} attended CI "
+                          f"{class_instance.id} ({class_instance.parent.abbreviation}) yet could not be found.")
+                continue
             database.update_enrollment_attendance(
                 student=db_student,
                 class_instance=class_instance,
@@ -867,7 +871,9 @@ def crawl_grades(session: WebSession, database: db.Controller, class_instance: d
         for student, improved, grade, date in parser.get_improvements(page):
             db_student = database.get_student(student[0])
             if db_student is None:
-                log.error("Student dodged the enrollment search.\n" + student)
+                log.error(f"Student {student[0]} was improved in CI "
+                          f"{class_instance.id} ({class_instance.parent.abbreviation}) yet could not be found.")
+                continue
 
             database.update_enrollment_improvement(
                 student=db_student,
