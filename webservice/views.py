@@ -7,7 +7,8 @@ from CLIPy import Clip, CacheStorage
 bp = Blueprint('clipy', __name__, url_prefix='')
 
 storage = CacheStorage.postgresql(config.DB_USER, config.DB_PASSWORD, config.DB_NAME, host=config.DB_HOST)
-clip = Clip(storage, config.CLIP_USER, config.CLIP_PASSWORD)
+clip = Clip(storage, config.CLIP_USER, config.CLIP_PASSWORD,
+            page_cache_parameters=(config.DB_USER, config.DB_PASSWORD, "page_cache"))
 
 
 @bp.route('/')

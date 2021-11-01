@@ -36,11 +36,12 @@ class CacheStorage:
 class Clip:
     _session = None
 
-    def __init__(self, cache: CacheStorage, username, password):
+    def __init__(self, cache: CacheStorage, username, password, page_cache_parameters=None):
         self.cache: CacheStorage = cache
         self.username = username
         self.password = password
-        self.session = Session(username, password)
+
+        self.session = Session(username, password, page_cache_parameters=page_cache_parameters)
 
     def find_student(self, name, course_filter=None):
         return self.cache.controller.find_student(name, course=course_filter)

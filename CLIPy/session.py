@@ -1,6 +1,5 @@
 import os
 from datetime import datetime, timedelta
-from random import random
 from threading import Semaphore
 from time import sleep
 
@@ -8,6 +7,7 @@ import requests
 from http.cookiejar import LWPCookieJar
 import logging
 from bs4 import BeautifulSoup
+import psycopg2
 
 from . import urls
 
@@ -28,7 +28,7 @@ class Session:
     A session behaves like a browser session, maintaining (some) state across requests.
     """
 
-    def __init__(self, username, password, cookies=os.getcwd() + '/cookies'):
+    def __init__(self, username, password, cookies=os.getcwd() + '/cookies', page_cache_parameters=None):
         log.debug('Creating clip session (Cookie file:{})'.format(cookies))
         self.__cookie_file__ = cookies
         self.authenticated = False
@@ -36,6 +36,10 @@ class Session:
         self.__requests_session__.cookies = LWPCookieJar(cookies)
         self.__username__ = username
         self.__password__ = password
+        if page_cache_parameters:
+            self.__session_cache__ = SessionCache(*page_cache_parameters)
+        else:
+            self.__session_cache__ = None
         for session in __active_sessions__:
             if session.__cookie_file__ == self.__cookie_file__:
                 raise Exception("Attempted to share a cookie file")
@@ -114,10 +118,16 @@ class Session:
         :param post_data: If filled, upgrades the request to an HTTP POST with this being the data dict
         :return: Parsed html tree
         """
+        cached_data = self.__session_cache__.read(url)
+        if cached_data:
+            return read_and_clean_response(cached_data)
+
         if post_data is None:
-            return read_and_clean_response(self.get(url))
+            html = self.get(url).text
         else:
-            return read_and_clean_response(self.post(url, data=post_data))
+            html = self.post(url, data=post_data).text
+        self.__session_cache__.store(url, html)
+        return read_and_clean_response(html)
 
     def get_broken_simplified_soup(self, url: str, post_data=None) -> BeautifulSoup:
         """
@@ -130,10 +140,16 @@ class Session:
         :param post_data: If filled, upgrades the request to an HTTP POST with this being the data dict
         :return: Parsed html tree
         """
+        cached_data = self.__session_cache__.read(url)
+        if cached_data:
+            return read_and_clean_broken_response(cached_data)
+
         if post_data is None:
-            return read_and_clean_broken_response(self.get(url))
+            html = self.get(url).text
         else:
-            return read_and_clean_broken_response(self.post(url, data=post_data))
+            html = self.post(url, data=post_data).text
+        self.__session_cache__.store(url, html)
+        return read_and_clean_broken_response(html)
 
     def get_file(self, url: str) -> (bytes, str):
         """
@@ -176,23 +192,68 @@ def clean_soup(soup: BeautifulSoup):
         tag.decompose()
 
 
-def read_and_clean_response(response: requests.Response) -> BeautifulSoup:
+def read_and_clean_response(html: str) -> BeautifulSoup:
     """
     Reads a response and simplifies its result.
-    :param response: Response to read
+    :param html: The html of the page that is to be simplified
     :return: Simplified result
     """
-    soup = BeautifulSoup(response.text, 'html.parser')
+    soup = BeautifulSoup(html, 'html.parser')
     clean_soup(soup)
     return soup
 
 
-def read_and_clean_broken_response(response: requests.Response) -> BeautifulSoup:
+def read_and_clean_broken_response(html: str) -> BeautifulSoup:
     """
     Reads a response and simplifies its result using a parser which allows broken HTML.
-    :param response: Response to read
+    :param html: The html of the page that is to be simplified
     :return: Simplified result
     """
-    soup = BeautifulSoup(response.text, 'html5lib')
+    soup = BeautifulSoup(html, 'html5lib')
     clean_soup(soup)
     return soup
+
+
+class SessionCache:
+    def __init__(self, username: str, password: str):
+        database = os.getenv("PAGE_CACHE_DB", "page_cache")
+        host = os.getenv("PAGE_CACHE_HOST", "localhost")
+        port = os.getenv("PAGE_CACHE_PORT", 5432)
+        self.__conn__ = psycopg2.connect(dbname=database, host=host, port=port, user=username, password=password)
+        self.__lock__ = Semaphore(value=1)
+
+    def read(self, url: str):
+        """
+        Obtains the cached content of an URL
+        :param url: The address of the potentially stored page
+        :return: The HTML of the stored page (null if not stored)
+        """
+        self.__lock__.acquire()
+        try:
+            cur = self.__conn__.cursor()
+            cur.execute("SELECT html FROM page_cache WHERE url=(%s);", (url,))
+            row = cur.fetchone()
+            cur.close()
+            if row:
+                return row[0]
+        finally:
+            self.__lock__.release()
+
+    def store(self, url: str, html: str):
+        """
+        Caches the content of an URL
+        :param url: The address of the current page
+        :param html: Page content
+        """
+        self.__lock__.acquire()
+        try:
+            cur = self.__conn__.cursor()
+            cur.execute(
+                "INSERT INTO page_cache (url, html, capture) "
+                "VALUES (%s, %s, %s) "
+                "ON CONFLICT (url) DO UPDATE SET html=EXCLUDED.html, capture=EXCLUDED.capture",
+                (url, html, datetime.now()))
+            self.__conn__.commit()
+            cur.close()
+        finally:
+            self.__lock__.release()
