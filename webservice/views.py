@@ -1,12 +1,11 @@
 from datetime import datetime
 from flask import Blueprint, jsonify
 
-from webservice import config
 from CLIPy import Clip
 
 bp = Blueprint('clipy', __name__, url_prefix='')
 
-clip = Clip(config)
+clip = Clip()
 
 
 @bp.route('/')
