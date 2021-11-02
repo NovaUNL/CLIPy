@@ -5,7 +5,7 @@ from time import sleep
 from typing import Callable
 
 from . import database as db
-from .config import CLIPY_THREADS
+from .config import CLIPY_THREADS, QUEUE_INFOLOG_INTERVAL
 from .crawler import PageCrawler
 from .session import Session
 
@@ -34,7 +34,9 @@ def task_queue_processor(session: Session, db_registry: db.SessionRegistry, task
                 raise Exception("Every thread has died")
             log.info(f"Approximately {remaining_tasks} work units remaining ({alive_threads} threads alive).")
             lock.release()
-            sleep(10)
+            if not bool(QUEUE_INFOLOG_INTERVAL):
+                break
+            sleep(QUEUE_INFOLOG_INTERVAL)
 
     for thread in threads:
         thread.join()
@@ -42,8 +44,9 @@ def task_queue_processor(session: Session, db_registry: db.SessionRegistry, task
 
 def year_task(session: Session, db_registry: db.SessionRegistry, task: Callable, from_year, to_year):
     year_queue = Queue()
-    [year_queue.put(year) for year in range(from_year, to_year+1)]
+    [year_queue.put(year) for year in range(from_year, to_year + 1)]
     task_queue_processor(session, db_registry, task, year_queue)
+
 
 def building_task(session: Session, db_registry: db.SessionRegistry, task: Callable):
     database = db.Controller(db_registry)
