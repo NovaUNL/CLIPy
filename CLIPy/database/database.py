@@ -764,7 +764,7 @@ class Controller:
                             else:
                                 log.info(f'An instance of {shift} changed the room from '
                                          f'{db_shift_instance.room} to {instance.room}')
-                            db_shift_instance.room = instance.room
+                                db_shift_instance.room = instance.room
                         instances.remove(instance)
                         break
                 if not matched:
