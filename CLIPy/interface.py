@@ -10,38 +10,30 @@ from .database import models as m
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
+from . import config
 
 
-class CacheStorage:
-    def __init__(self, registry: db.SessionRegistry, database_cache=False):
-        self.registry = registry
-        self.controller = db.Controller(registry, cache=database_cache)
+class LocalStorage:
+    def __init__(self, database_cache=False):
+        DATA_DB = config.DATA_DB
 
-    @staticmethod
-    def postgresql(username, password, schema, host=None):
-        if host is None:  # Let it default to localhost
-            engine = db.create_engine('postgresql', username=username, password=password, schema=schema)
-        else:
-            engine = db.create_engine('postgresql', username=username, password=password, schema=schema, host=host)
-        return CacheStorage(db.SessionRegistry(engine))
+        engine = db.create_engine(
+            'postgresql',
+            host=f"{DATA_DB['HOST']}:{DATA_DB['PORT']}",
+            username=DATA_DB['USER'],
+            password=DATA_DB['PASSWORD'],
+            schema=DATA_DB['NAME'])
 
-    @staticmethod
-    def sqlite(file):
-        if not os.path.isfile(file):
-            raise RuntimeError("Database file doesn't exist. Please create it manually.")
-        engine = db.create_engine('sqlite', file=file)
-        return CacheStorage(db.SessionRegistry(engine))
+        self.registry = db.SessionRegistry(engine)
+        self.controller = db.Controller(self.registry, cache=database_cache)
 
 
 class Clip:
     _session = None
 
-    def __init__(self, cache: CacheStorage, username, password, page_cache_parameters=None):
-        self.cache: CacheStorage = cache
-        self.username = username
-        self.password = password
-
-        self.session = Session(username, password, page_cache_parameters=page_cache_parameters)
+    def __init__(self):
+        self.cache = LocalStorage()
+        self.session = Session()
 
     def find_student(self, name, course_filter=None):
         return self.cache.controller.find_student(name, course=course_filter)
@@ -138,8 +130,12 @@ class Clip:
         processors.building_task(self.session, self.cache.registry, crawler.crawl_rooms)
 
     def update_admissions(self):
-        processors.year_task(self.session, self.cache.registry, crawler.crawl_admissions,
-                             from_year=INSTITUTION_FIRST_YEAR, to_year=INSTITUTION_LAST_YEAR)
+        processors.year_task(
+            self.session,
+            self.cache.registry,
+            crawler.crawl_admissions,
+            from_year=INSTITUTION_FIRST_YEAR,
+            to_year=INSTITUTION_LAST_YEAR)
 
     def update_class_info(self, class_instance_id: int):
         controller = db.Controller(self.cache.registry)

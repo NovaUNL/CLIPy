@@ -15,13 +15,21 @@ Avoid doing so during times that might disturb other students access to CLIP. Th
 ### Instalation
     pip install clip-crawler
 
+### Setup
+Setup an environment variable pointing to a settings file:
+
+    CONFIG=conf/flask/settings-example.json
+
+Make sure to insert proper credentials in that settings file.
+
 ### Usage
-    from CLIPy import CacheStorage, Clip
+    from CLIPy import Clip, config
     
-    storage = CacheStorage.postgresql('username', 'password', 'schema')
-    Clip.populate('CLIP ID', 'password', storage) # Run only once. Takes forever.
+    Clip.bootstrap_database('CLIP ID', 'password', storage)
     
-    clip = Clip(storage)
+    clip = Clip(config)
+    # Don't run it like this, it takes forever. Look at the parameters
+    clip.bootstrap_database()
     [print(student) for student in clip.find_student("John Smith")]
 
 ### Stuff that this is able to retrieve

@@ -2,13 +2,11 @@ from datetime import datetime
 from flask import Blueprint, jsonify
 
 from webservice import config
-from CLIPy import Clip, CacheStorage
+from CLIPy import Clip
 
 bp = Blueprint('clipy', __name__, url_prefix='')
 
-storage = CacheStorage.postgresql(config.DB_USER, config.DB_PASSWORD, config.DB_NAME, host=config.DB_HOST)
-clip = Clip(storage, config.CLIP_USER, config.CLIP_PASSWORD,
-            page_cache_parameters=(config.DB_USER, config.DB_PASSWORD, "page_cache"))
+clip = Clip(config)
 
 
 @bp.route('/')

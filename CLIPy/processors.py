@@ -5,7 +5,7 @@ from time import sleep
 from typing import Callable
 
 from . import database as db
-from .config import THREADS
+from .config import CLIPY_THREADS
 from .crawler import PageCrawler
 from .session import Session
 
@@ -15,7 +15,7 @@ log = logging.getLogger(__name__)
 def task_queue_processor(session: Session, db_registry: db.SessionRegistry, task: Callable, queue: Queue):
     lock = Lock()
     threads = []
-    for thread in range(0, THREADS):
+    for thread in range(0, CLIPY_THREADS):
         threads.append(PageCrawler("Thread-" + str(thread), session, db_registry, queue, lock, task))
         threads[thread].start()
 

@@ -1,10 +1,26 @@
 {
-  "DB_HOST": "cl_postgres:5432",
-  "DB_NAME": "clipy",
-  "DB_USER": "clipy",
-  "DB_PASSWORD": "changeme",
-  "CLIP_USER": "j.smith",
-  "CLIP_PASSWORD": "foobarbaz",
-  "THREADS": 10,
-  "FILE_SAVE_DIR": "/files"
+  "DATA_DB": {
+    "HOST": "localhost",
+    "PORT": "5432",
+    "NAME": "clipy_data_db",
+    "USER": "clipy_user",
+    "PASSWORD": "changeme"
+  },
+  "CACHE_DB": {
+    "HOST": "localhost",
+    "PORT": "5432",
+    "NAME": "clipy_cache_db",
+    "USER": "clipy_user",
+    "PASSWORD": "changeme"
+  },
+  "CLIP_CREDENTIALS": {
+    "USERNAME": "j.smith",
+    "PASSWORD": "foobarbaz"
+  },
+  "CLIPY_THREADS": 4,
+  "WEBSERVICE_THREADS": 10,
+  "FILE_SAVE_DIR": "/files",
+  "INSTITUTION_FIRST_YEAR": 1978,
+  "INSTITUTION_LAST_YEAR": 2022,
+  "INSTITUTION_ID": 97747
 }

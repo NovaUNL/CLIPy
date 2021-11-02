@@ -10,6 +10,7 @@ from bs4 import BeautifulSoup
 import psycopg2
 
 from . import urls
+from . import config
 
 log = logging.getLogger(__name__)
 __active_sessions__ = []
@@ -28,16 +29,17 @@ class Session:
     A session behaves like a browser session, maintaining (some) state across requests.
     """
 
-    def __init__(self, username, password, cookies=os.getcwd() + '/cookies', page_cache_parameters=None):
+    def __init__(self, cookies=os.getcwd() + '/cookies'):
         log.debug('Creating clip session (Cookie file:{})'.format(cookies))
         self.__cookie_file__ = cookies
         self.authenticated = False
         self.__requests_session__ = requests.Session()
         self.__requests_session__.cookies = LWPCookieJar(cookies)
-        self.__username__ = username
-        self.__password__ = password
-        if page_cache_parameters:
-            self.__session_cache__ = SessionCache(*page_cache_parameters)
+        credentials = config.CLIP_CREDENTIALS
+        self.__username__ = credentials['USERNAME']
+        self.__password__ = credentials['PASSWORD']
+        if config.CACHE_DB:
+            self.__session_cache__ = SessionCache(config.CACHE_DB)
         else:
             self.__session_cache__ = None
         for session in __active_sessions__:
@@ -121,7 +123,7 @@ class Session:
         :return: Parsed html tree
         """
         cached_data = self.__session_cache__.read(url)
-        if cached_data:
+        if cached_data is not None:
             return read_and_clean_response(cached_data)
 
         if post_data is None:
@@ -143,7 +145,7 @@ class Session:
         :return: Parsed html tree
         """
         cached_data = self.__session_cache__.read(url)
-        if cached_data:
+        if cached_data is not None:
             return read_and_clean_broken_response(cached_data)
 
         if post_data is None:
@@ -217,11 +219,13 @@ def read_and_clean_broken_response(html: str) -> BeautifulSoup:
 
 
 class SessionCache:
-    def __init__(self, username: str, password: str):
-        database = os.getenv("PAGE_CACHE_DB", "page_cache")
-        host = os.getenv("PAGE_CACHE_HOST", "localhost")
-        port = os.getenv("PAGE_CACHE_PORT", 5432)
-        self.__conn__ = psycopg2.connect(dbname=database, host=host, port=port, user=username, password=password)
+    def __init__(self, settings):
+        self.__conn__ = psycopg2.connect(
+            dbname=settings['NAME'],
+            host=settings['HOST'],
+            port=settings['PORT'],
+            user=settings['USER'],
+            password=settings['PASSWORD'])
         self.__lock__ = Semaphore(value=1)
 
     def read(self, url: str):

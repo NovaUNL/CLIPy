@@ -2,12 +2,7 @@ import json
 import os
 
 # Defaults
-DB_HOST = "localhost:5432"
-DB_NAME = "clipy"
-DB_USER = "clipy"
-DB_PASSWORD = None
-CLIP_USER = None
-CLIP_PASSWORD = None
+WEBSERVICE_THREADS = 10
 
 assert 'CONFIG' in os.environ
 CONFIG_PATH = os.environ['CONFIG']
