@@ -23,11 +23,11 @@ Setup an environment variable pointing to a settings file:
 Make sure to insert proper credentials in that settings file.
 
 ### Usage
-    from CLIPy import Clip, config
+    from CLIPy import Clip
     
     Clip.bootstrap_database('CLIP ID', 'password', storage)
     
-    clip = Clip(config)
+    clip = Clip()
     # Don't run it like this, it takes forever. Look at the parameters
     clip.bootstrap_database()
     [print(student) for student in clip.find_student("John Smith")]
