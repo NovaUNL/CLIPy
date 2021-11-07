@@ -235,8 +235,9 @@ def get_enrollments(page):
 
 #: Generic shift scheduling string. Looks something like 'Segunda-Feira  XX:00 - YY:00  Ed Z: Lab 123 A/Ed.Z'
 SHIFT_SCHEDULING_EXP = re.compile(
-    '(?P<weekday>[\w-]+) {2}(?P<init_hour>\d{2}):(?P<init_min>\d{2}) - (?P<end_hour>\d{2}):(?P<end_min>\d{2})(?: {2})?'
-    '(?:(E[dD] .*: )?(?:Sala )?(?P<computer_lab>Lab Computadores )?(?P<lab>Lab[.]? ?)?(?P<room>[\w\b. ]+)(?:\([\w. ]+\))?/(?P<building>[\w\d. ]+))?')
+    '^(?P<weekday>[\w-]+) '
+    '{2}(?P<init_hour>\d{2}):(?P<init_min>\d{2}) - (?P<end_hour>\d{2}):(?P<end_min>\d{2})(?: {2})?'
+    '(?:(E[dD] ?.*: )?(?:Sala )?(?P<computer_lab>Lab Computadores )?(?P<lab>Lab[.]? ?)?(?P<room>([\w\b/. -]+))(?:\([\w. ]+\))?/(?P<building>[\w\d. ]+))?$')
 
 
 def get_shift_info(page):
@@ -636,11 +637,11 @@ def get_places(page):
 
 
 #: The generic long room string looks something like `Laboratório de Ensino Ed xyz: Lab 123` most of the times
-LONG_ROOM_EXP = re.compile('(?P<room_type>Sala|Laboratório de Ensino|Anfiteatro|Hangar|Edifício|Auditório)(( de)? '
-                           '(?P<room_subtype>Aula|Reunião|Mestrado|Computadores|Multimédia|Multiusos))?'
-                           '( E[Dd] (?P<building>[\w ]+):)? '
+LONG_ROOM_EXP = re.compile('^(?P<room_type>Sala|Laboratório|Anfiteatro|Hangar|Edifício|Auditório)(( de)? '
+                           '(?P<room_subtype>Aula|Reunião|Mestrado|Computadores|Multimédia|Multiusos|Ensino|Investigação))?'
+                           '( E[Dd] (?P<building>[\w/ ]+):)? '
                            '(?:Lab[. ]? (?:Computadores )?|Lab\.|Laboratório |H.|Ed: |Sala )?'
-                           '(?P<room_name>[\w .-]*)')
+                           '(?P<room_name>[\w()/ .-]*)$')
 
 
 def parse_place_str(place) -> (models.RoomType, str):
@@ -654,7 +655,8 @@ def parse_place_str(place) -> (models.RoomType, str):
     if match is None:
         return models.RoomType.generic, place
     room_name = match.group('room_name')
-    room_type = match.group('room_type')
+    room_type_str = match.group('room_type')
+    room_type = None
     subtype = match.group('room_subtype')
     if subtype:
         if subtype == 'Aula':
@@ -669,15 +671,16 @@ def parse_place_str(place) -> (models.RoomType, str):
             room_type = models.RoomType.masters
         elif subtype == 'Multiusos':
             room_type = models.RoomType.generic
+
+    if room_type is not None:
+        return room_type, room_name
+
+    if room_type_str.startswith('Lab'):
+        room_type = models.RoomType.laboratory
+    elif room_type_str.startswith('Anf'):
+        room_type = models.RoomType.auditorium
     else:
-        if room_type == 'Sala':
-            room_type = models.RoomType.generic
-        elif room_type.startswith('Lab'):
-            room_type = models.RoomType.laboratory
-        elif room_type.startswith('Anf'):
-            room_type = models.RoomType.auditorium
-        else:
-            room_type = models.RoomType.generic
+        room_type = models.RoomType.generic
 
     return room_type, room_name
 

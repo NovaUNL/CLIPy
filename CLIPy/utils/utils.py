@@ -5,7 +5,8 @@ weekdays = {'segunda': 0,
             'quarta': 2,
             'quinta': 3,
             'sexta': 4,
-            'sabado': 5,
+            # I hate my life...
+            '7': 5,
             'domingo': 6}
 
 
