@@ -9,6 +9,7 @@ from threading import Thread, Lock
 from time import sleep
 
 import re
+from typing import Callable
 
 from sqlalchemy.exc import IntegrityError
 
@@ -23,8 +24,14 @@ log = logging.getLogger(__name__)
 
 
 class PageCrawler(Thread):
-    def __init__(self, name, clip_session: WebSession, db_registry: db.SessionRegistry, work_queue: Queue,
-                 queue_lock: Lock, crawl_function):
+    def __init__(self,
+                 name,
+                 clip_session: WebSession,
+                 db_registry: db.SessionRegistry,
+                 work_queue: Queue,
+                 queue_lock: Lock,
+                 crawl_function: Callable,
+                 cache=True):
         Thread.__init__(self)
         self.name = name
         self.web_session: WebSession = clip_session
@@ -32,6 +39,7 @@ class PageCrawler(Thread):
         self.work_queue = work_queue
         self.queue_lock = queue_lock
         self.crawl_function = crawl_function
+        self.cache = cache
 
     def run(self):
         db_session = self.db_registry.get_session()
@@ -45,7 +53,7 @@ class PageCrawler(Thread):
                     exception_count = 0
                     while True:
                         try:
-                            self.crawl_function(self.web_session, db_controller, work_unit)
+                            self.crawl_function(self.web_session, db_controller, work_unit, cache=self.cache)
                             exception_count = 0
                             break
                         except Exception:
@@ -66,19 +74,22 @@ class PageCrawler(Thread):
             self.db_registry.remove()
 
 
-def crawl_departments(session: WebSession, database: db.Controller):
+def crawl_departments(session: WebSession, database: db.Controller, cache=True):
     """
     Finds new departments and adds them to the database. *NOT* thread-safe.
 
     :param session: Web session
     :param database: Database controller
+    :param cache: Bool stating whether to use cached responses when available
     """
     found = {}  # id -> Department
 
     # Find the departments which existed each year
     for year in range(INSTITUTION_FIRST_YEAR, datetime.now().year + 2):
         log.info(f"Crawling departments of institution. Year:{year}")
-        hierarchy = session.get_simplified_soup(urls.DEPARTMENTS.format(institution=INSTITUTION_ID, year=year))
+        hierarchy = session.get_simplified_soup(
+            urls.DEPARTMENTS.format(institution=INSTITUTION_ID, year=year),
+            cache=cache)
         for department_id, name in parser.get_departments(hierarchy):
             if department_id in found:  # update creation year
                 found[department_id].add_year(year)
@@ -88,12 +99,13 @@ def crawl_departments(session: WebSession, database: db.Controller):
     database.add_departments(found.values())
 
 
-def crawl_buildings(session: WebSession, database: db.Controller):
+def crawl_buildings(session: WebSession, database: db.Controller, cache=True):
     """
     Finds new buildings and adds them to the database. *NOT* thread-safe.
 
     :param session: Web session
     :param database: Database controller
+    :param cache: Bool stating whether to use cached responses when available
     """
 
     buildings = {}  # id -> Candidate
@@ -105,7 +117,8 @@ def crawl_buildings(session: WebSession, database: db.Controller):
                     institution=INSTITUTION_ID,
                     year=year,
                     period=period['part'],
-                    period_type=period['letter']))
+                    period_type=period['letter']),
+                cache=cache)
             page_buildings = parser.get_buildings(page)
             for identifier, name in page_buildings:
                 candidate = db.candidates.Building(identifier=identifier, name=name, first_year=year, last_year=year)
@@ -125,20 +138,23 @@ def crawl_buildings(session: WebSession, database: db.Controller):
 integrated_master_name_exp = re.compile("Mestrado Integrado.*")
 
 
-def crawl_courses(session: WebSession, database: db.Controller):
+def crawl_courses(session: WebSession, database: db.Controller, cache=True):
     """
     Finds new courses and adds them to the database. *NOT* thread-safe.
 
     :param session: Web session
     :param database: Database controller
+    :param cache: Bool stating whether to use cached responses when available
     """
     courses = {}  # identifier -> Candidate pairs
 
     # Obtain course id-name pairs from the course list page
-    page = session.get_simplified_soup(urls.COURSES.format(institution=INSTITUTION_ID))
+    page = session.get_simplified_soup(urls.COURSES.format(institution=INSTITUTION_ID), cache=cache)
     for identifier, name in parser.get_course_names(page):
         # Fetch the course curricular plan to find the activity years
-        page = session.get_simplified_soup(urls.CURRICULAR_PLANS.format(institution=INSTITUTION_ID, course=identifier))
+        page = session.get_simplified_soup(
+            urls.CURRICULAR_PLANS.format(institution=INSTITUTION_ID, course=identifier),
+            cache=cache)
         first, last = parser.get_course_activity_years(page)
         candidate = db.candidates.Course(identifier, name, first_year=first, last_year=last)
         courses[identifier] = candidate
@@ -149,14 +165,17 @@ def crawl_courses(session: WebSession, database: db.Controller):
     for degree in database.get_degree_set():
         if degree.id == 4:  # Skip integrated masters
             continue
-        page = session.get_simplified_soup(urls.STATISTICS.format(institution=INSTITUTION_ID, degree=degree.iid))
+        page = session.get_simplified_soup(
+            urls.STATISTICS.format(institution=INSTITUTION_ID, degree=degree.iid),
+            cache=cache)
         for identifier, abbreviation in parser.get_course_abbreviations(page):
             if identifier in courses:
                 course = courses[identifier]
                 courses[identifier].abbreviation = abbreviation
                 if degree.id == 2 and abbreviation.startswith('MI'):  # Distinguish masters from integrated masters
                     course_page = session.get_simplified_soup(
-                        urls.COURSE.format(institution=INSTITUTION_ID, course=course.id))
+                        urls.COURSE.format(institution=INSTITUTION_ID, course=course.id),
+                        cache=cache)
                     if course_page.find(text=integrated_master_name_exp):
                         courses[identifier].degree = integrated_master_degree
                     else:
@@ -171,18 +190,20 @@ def crawl_courses(session: WebSession, database: db.Controller):
     database.add_courses(courses.values())
 
 
-def crawl_rooms(session: WebSession, database: db.Controller, building: db.models.Building):
+def crawl_rooms(session: WebSession, database: db.Controller, building: db.models.Building, cache=True):
     building = database.session.merge(building)
     rooms = {}  # id -> Candidate
 
     for year in range(building.first_year, building.last_year + 1):
-        page = session.get_simplified_soup(urls.BUILDING_SCHEDULE.format(
-            institution=INSTITUTION_ID,
-            building=building.id,
-            year=year,
-            period=1,  # FIXME, this is a problem as some buildings only appear on the second period
-            period_type='s',
-            weekday=2))  # 2 is monday
+        page = session.get_simplified_soup(
+            urls.BUILDING_SCHEDULE.format(
+                institution=INSTITUTION_ID,
+                building=building.id,
+                year=year,
+                period=1,  # FIXME, this is a problem as some buildings only appear on the second period
+                period_type='s',
+                weekday=2),
+            cache=cache)  # 2 is monday
         candidates = parser.get_places(page)
         if len(candidates) > 0:
             log.debug(f'Found the following rooms in {building}, {year}:\n{candidates}')
@@ -197,7 +218,7 @@ def crawl_rooms(session: WebSession, database: db.Controller, building: db.model
         database.add_room(room)
 
 
-def crawl_teachers(session: WebSession, database: db.Controller, department: db.models.Department):
+def crawl_teachers(session: WebSession, database: db.Controller, department: db.models.Department, cache=True):
     department = database.session.merge(department)
     periods = database.get_period_set()
     classes_instances_cache = dict()  # cache to avoid queries
@@ -206,12 +227,14 @@ def crawl_teachers(session: WebSession, database: db.Controller, department: db.
     for year in range(department.first_year, department.last_year + 1):
         teachers = {}  # id -> Candidate
         for period in periods:
-            page = session.get_simplified_soup(urls.DEPARTMENT_TEACHERS.format(
-                institution=INSTITUTION_ID,
-                department=department.id,
-                year=year,
-                period=period['part'],
-                period_type=period['letter']))
+            page = session.get_simplified_soup(
+                urls.DEPARTMENT_TEACHERS.format(
+                    institution=INSTITUTION_ID,
+                    department=department.id,
+                    year=year,
+                    period=period['part'],
+                    period_type=period['letter']),
+                cache=cache)
             candidates = parser.get_teachers(page)
             for identifier, name in candidates:
                 # If there's a single teacher for a given period, a page with his/her schedule is served instead.
@@ -233,13 +256,15 @@ def crawl_teachers(session: WebSession, database: db.Controller, department: db.
                         last_year=year)
                     teachers[identifier] = teacher
 
-                schedule_page = session.get_simplified_soup(urls.TEACHER_SCHEDULE.format(
-                    teacher=identifier,
-                    institution=INSTITUTION_ID,
-                    department=department.id,
-                    year=year,
-                    period=period['part'],
-                    period_type=period['letter']))
+                schedule_page = session.get_simplified_soup(
+                    urls.TEACHER_SCHEDULE.format(
+                        teacher=identifier,
+                        institution=INSTITUTION_ID,
+                        department=department.id,
+                        year=year,
+                        period=period['part'],
+                        period_type=period['letter']),
+                    cache=cache)
 
                 while True:  # Cycle in case classes get added during the first iteration
                     for shift_link_tag in schedule_page.find_all(href=urls.SHIFT_LINK_EXP):
@@ -279,23 +304,27 @@ def crawl_teachers(session: WebSession, database: db.Controller, department: db.
 
 
 def _crawl_class(session: WebSession, database: db.Controller, class_id, year, period,
-                 name=None, department=None):
+                 name=None, department=None, cache=True):
     # Fetch abbreviation and number of ECTSs
-    page = session.get_simplified_soup(urls.CLASS_IDENTITY.format(
-        institution=INSTITUTION_ID,
-        year=year,
-        period=period['part'],
-        period_type=period['letter'],
-        class_id=class_id))
+    page = session.get_simplified_soup(
+        urls.CLASS_IDENTITY.format(
+            institution=INSTITUTION_ID,
+            year=year,
+            period=period['part'],
+            period_type=period['letter'],
+            class_id=class_id),
+        cache=cache)
     instance_name, abbr, ects = parser.get_class_identity(page, class_id)
 
     # Alternative
-    # page = session.get_simplified_soup(urls.CLASS.format(
-    #     institution=INSTITUTION_ID,
-    #     year=year,
-    #     period=period['part'],
-    #     period_type=period['letter'],
-    #     class_id=class_id))
+    # page = session.get_simplified_soup(
+    #     urls.CLASS.format(
+    #         institution=INSTITUTION_ID,
+    #         year=year,
+    #         period=period['part'],
+    #         period_type=period['letter'],
+    #         class_id=class_id),
+    #     cache=cache)
     # instance_name, abbr, ects = parser.get_class_instance(page, class_id)
 
     if name is not None and name != instance_name:
@@ -312,17 +341,17 @@ def _crawl_class(session: WebSession, database: db.Controller, class_id, year, p
             ects=ects))
 
 
-def crawl_class_instance(session: WebSession, database: db.Controller, class_id: int, year: int, period):
+def crawl_class_instance(session: WebSession, database: db.Controller, class_id: int, year: int, period, cache=True):
     klass = _crawl_class(session, database, class_id, year, period)
     new_class_instances = database.add_class_instances([db.candidates.ClassInstance(klass, period['id'], year)])
     if len(new_class_instances) > 0:
-        _populate_new_class_instances(session, database, new_class_instances)
+        _populate_new_class_instances(session, database, new_class_instances, cache=cache)
 
 
 period_exp = re.compile('&tipo_de_per%EDodo_lectivo=(?P<type>\w)&per%EDodo_lectivo=(?P<stage>\d)$')
 
 
-def crawl_classes(session: WebSession, database: db.Controller, department: db.models.Department):
+def crawl_classes(session: WebSession, database: db.Controller, department: db.models.Department, cache=True):
     department = database.session.merge(department)
     log.debug("Crawling classes in department %s" % department.id)
     classes = {}
@@ -330,10 +359,12 @@ def crawl_classes(session: WebSession, database: db.Controller, department: db.m
 
     # for each year this department operated
     for year in range(department.first_year, department.last_year + 1):
-        page = session.get_simplified_soup(urls.DEPARTMENT_PERIODS.format(
-            institution=INSTITUTION_ID,
-            department=department.id,
-            year=year))
+        page = session.get_simplified_soup(
+            urls.DEPARTMENT_PERIODS.format(
+                institution=INSTITUTION_ID,
+                department=department.id,
+                year=year),
+            cache=cache)
 
         period_links = page.find_all(href=period_exp)
 
@@ -356,12 +387,14 @@ def crawl_classes(session: WebSession, database: db.Controller, department: db.m
             if period is None:
                 raise Exception("Unknown period")
 
-            page = session.get_simplified_soup(urls.DEPARTMENT_CLASSES.format(
-                institution=INSTITUTION_ID,
-                department=department.id,
-                year=year,
-                period=period['part'],
-                period_type=period['letter']))
+            page = session.get_simplified_soup(
+                urls.DEPARTMENT_CLASSES.format(
+                    institution=INSTITUTION_ID,
+                    department=department.id,
+                    year=year,
+                    period=period['part'],
+                    period_type=period['letter']),
+                cache=cache)
 
             class_links = page.find_all(href=urls.CLASS_EXP)
 
@@ -372,7 +405,7 @@ def crawl_classes(session: WebSession, database: db.Controller, department: db.m
                 if class_id not in classes:
                     classes[class_id] = _crawl_class(
                         session, database, class_id, year, period,
-                        name=class_name, department=department)
+                        name=class_name, department=department, cache=cache)
 
                 if classes[class_id] is None:
                     raise Exception("Null class")
@@ -382,23 +415,23 @@ def crawl_classes(session: WebSession, database: db.Controller, department: db.m
         _populate_new_class_instances(session, database, new_class_instances)
 
 
-def _populate_new_class_instances(session: WebSession, database: db.Controller, new_class_instances):
+def _populate_new_class_instances(session: WebSession, database: db.Controller, new_class_instances, cache=True):
     for instance in new_class_instances:
-        crawl_class_info(session, database, instance)
-        crawl_class_shifts(session, database, instance)
-        crawl_class_enrollments(session, database, instance)
-        crawl_class_events(session, database, instance)
-        crawl_grades(session, database, instance)
+        crawl_class_info(session, database, instance, cache=cache)
+        crawl_class_shifts(session, database, instance, cache=cache)
+        crawl_class_enrollments(session, database, instance, cache=cache)
+        crawl_class_events(session, database, instance, cache=cache)
+        crawl_grades(session, database, instance, cache=cache)
         crawl_files(session, database, instance)
 
 
-def crawl_admissions(session: WebSession, database: db.Controller, year):
+def crawl_admissions(session: WebSession, database: db.Controller, year, cache="This is ignored"):
     admissions = []
     if year < 2006:
         return
     log.debug(f"Crawling admissions for the year {year}")
     course_ids = set()  # Courses found in this year's page
-    page = session.get_simplified_soup(urls.ADMISSIONS.format(institution=INSTITUTION_ID, year=year))
+    page = session.get_simplified_soup(urls.ADMISSIONS.format(institution=INSTITUTION_ID, year=year), cache=False)
     course_links = page.find_all(href=urls.COURSE_EXP)
     for course_link in course_links:  # For every found course
         course_id = int(urls.COURSE_EXP.findall(course_link.attrs['href'])[0])
@@ -410,11 +443,13 @@ def crawl_admissions(session: WebSession, database: db.Controller, year):
             log.error(f"Unable to fetch the course with the internal identifier {course_id}. Skipping.")
             continue
         for phase in range(1, 4):  # For every of the three phases
-            page = session.get_simplified_soup(urls.ADMITTED.format(
-                institution=INSTITUTION_ID,
-                year=year,
-                course=course_id,
-                phase=phase))
+            page = session.get_simplified_soup(
+                urls.ADMITTED.format(
+                    institution=INSTITUTION_ID,
+                    year=year,
+                    course=course_id,
+                    phase=phase),
+                cache=False)
             candidates = parser.get_admissions(page)
             for name, option, student_id, state in candidates:
                 student = None
@@ -433,17 +468,23 @@ def crawl_admissions(session: WebSession, database: db.Controller, year):
     database.add_admissions(admissions)
 
 
-def crawl_class_enrollments(session: WebSession, database: db.Controller, class_instance: db.models.ClassInstance):
+def crawl_class_enrollments(
+        session: WebSession,
+        database: db.Controller,
+        class_instance: db.models.ClassInstance,
+        cache=True):
     log.debug("Crawling enrollments in class instance ID %s" % class_instance.id)
     class_instance: db.models.ClassInstance = database.session.merge(class_instance)
     year = class_instance.year
 
-    page = session.get_simplified_soup(urls.CLASS_ENROLLED.format(
-        institution=INSTITUTION_ID,
-        year=class_instance.year,
-        period=class_instance.period.part,
-        period_type=class_instance.period.letter,
-        class_id=class_instance.parent.id))
+    page = session.get_simplified_soup(
+        urls.CLASS_ENROLLED.format(
+            institution=INSTITUTION_ID,
+            year=class_instance.year,
+            period=class_instance.period.part,
+            period_type=class_instance.period.letter,
+            class_id=class_instance.parent.id),
+        cache=cache)
 
     # Strip file header and split it into lines
     if len(page.find_all(string=re.compile("Pedido inválido"))) > 0:
@@ -485,7 +526,7 @@ def crawl_class_enrollments(session: WebSession, database: db.Controller, class_
     database.add_enrollments(enrollments)
 
 
-def crawl_class_info(session: WebSession, database: db.Controller, class_instance: db.models.ClassInstance):
+def crawl_class_info(session: WebSession, database: db.Controller, class_instance: db.models.ClassInstance, cache=True):
     log.debug("Crawling info from class instance ID %s" % class_instance.id)
     class_instance = database.session.merge(class_instance)
     class_info = {}
@@ -497,54 +538,54 @@ def crawl_class_info(session: WebSession, database: db.Controller, class_instanc
         'period_type': class_instance.period.letter,
         'class_id': class_instance.parent.id
     }
-    page = session.get_broken_simplified_soup(urls.CLASS_DESCRIPTION.format(**args))
+    page = session.get_broken_simplified_soup(urls.CLASS_DESCRIPTION.format(**args), cache=cache)
     try:
         class_info['description'] = parser.get_bilingual_info(page)
     except ValueError:
         log.error(f"Failed to parse the description of class inst. {class_instance.id} ({class_instance.parent.name})")
-    page = session.get_broken_simplified_soup(urls.CLASS_OBJECTIVES.format(**args))
+    page = session.get_broken_simplified_soup(urls.CLASS_OBJECTIVES.format(**args), cache=cache)
     try:
         class_info['objectives'] = parser.get_bilingual_info(page)
     except ValueError:
         log.error(f"Failed to parse the objectives of class inst. {class_instance.id} ({class_instance.parent.name})")
-    page = session.get_broken_simplified_soup(urls.CLASS_REQUIREMENTS.format(**args))
+    page = session.get_broken_simplified_soup(urls.CLASS_REQUIREMENTS.format(**args), cache=cache)
     try:
         class_info['requirements'] = parser.get_bilingual_info(page)
     except ValueError:
         log.error(f"Failed to parse the requirements of class inst. {class_instance.id} ({class_instance.parent.name})")
-    page = session.get_broken_simplified_soup(urls.CLASS_COMPETENCES.format(**args))
+    page = session.get_broken_simplified_soup(urls.CLASS_COMPETENCES.format(**args), cache=cache)
     try:
         class_info['competences'] = parser.get_bilingual_info(page)
     except ValueError:
         log.error(f"Failed to parse the competences of class inst. {class_instance.id} ({class_instance.parent.name})")
-    page = session.get_broken_simplified_soup(urls.CLASS_PROGRAM.format(**args))
+    page = session.get_broken_simplified_soup(urls.CLASS_PROGRAM.format(**args), cache=cache)
     try:
         class_info['program'] = parser.get_bilingual_info(page)
     except ValueError:
         log.error(f"Failed to parse the program of class inst. {class_instance.id} ({class_instance.parent.name})")
-    page = session.get_broken_simplified_soup(urls.CLASS_BIBLIOGRAPHY.format(**args))
+    page = session.get_broken_simplified_soup(urls.CLASS_BIBLIOGRAPHY.format(**args), cache=cache)
     try:
         class_info['bibliography'] = parser.get_bilingual_info(page)
     except ValueError:
         log.error(f"Failed to parse the bibliography of class inst. {class_instance.id} ({class_instance.parent.name})")
-    page = session.get_broken_simplified_soup(urls.CLASS_ASSISTANCE.format(**args))
+    page = session.get_broken_simplified_soup(urls.CLASS_ASSISTANCE.format(**args), cache=cache)
     try:
         class_info['assistance'] = parser.get_bilingual_info(page)
     except ValueError:
         log.error(f"Failed to parse the assistance of class inst. {class_instance.id} ({class_instance.parent.name})")
-    page = session.get_broken_simplified_soup(urls.CLASS_TEACHING_METHODS.format(**args))
+    page = session.get_broken_simplified_soup(urls.CLASS_TEACHING_METHODS.format(**args), cache=cache)
     try:
         class_info['teaching_methods'] = parser.get_bilingual_info(page)
     except ValueError:
         log.error("Failed to parse the teaching methods of class inst. "
                   f"{class_instance.id} ({class_instance.parent.name})")
-    page = session.get_broken_simplified_soup(urls.CLASS_EVALUATION_METHODS.format(**args))
+    page = session.get_broken_simplified_soup(urls.CLASS_EVALUATION_METHODS.format(**args), cache=cache)
     try:
         class_info['evaluation_methods'] = parser.get_bilingual_info(page)
     except ValueError:
         log.error("Failed to parse the evaluation methods of class inst. "
                   f"{class_instance.id} ({class_instance.parent.name})")
-    page = session.get_broken_simplified_soup(urls.CLASS_EXTRA.format(**args))
+    page = session.get_broken_simplified_soup(urls.CLASS_EXTRA.format(**args), cache=cache)
     try:
         class_info['extra_info'] = parser.get_bilingual_info(page)
     except ValueError:
@@ -552,26 +593,37 @@ def crawl_class_info(session: WebSession, database: db.Controller, class_instanc
     database.update_class_instance_info(class_instance, class_info)
 
 
-def crawl_class_events(session: WebSession, database: db.Controller, class_instance: db.models.ClassInstance):
+def crawl_class_events(
+        session: WebSession,
+        database: db.Controller,
+        class_instance: db.models.ClassInstance,
+        cache=True):
     log.debug("Crawling events from class instance ID %s" % class_instance.id)
     class_instance = database.session.merge(class_instance)
 
-    page = session.get_broken_simplified_soup(urls.CLASS_EVENTS.format(
-        institution=INSTITUTION_ID,
-        year=class_instance.year,
-        class_id=class_instance.parent.id,
-        period=class_instance.period.part,
-        period_type=class_instance.period.letter))
+    page = session.get_broken_simplified_soup(
+        urls.CLASS_EVENTS.format(
+            institution=INSTITUTION_ID,
+            year=class_instance.year,
+            class_id=class_instance.parent.id,
+            period=class_instance.period.part,
+            period_type=class_instance.period.letter),
+        cache=cache)
     events = parser.get_class_events(page)
     database.update_class_instance_events(class_instance, events)
 
 
-def crawl_class_shifts(session: WebSession, database: db.Controller, class_instance: db.models.ClassInstance):
+def crawl_class_shifts(
+        session: WebSession,
+        database: db.Controller,
+        class_instance: db.models.ClassInstance,
+        cache=True):
     """
     Updates information on shifts belonging to a given class instance.
     :param session: Browsing session
     :param database: Database controller
     :param class_instance: ClassInstance object to look after
+    :param cache: Bool stating whether to use cached responses when available
     """
     log.debug("Crawling shifts class instance ID %s" % class_instance.id)
     class_instance: db.models.ClassInstance = database.session.merge(class_instance)
@@ -579,12 +631,14 @@ def crawl_class_shifts(session: WebSession, database: db.Controller, class_insta
     missing_shifts = {(shift.type.abbreviation, shift.number): shift.id for shift in class_instance.shifts}
 
     # --- Prepare the list of shifts to crawl ---
-    page = session.get_simplified_soup(urls.CLASS_SHIFTS.format(
-        institution=INSTITUTION_ID,
-        year=class_instance.year,
-        class_id=class_instance.parent.id,
-        period=class_instance.period.part,
-        period_type=class_instance.period.letter))
+    page = session.get_simplified_soup(
+        urls.CLASS_SHIFTS.format(
+            institution=INSTITUTION_ID,
+            year=class_instance.year,
+            class_id=class_instance.parent.id,
+            period=class_instance.period.part,
+            period_type=class_instance.period.letter),
+        cache=cache)
     try:
         page.find('td', class_="barra_de_escolhas").find('table').decompose()  # Delete block with other instances
     except AttributeError:
@@ -633,7 +687,7 @@ def crawl_class_shifts(session: WebSession, database: db.Controller, class_insta
         shift_pages.append((page, shift_type, shift_number))  # save it, avoid requesting it again
     else:  # if there are multiple shifts then request them
         for shift_link in shift_links:
-            shift_page = session.get_simplified_soup(urls.ROOT + shift_link.attrs['href'])
+            shift_page = session.get_simplified_soup(urls.ROOT + shift_link.attrs['href'], cache=cache)
             shift_link_matches = urls.SHIFT_LINK_EXP.search(shift_link.attrs['href'])
             shift_type = shift_link_matches.group("type")
             shift_number = int(shift_link_matches.group("number"))
@@ -700,34 +754,39 @@ def crawl_class_shifts(session: WebSession, database: db.Controller, class_insta
         database.add_shift_students(shift, students)
 
 
-def crawl_files(session: WebSession, database: db.Controller, class_instance: db.models.ClassInstance):
+def crawl_files(session: WebSession, database: db.Controller, class_instance: db.models.ClassInstance, cache=True):
     """
     Finds files uploaded to a class instance.
     :param session: Browsing session
     :param database: Database controller
     :param class_instance: ClassInstance object to look after
+    :param cache: Bool stating whether to use cached responses when available
     """
     log.debug("Crawling class instance ID %s files" % class_instance.id)
     class_instance: db.models.ClassInstance = database.session.merge(class_instance)
     known_file_ids = {file.id for file in class_instance.files}
 
-    page = session.get_simplified_soup(urls.CLASS_FILE_TYPES.format(
-        institution=INSTITUTION_ID,
-        year=class_instance.year,
-        class_id=class_instance.parent.id,
-        period=class_instance.period.part,
-        period_type=class_instance.period.letter))
-
-    file_types = parser.get_file_types(page)
-
-    for file_type, _ in file_types:
-        page = session.get_simplified_soup(urls.CLASS_FILES.format(
+    page = session.get_simplified_soup(
+        urls.CLASS_FILE_TYPES.format(
             institution=INSTITUTION_ID,
             year=class_instance.year,
             class_id=class_instance.parent.id,
             period=class_instance.period.part,
-            period_type=class_instance.period.letter,
-            file_type=file_type.to_url_argument()))
+            period_type=class_instance.period.letter),
+        cache=cache)
+
+    file_types = parser.get_file_types(page)
+
+    for file_type, _ in file_types:
+        page = session.get_simplified_soup(
+            urls.CLASS_FILES.format(
+                institution=INSTITUTION_ID,
+                year=class_instance.year,
+                class_id=class_instance.parent.id,
+                period=class_instance.period.part,
+                period_type=class_instance.period.letter,
+                file_type=file_type.to_url_argument()),
+            cache=cache)
         files = parser.get_files(page)
         for identifier, name, size, upload_datetime, uploader in files:
             if identifier not in known_file_ids:
@@ -754,14 +813,16 @@ def download_files(session: WebSession, database: db.Controller, class_instance:
                 poked_file_types.add(file_type)
 
                 # poke the page, this is required to download, for some reason...
-                session.get_simplified_soup(urls.CLASS_FILES.format(
-                    institution=INSTITUTION_ID,
-                    year=class_instance.year,
-                    department=class_instance.department.id,
-                    class_id=class_instance.parent.id,
-                    period=class_instance.period.part,
-                    period_type=class_instance.period.letter,
-                    file_type=class_file.file_type.to_url_argument()))
+                session.get_simplified_soup(
+                    urls.CLASS_FILES.format(
+                        institution=INSTITUTION_ID,
+                        year=class_instance.year,
+                        department=class_instance.department.id,
+                        class_id=class_instance.parent.id,
+                        period=class_instance.period.part,
+                        period_type=class_instance.period.letter,
+                        file_type=class_file.file_type.to_url_argument()),
+                    cache=False)
 
             response = session.get_file(urls.FILE_URL.format(file_identifier=class_file.file.id))
             if response is None:
@@ -791,24 +852,26 @@ def download_files(session: WebSession, database: db.Controller, class_instance:
             database.update_downloaded_file(file=class_file.file, hash=sha1, mime=mime)
 
 
-def crawl_grades(session: WebSession, database: db.Controller, class_instance: db.models.ClassInstance):
+def crawl_grades(session: WebSession, database: db.Controller, class_instance: db.models.ClassInstance, cache=True):
     class_instance: db.models.ClassInstance = database.session.merge(class_instance)
 
     if len(class_instance.enrollments) == 0:
         return  # Class has no one enrolled, nothing to see here...
 
     # Grades
-    page = session.get_simplified_soup(urls.CLASS_RESULTS.format(
-        institution=INSTITUTION_ID,
-        year=class_instance.year,
-        class_id=class_instance.parent.id,
-        period=class_instance.period.part,
-        period_type=class_instance.period.letter))
+    page = session.get_simplified_soup(
+        urls.CLASS_RESULTS.format(
+            institution=INSTITUTION_ID,
+            year=class_instance.year,
+            class_id=class_instance.parent.id,
+            period=class_instance.period.part,
+            period_type=class_instance.period.letter),
+        cache=cache)
 
     course_links = page.find_all(href=urls.COURSE_EXP)
 
     for link in course_links:
-        page = session.get_simplified_soup(urls.ROOT + link.attrs['href'])
+        page = session.get_simplified_soup(urls.ROOT + link.attrs['href'], cache=cache)
         results = parser.get_results(page)
 
         for student, evaluations, approved in results:
@@ -835,16 +898,18 @@ def crawl_grades(session: WebSession, database: db.Controller, class_instance: d
                 approved=approved)
 
     # Attendance
-    page = session.get_simplified_soup(urls.CLASS_ATTENDANCE.format(
-        institution=INSTITUTION_ID,
-        year=class_instance.year,
-        class_id=class_instance.parent.id,
-        period=class_instance.period.part,
-        period_type=class_instance.period.letter))
+    page = session.get_simplified_soup(
+        urls.CLASS_ATTENDANCE.format(
+            institution=INSTITUTION_ID,
+            year=class_instance.year,
+            class_id=class_instance.parent.id,
+            period=class_instance.period.part,
+            period_type=class_instance.period.letter),
+        cache=cache)
     course_links = page.find_all(href=urls.COURSE_EXP)
 
     for link in course_links:
-        page = session.get_simplified_soup(urls.ROOT + link.attrs['href'])
+        page = session.get_simplified_soup(urls.ROOT + link.attrs['href'], cache=cache)
         for student, attendance, date in parser.get_attendance(page):
             db_student = database.get_student(student[0])
             if db_student is None:
@@ -858,16 +923,18 @@ def crawl_grades(session: WebSession, database: db.Controller, class_instance: d
                 date=date)
 
     # Improvements
-    page = session.get_simplified_soup(urls.CLASS_IMPROVEMENTS.format(
-        institution=INSTITUTION_ID,
-        year=class_instance.year,
-        class_id=class_instance.parent.id,
-        period=class_instance.period.part,
-        period_type=class_instance.period.letter))
+    page = session.get_simplified_soup(
+        urls.CLASS_IMPROVEMENTS.format(
+            institution=INSTITUTION_ID,
+            year=class_instance.year,
+            class_id=class_instance.parent.id,
+            period=class_instance.period.part,
+            period_type=class_instance.period.letter),
+        cache=cache)
     course_links = page.find_all(href=urls.COURSE_EXP)
 
     for link in course_links:
-        page = session.get_simplified_soup(urls.ROOT + link.attrs['href'])
+        page = session.get_simplified_soup(urls.ROOT + link.attrs['href'], cache=cache)
         for student, improved, grade, date in parser.get_improvements(page):
             db_student = database.get_student(student[0])
             if db_student is None:
@@ -888,7 +955,8 @@ def crawl_library_individual_room_availability(session: WebSession, date: dateti
         urls.LIBRARY_INDIVIDUAL_ROOMS,
         post_data={
             'submit:reservas:es': 'Ver+disponibilidade',
-            'data': date.isoformat()})
+            'data': date.isoformat()},
+        cache=False)
     return parser.get_library_room_availability(page)
 
 
@@ -897,5 +965,6 @@ def crawl_library_group_room_availability(session: WebSession, date: datetime.da
         urls.LIBRARY_GROUP_ROOMS,
         post_data={
             'submit:reservas:es': 'Ver+disponibilidade',
-            'data': date.isoformat()})
+            'data': date.isoformat()},
+        cache=False)
     return parser.get_library_group_room_availability(page)

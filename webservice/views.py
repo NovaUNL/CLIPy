@@ -1,5 +1,5 @@
 from datetime import datetime
-from flask import Blueprint, jsonify
+from flask import Blueprint, jsonify, request
 
 from CLIPy import Clip
 
@@ -109,26 +109,30 @@ def get_library_info(day):
 
 @bp.route('/update/courses/', methods=['GET'])
 def update_courses():
-    clip.update_courses()
+    cache = request.args.get('cache', default=False, type=bool)
+    clip.update_courses(cache=cache)
     return "Success"
 
 
 @bp.route('/update/rooms/', methods=['GET'])
 def update_rooms():
-    clip.update_rooms()
+    cache = request.args.get('cache', default=False, type=bool)
+    clip.update_rooms(cache=cache)
     return "Success"
 
 
 @bp.route('/update/classes/', methods=['GET'])
 def update_classes():
-    clip.update_classes()
+    cache = request.args.get('cache', default=False, type=bool)
+    clip.update_classes(cache=cache)
     return "Success"
 
 
 @bp.route('/update/teachers/', methods=['GET'], defaults={'department_id': None})
 @bp.route('/update/teachers/<int:department_id>', methods=['GET'])
 def update_teachers(department_id):
-    clip.update_teachers(department_id)
+    cache = request.args.get('cache', default=False, type=bool)
+    clip.update_teachers(department_id, cache=cache)
     return "Success"
 
 
@@ -140,35 +144,41 @@ def update_admissions():
 
 @bp.route('/update/class_info/<int:class_instance_id>', methods=['GET'])
 def update_class_info(class_instance_id):
-    clip.update_class_info(class_instance_id)
+    cache = request.args.get('cache', default=False, type=bool)
+    clip.update_class_info(class_instance_id, cache=cache)
     return "Success"
 
 
 @bp.route('/update/class_enrollments/<int:class_instance_id>', methods=['GET'])
 def update_class_enrollments(class_instance_id):
-    clip.update_class_enrollments(class_instance_id)
+    cache = request.args.get('cache', default=False, type=bool)
+    clip.update_class_enrollments(class_instance_id, cache=cache)
     return "Success"
 
 
 @bp.route('/update/shifts/<int:class_instance_id>', methods=['GET'])
 def update_shifts(class_instance_id):
-    clip.update_class_shifts(class_instance_id)
+    cache = request.args.get('cache', default=False, type=bool)
+    clip.update_class_shifts(class_instance_id, cache=cache)
     return "Success"
 
 
 @bp.route('/update/events/<int:class_instance_id>', methods=['GET'])
 def update_events(class_instance_id):
-    clip.update_class_events(class_instance_id)
+    cache = request.args.get('cache', default=False, type=bool)
+    clip.update_class_events(class_instance_id, cache=cache)
     return "Success"
 
 
 @bp.route('/update/class_files/<int:class_instance_id>', methods=['GET'])
 def update_class_files(class_instance_id):
-    clip.update_class_files(class_instance_id)
+    cache = request.args.get('cache', default=False, type=bool)
+    clip.update_class_files(class_instance_id, cache=cache)
     return "Success"
 
 
 @bp.route('/update/class_grades/<int:class_instance_id>', methods=['GET'])
 def update_class_grades(class_instance_id):
-    clip.update_class_grades(class_instance_id)
+    cache = request.args.get('cache', default=False, type=bool)
+    clip.update_class_grades(class_instance_id, cache=cache)
     return "Success"

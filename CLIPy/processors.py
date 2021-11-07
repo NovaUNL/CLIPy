@@ -12,11 +12,11 @@ from .session import Session
 log = logging.getLogger(__name__)
 
 
-def task_queue_processor(session: Session, db_registry: db.SessionRegistry, task: Callable, queue: Queue):
+def task_queue_processor(session: Session, db_registry: db.SessionRegistry, task: Callable, queue: Queue, cache=True):
     lock = Lock()
     threads = []
     for thread in range(0, CLIPY_THREADS):
-        threads.append(PageCrawler("Thread-" + str(thread), session, db_registry, queue, lock, task))
+        threads.append(PageCrawler("Thread-" + str(thread), session, db_registry, queue, lock, task, cache=cache))
         threads[thread].start()
 
     while True:
@@ -42,27 +42,27 @@ def task_queue_processor(session: Session, db_registry: db.SessionRegistry, task
         thread.join()
 
 
-def year_task(session: Session, db_registry: db.SessionRegistry, task: Callable, from_year, to_year):
+def year_task(session: Session, db_registry: db.SessionRegistry, task: Callable, from_year, to_year, cache=True):
     year_queue = Queue()
     [year_queue.put(year) for year in range(from_year, to_year + 1)]
-    task_queue_processor(session, db_registry, task, year_queue)
+    task_queue_processor(session, db_registry, task, year_queue, cache=cache)
 
 
-def building_task(session: Session, db_registry: db.SessionRegistry, task: Callable):
+def building_task(session: Session, db_registry: db.SessionRegistry, task: Callable, cache=True):
     database = db.Controller(db_registry)
     department_queue = Queue()
     [department_queue.put(department) for department in database.get_building_set()]
-    task_queue_processor(session, db_registry, task, department_queue)
+    task_queue_processor(session, db_registry, task, department_queue, cache=cache)
 
 
-def department_task(session: Session, db_registry: db.SessionRegistry, task: Callable):
+def department_task(session: Session, db_registry: db.SessionRegistry, task: Callable, cache=True):
     database = db.Controller(db_registry)
     department_queue = Queue()
     [department_queue.put(department) for department in database.get_department_set()]
-    task_queue_processor(session, db_registry, task, department_queue)
+    task_queue_processor(session, db_registry, task, department_queue, cache=cache)
 
 
-def class_task(session: Session, db_registry: db.SessionRegistry, task: Callable, year=None, period=None):
+def class_task(session: Session, db_registry: db.SessionRegistry, task: Callable, year=None, period=None, cache=True):
     database = db.Controller(db_registry)
     class_instance_queue = Queue()
     if year is None:
@@ -73,4 +73,4 @@ def class_task(session: Session, db_registry: db.SessionRegistry, task: Callable
         else:
             class_instances = database.fetch_class_instances(year=year, period=period)
     [class_instance_queue.put(class_instance) for class_instance in class_instances]
-    task_queue_processor(session, db_registry, task, class_instance_queue)
+    task_queue_processor(session, db_registry, task, class_instance_queue, cache=cache)

@@ -112,19 +112,21 @@ class Session:
         self.authenticate()
         return self.__requests_session__.post(url, data=data, headers=http_headers, timeout=30)
 
-    def get_simplified_soup(self, url: str, post_data=None) -> BeautifulSoup:
+    def get_simplified_soup(self, url: str, cache=True, post_data=None) -> BeautifulSoup:
         """
         | Fetches a remote URL using an HTTP GET method using the current session attributes.
         | Then parses the response text cleaning tags which aren't useful for parsing
         | If the post field is filled the HTTP POST method is used instead
 
         :param url: URL to fetch
+        :param cache: Whether to retrieve data from the cache
         :param post_data: If filled, upgrades the request to an HTTP POST with this being the data dict
         :return: Parsed html tree
         """
-        cached_data = self.__session_cache__.read(url)
-        if cached_data is not None:
-            return read_and_clean_response(cached_data)
+        if cache:
+            cached_data = self.__session_cache__.read(url)
+            if cached_data is not None:
+                return read_and_clean_response(cached_data)
 
         if post_data is None:
             html = self.get(url).text
@@ -133,7 +135,7 @@ class Session:
         self.__session_cache__.store(url, html)
         return read_and_clean_response(html)
 
-    def get_broken_simplified_soup(self, url: str, post_data=None) -> BeautifulSoup:
+    def get_broken_simplified_soup(self, url: str, cache=True, post_data=None) -> BeautifulSoup:
         """
         | Fetches a remote URL using an HTTP GET method using the current session attributes.
         | Then parses the response text with an heavy parser (allowing for broken HTML)
@@ -141,12 +143,14 @@ class Session:
         | If the post field is filled the HTTP POST method is used instead
 
         :param url: URL to fetch
+        :param cache: Whether to retrieve data from the cache
         :param post_data: If filled, upgrades the request to an HTTP POST with this being the data dict
         :return: Parsed html tree
         """
-        cached_data = self.__session_cache__.read(url)
-        if cached_data is not None:
-            return read_and_clean_broken_response(cached_data)
+        if cache:
+            cached_data = self.__session_cache__.read(url)
+            if cached_data is not None:
+                return read_and_clean_broken_response(cached_data)
 
         if post_data is None:
             html = self.get(url).text

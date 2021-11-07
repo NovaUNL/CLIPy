@@ -109,7 +109,8 @@ class Clip:
         obj = self.cache.controller.session.query(m.ClassEvent).get(id)
         return None if obj is None else obj.serialize()
 
-    def update_teachers(self, department_id):
+    def update_teachers(self, department_id, cache=False):
+        log.info("Updating teachers")
         if department_id:
             controller = db.Controller(self.cache.registry)
             department = controller.session.query(m.Department).get(department_id)
@@ -118,18 +119,22 @@ class Clip:
         else:
             processors.department_task(self.session, self.cache.registry, crawler.crawl_teachers)
 
-    def update_classes(self):
+    def update_classes(self, cache=False):
+        log.info("Updating Classes")
         processors.department_task(self.session, self.cache.registry, crawler.crawl_classes)
 
-    def update_courses(self):
+    def update_courses(self, cache=True):
+        log.info("Updating courses")
         controller = db.Controller(self.cache.registry)
-        crawler.crawl_courses(self.session, controller)
+        crawler.crawl_courses(self.session, controller, cache=cache)
         self.cache.registry.remove()
 
-    def update_rooms(self):
-        processors.building_task(self.session, self.cache.registry, crawler.crawl_rooms)
+    def update_rooms(self, cache=True):
+        log.info("Updating rooms")
+        processors.building_task(self.session, self.cache.registry, crawler.crawl_rooms, cache=cache)
 
     def update_admissions(self):
+        log.info("Updating admissions")
         processors.year_task(
             self.session,
             self.cache.registry,
@@ -137,38 +142,44 @@ class Clip:
             from_year=INSTITUTION_FIRST_YEAR,
             to_year=INSTITUTION_LAST_YEAR)
 
-    def update_class_info(self, class_instance_id: int):
+    def update_class_info(self, class_instance_id: int, cache=False):
+        log.info(f"Updating class info for {class_instance_id}")
         controller = db.Controller(self.cache.registry)
         class_instance = controller.session.query(m.ClassInstance).get(class_instance_id)
-        crawler.crawl_class_info(self.session, controller, class_instance)
+        crawler.crawl_class_info(self.session, controller, class_instance, cache=cache)
         self.cache.registry.remove()
 
-    def update_class_enrollments(self, class_instance_id: int):
+    def update_class_enrollments(self, class_instance_id: int, cache=False):
+        log.info(f"Updating enrollments for {class_instance_id}")
         controller = db.Controller(self.cache.registry)
         class_instance = controller.session.query(m.ClassInstance).get(class_instance_id)
-        crawler.crawl_class_enrollments(self.session, controller, class_instance)
+        crawler.crawl_class_enrollments(self.session, controller, class_instance, cache=cache)
         self.cache.registry.remove()
 
-    def update_class_shifts(self, class_instance_id: int):
+    def update_class_shifts(self, class_instance_id: int, cache=False):
+        log.info(f"Updating shifts for {class_instance_id}")
         controller = db.Controller(self.cache.registry)
         class_instance = controller.session.query(m.ClassInstance).get(class_instance_id)
-        crawler.crawl_class_shifts(self.session, controller, class_instance)
+        crawler.crawl_class_shifts(self.session, controller, class_instance, cache=cache)
         self.cache.registry.remove()
 
-    def update_class_events(self, class_instance_id: int):
+    def update_class_events(self, class_instance_id: int, cache=False):
+        log.info(f"Updating events for {class_instance_id}")
         controller = db.Controller(self.cache.registry)
         class_instance = controller.session.query(m.ClassInstance).get(class_instance_id)
-        crawler.crawl_class_events(self.session, controller, class_instance)
+        crawler.crawl_class_events(self.session, controller, class_instance, cache=cache)
         self.cache.registry.remove()
 
-    def update_class_files(self, class_instance_id: int):
+    def update_class_files(self, class_instance_id: int, cache=False):
+        log.info(f"Updating files for {class_instance_id}")
         class_instance = self.cache.controller.session.query(m.ClassInstance).get(class_instance_id)
         controller = db.Controller(self.cache.registry)
-        crawler.crawl_files(self.session, controller, class_instance)
+        crawler.crawl_files(self.session, controller, class_instance, cache=cache)
         crawler.download_files(self.session, controller, class_instance)
         self.cache.registry.remove()
 
-    def update_class_grades(self, class_instance_id: int):
+    def update_class_grades(self, class_instance_id: int, cache=False):
+        log.info(f"Updating grades for {class_instance_id}")
         class_instance = self.cache.controller.session.query(m.ClassInstance).get(class_instance_id)
         controller = db.Controller(self.cache.registry)
         crawler.crawl_grades(self.session, controller, class_instance)
