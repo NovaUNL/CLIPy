@@ -8,7 +8,7 @@ def read(fname):
 
 setup(
     name="CLIP-Crawler",
-    version="1.0.0",
+    version="1.1.0",
     author="Cláudio Pereira",
     author_email="development@claudiop.com",
     description=(
@@ -19,12 +19,12 @@ setup(
     packages=find_packages(),
     long_description=read('README.rst'),
     classifiers=[
-        "Development Status :: 3 - Alpha",
+        "Development Status :: 5 - Production/Stable",
         "Topic :: Utilities",
         "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
         "Natural Language :: Portuguese",
         "Topic :: Internet :: WWW/HTTP",
         "Topic :: Internet :: WWW/HTTP :: Dynamic Content",
         "Topic :: Text Processing :: Markup :: HTML",
-    ], install_requires=['sqlalchemy', 'requests', 'beautifulsoup4', 'htmlmin', 'unidecode']
+    ], install_requires=['sqlalchemy', 'requests', 'beautifulsoup4', 'htmlmin', 'unidecode', 'html5lib', 'pymongo']
 )
