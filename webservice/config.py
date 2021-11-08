@@ -3,6 +3,8 @@ import os
 
 # Defaults
 WEBSERVICE_THREADS = 10
+WEBSERVICE_ADDRESS = "localhost"
+WEBSERVICE_PORT = 893
 
 assert 'CONFIG' in os.environ
 CONFIG_PATH = os.environ['CONFIG']
