@@ -392,10 +392,10 @@ def get_bilingual_info(page) -> (str, str, datetime, str):
         return None, None, None, None
     panes = table_root.find_all('td', valign="top", bgcolor="#ffffff")
     if len(panes) != 2:
-        file = open('page.html', 'w')
-        log.critical('A problematic page appeared and it couldn\'t be parsed.'
-                     'Its contents have been saved to page.html')
-        file.write(page.prettify())
+        # file = open('page.html', 'w')
+        # log.critical('A problematic page appeared and it couldn\'t be parsed.'
+        #              'Its contents have been saved to page.html')
+        # file.write(page.prettify())
         raise ValueError()
     footer = table_root.find_all('small')
 
