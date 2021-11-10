@@ -801,7 +801,11 @@ def crawl_files(session: WebSession, database: db.Controller, class_instance: db
     # TODO deletion
 
 
-def download_files(session: WebSession, database: db.Controller, class_instance: db.models.ClassInstance):
+def download_files(
+        session: WebSession,
+        database: db.Controller,
+        class_instance: db.models.ClassInstance,
+        cache="This is ignored"):
     class_instance: db.models.ClassInstance = database.session.merge(class_instance)
     class_files = class_instance.file_relations
     poked_file_types = set()

@@ -355,8 +355,8 @@ class ClassInstance(Base):
     parent = orm.relationship(Class, back_populates="instances")
     period = orm.relationship(Period, back_populates="class_instances")
     file_relations = orm.relationship(ClassFile, back_populates="class_instance")
-    enrollments = orm.relationship("Enrollment", order_by="Enrollment.id", back_populates="class_instance")
-    shifts = orm.relationship("Shift", order_by="Shift.number", back_populates="class_instance")
+    enrollments = orm.relationship("Enrollment", back_populates="class_instance")
+    shifts = orm.relationship("Shift", back_populates="class_instance")
     files = association_proxy('file_relations', 'file')
     events = orm.relationship("ClassEvent", back_populates="class_instance")
     messages = orm.relationship("ClassMessages", order_by="ClassMessages.datetime", back_populates="class_instance")
@@ -376,8 +376,10 @@ class ClassInstance(Base):
             else json.loads(self.information, object_hook=json_util.object_hook),
             'department_id': self.department_id,
             'events': [event.serialize() for event in self.events],
-            'enrollments': [enrollment.id for enrollment in self.enrollments],
-            'shifts': [shift.id for shift in self.shifts]}
+            'enrollments': [enrollment.serialize() for enrollment in self.enrollments],
+            'shifts': [shift.serialize() for shift in self.shifts],
+            'files': [file.serialize() for file in self.file_relations]
+        }
         return data
 
 
@@ -745,7 +747,7 @@ class Shift(Base):
             'id': self.id,
             'class_instance_id': self.class_instance_id,
             'number': self.number,
-            'type': self.type.abbreviation,
+            'type': self.type_id,
             'minutes': self.minutes,
             'restrictions': self.restrictions,
             'state': self.state,
