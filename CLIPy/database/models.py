@@ -5,6 +5,7 @@ from enum import Enum
 import sqlalchemy as sa
 import sqlalchemy.orm as orm
 from bson import json_util
+from sqlalchemy import TIMESTAMP, func
 from sqlalchemy.ext.associationproxy import association_proxy
 from sqlalchemy.ext.declarative import declarative_base
 
@@ -174,6 +175,8 @@ class Building(Base, TemporalEntity):
     id = sa.Column(sa.Integer, primary_key=True)
     #: CLIP name (usually not the full name)
     name = sa.Column(sa.String(50), nullable=False)
+    #: The last time this building was checked for updates
+    update_timestamp = sa.Column(TIMESTAMP(timezone=True), server_default=func.now())
 
     # Relation
     rooms = orm.relationship("Room", order_by="Room.name", back_populates="building")
@@ -184,7 +187,9 @@ class Building(Base, TemporalEntity):
     def serialize(self):
         return {
             'id': self.id,
-            'name': self.name}
+            'name': self.name,
+            'update_timestamp': self.update_timestamp,
+        }
 
 
 department_teachers = sa.Table(
@@ -199,6 +204,8 @@ class Department(Base, TemporalEntity):
     id = sa.Column(sa.Integer, primary_key=True)
     #: Full name
     name = sa.Column(sa.String(50))
+    #: The last time this department was checked for updates
+    update_timestamp = sa.Column(TIMESTAMP(timezone=True), server_default=func.now())
 
     # Relations and constraints
     teachers = orm.relationship("Teacher", secondary=department_teachers, back_populates="departments")
@@ -209,7 +216,9 @@ class Department(Base, TemporalEntity):
     def serialize(self):
         return {
             'id': self.id,
-            'name': self.name}
+            'name': self.name,
+            'update_timestamp': self.update_timestamp,
+        }
 
     def serialize_related(self):
         return {
@@ -228,6 +237,8 @@ class Class(Base):
     abbreviation = sa.Column(sa.String(15))
     #: Number of *half* credits (bologna) that this class takes.
     ects = sa.Column(sa.Integer, nullable=True)
+    #: The last time this class was checked for updates
+    update_timestamp = sa.Column(TIMESTAMP(timezone=True), server_default=func.now())
 
     # Relations and constraints
     instances = orm.relationship("ClassInstance", order_by="ClassInstance.year", back_populates="parent")
@@ -241,7 +252,9 @@ class Class(Base):
             'name': self.name,
             'abbr': self.abbreviation,
             'ects': self.ects,
-            'instances': [instance.id for instance in self.instances]}
+            'instances': [instance.id for instance in self.instances],
+            'update_timestamp': self.update_timestamp,
+        }
 
 
 class Room(Base):
@@ -254,6 +267,8 @@ class Room(Base):
     room_type = sa.Column(IntEnum(RoomType))
     #: This room's parent building
     building_id = sa.Column(sa.Integer, sa.ForeignKey(Building.id), nullable=False)
+    #: The last time this room was checked for updates
+    update_timestamp = sa.Column(TIMESTAMP(timezone=True), server_default=func.now())
 
     # Relations and constraints
     building = orm.relationship(Building, back_populates="rooms")
@@ -268,7 +283,9 @@ class Room(Base):
             'id': self.id,
             'name': self.name,
             'type': self.room_type.value,
-            'building': self.building_id}
+            'building': self.building_id,
+            'update_timestamp': self.update_timestamp,
+        }
 
 
 class ClassFile(Base):
@@ -349,6 +366,8 @@ class ClassInstance(Base):
     year = sa.Column(sa.Integer)
     #: JSON encoded representation of the class instance information
     information = sa.Column(sa.Text, nullable=True)
+    #: The last time this class instance was checked for updates (NOTE: not auto-updated)
+    update_timestamp = sa.Column(sa.DateTime(timezone=True), nullable=False)
 
     # Relations and constraints
     department = orm.relationship(Department)
@@ -360,6 +379,18 @@ class ClassInstance(Base):
     files = association_proxy('file_relations', 'file')
     events = orm.relationship("ClassEvent", back_populates="class_instance")
     messages = orm.relationship("ClassMessages", order_by="ClassMessages.datetime", back_populates="class_instance")
+
+    #: Timestamp of the last shifts update
+    shifts_update = sa.Column(sa.DateTime(timezone=True), nullable=True)
+    #: Timestamp of the last enrollments update
+    enrollments_update = sa.Column(sa.DateTime(timezone=True), nullable=True)
+    #: Timestamp of the last grades update
+    grades_update = sa.Column(sa.DateTime(timezone=True), nullable=True)
+    #: Timestamp of the last events update
+    events_update = sa.Column(sa.DateTime(timezone=True), nullable=True)
+    #: Timestamp of the last files update
+    files_update = sa.Column(sa.DateTime(timezone=True), nullable=True)
+
     __table_args__ = (
         sa.UniqueConstraint('class_id', 'year', 'period_id', name='un_class_instance'),)
 
@@ -378,7 +409,13 @@ class ClassInstance(Base):
             'events': [event.serialize() for event in self.events],
             'enrollments': [enrollment.serialize() for enrollment in self.enrollments],
             'shifts': [shift.serialize() for shift in self.shifts],
-            'files': [file.serialize() for file in self.file_relations]
+            'files': [file.serialize() for file in self.file_relations],
+            'info_update': self.update_timestamp,
+            'shifts_update': self.shifts_update,
+            'enrollments_update': self.enrollments_update,
+            'grades_update': self.grades_update,
+            'events_update': self.events_update,
+            'files_update': self.files_update,
         }
         return data
 
@@ -441,6 +478,8 @@ class Course(Base, TemporalEntity):
     abbreviation = sa.Column(sa.String(15))
     #: Degree conferred by this course
     degree_id = sa.Column(sa.Integer, sa.ForeignKey(Degree.id))
+    #: The last time this course was checked for updates
+    update_timestamp = sa.Column(TIMESTAMP(timezone=True), server_default=func.now())
 
     # Relations and constraints
     degree = orm.relationship(Degree, back_populates="courses")
@@ -489,6 +528,9 @@ class Teacher(Base, TemporalEntity):
     id = sa.Column(sa.Integer, primary_key=True)
     #: Full name
     name = sa.Column(sa.String)
+    #: The last time this teacher was checked for updates
+    update_timestamp = sa.Column(TIMESTAMP(timezone=True), server_default=func.now())
+
     # Relations and constraints
     departments = orm.relationship(Department, secondary=department_teachers, back_populates="teachers")
     shifts = orm.relationship('Shift', secondary=shift_teachers, back_populates='teachers')
@@ -503,7 +545,8 @@ class Teacher(Base, TemporalEntity):
             'name': self.name,
             'first_year': self.first_year,
             'last_year': self.last_year,
-            'depts': [department.id for department in self.departments]
+            'depts': [department.id for department in self.departments],
+            'update_timestamp': self.update_timestamp,
         }
 
 
@@ -548,7 +591,9 @@ class Student(Base, TemporalEntity):
             'abbr': self.abbreviation,
             'course': self.course_id,
             'first_year': self.first_year,
-            'last_year': self.last_year}
+            'last_year': self.last_year,
+            'update_timestamp': self.update_timestamp,
+        }
 
 
 class ClassMessages(Base):
@@ -595,7 +640,7 @@ class Admission(Base):
     #: Student current state (as of check_date)
     state = sa.Column(sa.String(50))
     #: Date on which this record was crawled
-    check_date = sa.Column(sa.DateTime, default=datetime.now())
+    check_date = sa.Column(sa.DateTime(timezone=True), default=datetime.now())
 
     # Relations and constraints
     student = orm.relationship("Student", back_populates="admission_records")
@@ -665,6 +710,8 @@ class Enrollment(Base):
     special_grade_date = sa.Column(sa.Date, nullable=True, default=None)
     #: Whether the final result was an approval
     approved = sa.Column(sa.Boolean, nullable=True, default=None)
+    #: The last time this enrollment was checked for updates
+    update_timestamp = sa.Column(TIMESTAMP(timezone=True), server_default=func.now())
 
     # Relations and constraints
     student = orm.relationship("Student", back_populates="enrollments")
@@ -696,7 +743,9 @@ class Enrollment(Base):
             'exam_grade_date': self.exam_grade_date,
             'special_grade': self.special_grade,
             'special_grade_date': None if self.special_grade_date is None else self.special_grade_date.isoformat(),
-            'approved': self.approved}
+            'approved': self.approved,
+            'update_timestamp': self.update_timestamp,
+        }
 
 
 class Shift(Base):
@@ -725,6 +774,8 @@ class Shift(Base):
     restrictions = sa.Column(sa.String(200))  # FIXME enum?
     #: Shift current state (opened, closed, these are left unchanged once the class ends)
     state = sa.Column(sa.String(200))  # FIXME enum?
+    #: The last time this shift was checked for updates
+    update_timestamp = sa.Column(TIMESTAMP(timezone=True), server_default=func.now())
 
     # Relations and constraints
     teachers = orm.relationship(Teacher, secondary=shift_teachers, back_populates='shifts')
@@ -753,7 +804,8 @@ class Shift(Base):
             'state': self.state,
             'teachers': [teacher.id for teacher in self.teachers],
             'students': [student.id for student in self.students],
-            'instances': [instance.id for instance in self.instances]
+            'instances': [instance.id for instance in self.instances],
+            'update_timestamp': self.update_timestamp,
         }
 
 

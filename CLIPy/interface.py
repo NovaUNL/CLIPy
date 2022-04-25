@@ -1,6 +1,6 @@
 import logging
-import os
-from datetime import datetime
+
+from datetime import datetime, timezone
 
 from . import database as db, processors, crawler
 from .config import INSTITUTION_FIRST_YEAR, INSTITUTION_LAST_YEAR
@@ -145,44 +145,74 @@ class Clip:
     def update_class_info(self, class_instance_id: int, cache=False):
         log.info(f"Updating class info for {class_instance_id}")
         controller = db.Controller(self.cache.registry)
-        class_instance = controller.session.query(m.ClassInstance).get(class_instance_id)
+        class_instance: m.ClassInstance = controller.session.query(m.ClassInstance).get(class_instance_id)
         crawler.crawl_class_info(self.session, controller, class_instance, cache=cache)
+
+        class_instance.update_timestamp = datetime.now().astimezone()
+        controller.session.add(class_instance)
+        controller.session.commit()
+
         self.cache.registry.remove()
 
     def update_class_enrollments(self, class_instance_id: int, cache=False):
         log.info(f"Updating enrollments for {class_instance_id}")
         controller = db.Controller(self.cache.registry)
-        class_instance = controller.session.query(m.ClassInstance).get(class_instance_id)
+        class_instance: m.ClassInstance = controller.session.query(m.ClassInstance).get(class_instance_id)
         crawler.crawl_class_enrollments(self.session, controller, class_instance, cache=cache)
+
+        class_instance.enrollments_update = datetime.now().astimezone()
+        controller.session.add(class_instance)
+        controller.session.commit()
+
         self.cache.registry.remove()
 
     def update_class_shifts(self, class_instance_id: int, cache=False):
         log.info(f"Updating shifts for {class_instance_id}")
         controller = db.Controller(self.cache.registry)
-        class_instance = controller.session.query(m.ClassInstance).get(class_instance_id)
+        class_instance: m.ClassInstance = controller.session.query(m.ClassInstance).get(class_instance_id)
         crawler.crawl_class_shifts(self.session, controller, class_instance, cache=cache)
+
+        class_instance.shifts_update = datetime.now().astimezone()
+        controller.session.add(class_instance)
+        controller.session.commit()
+
         self.cache.registry.remove()
 
     def update_class_events(self, class_instance_id: int, cache=False):
         log.info(f"Updating events for {class_instance_id}")
         controller = db.Controller(self.cache.registry)
-        class_instance = controller.session.query(m.ClassInstance).get(class_instance_id)
+        class_instance: m.ClassInstance = controller.session.query(m.ClassInstance).get(class_instance_id)
         crawler.crawl_class_events(self.session, controller, class_instance, cache=cache)
+
+        class_instance.events_update = datetime.now().astimezone()
+        controller.session.add(class_instance)
+        controller.session.commit()
+
         self.cache.registry.remove()
 
     def update_class_files(self, class_instance_id: int, cache=False):
         log.info(f"Updating files for {class_instance_id}")
-        class_instance = self.cache.controller.session.query(m.ClassInstance).get(class_instance_id)
+        class_instance: m.ClassInstance = self.cache.controller.session.query(m.ClassInstance).get(class_instance_id)
         controller = db.Controller(self.cache.registry)
         crawler.crawl_files(self.session, controller, class_instance, cache=cache)
         crawler.download_files(self.session, controller, class_instance)
+
+        class_instance.files_update = datetime.now().astimezone()
+        controller.session.add(class_instance)
+        controller.session.commit()
+
         self.cache.registry.remove()
 
     def update_class_grades(self, class_instance_id: int, cache=False):
         log.info(f"Updating grades for {class_instance_id}")
-        class_instance = self.cache.controller.session.query(m.ClassInstance).get(class_instance_id)
+        class_instance: m.ClassInstance = self.cache.controller.session.query(m.ClassInstance).get(class_instance_id)
         controller = db.Controller(self.cache.registry)
         crawler.crawl_grades(self.session, controller, class_instance)
+
+        class_instance.grades_update = datetime.now().astimezone()
+        controller.session.add(class_instance)
+        controller.session.commit()
+
         self.cache.registry.remove()
 
     def bootstrap_database(self, year: int = None, period_part=2, period_parts=None):
@@ -196,11 +226,11 @@ class Clip:
         :param period_part: (Optional) Period filter (part of period_parts)
         :param period_parts: (Optional) Period filter
         """
-
         if period_part is not None and period_parts is not None:
             period = self.cache.controller.get_period(period_part, period_parts)
         else:
             period = None
+        log.info(f"Bootstrapping for period {period} or year {year}")
 
         main_thread_db_controller = db.Controller(self.cache.registry, cache=False)
 
@@ -231,8 +261,89 @@ class Clip:
         # Find teachers (depends on up-to-date departments and shifts).
         processors.department_task(self.session, self.cache.registry, crawler.crawl_teachers)
 
+        # These should come for free (finding new classes recurses into sub-entities)
+        # log.info(f"Updating enrollments")
+        # processors.class_task(self.session, self.cache.registry, crawler.crawl_class_enrollments, year=year)
+        # log.info(f"Updating shifts")
+        # processors.class_task(self.session, self.cache.registry, crawler.crawl_class_shifts, year=year)
+        # log.info(f"Updating grades")
+        # processors.class_task(self.session, self.cache.registry, crawler.crawl_grades, year=year)
+        # log.info(f"Updating class info")
+        # processors.class_task(self.session, self.cache.registry, crawler.crawl_class_info, year=year)
+        # log.info(f"Updating files")
+        # processors.class_task(self.session, self.cache.registry, crawler.crawl_files, year=year)
+
         # Downloads known files
         processors.class_task(self.session, self.cache.registry, crawler.download_files, year=year, period=period)
+
+    def roam(self):
+        class_instances = self.cache.controller.session.query(m.ClassInstance) \
+            .with_entities(m.ClassInstance.id,
+                           m.ClassInstance.year,
+                           m.ClassInstance.period_id,
+                           m.ClassInstance.update_timestamp,
+                           m.ClassInstance.shifts_update,
+                           m.ClassInstance.enrollments_update,
+                           m.ClassInstance.grades_update,
+                           m.ClassInstance.files_update,
+                           m.ClassInstance.events_update) \
+            .all()
+
+        current_date = datetime.now().astimezone()
+
+        pending_info_update = []
+        pending_shifts_update = []
+        pending_enrollments_update = []
+        pending_grades_update = []
+        pending_files_update = []
+        pending_events_update = []
+
+        for class_instance_id, year, period_id, update_timestamp, shifts_update, enrollments_update, grades_update, \
+            files_update, events_update in class_instances:
+            if year < 2022:
+                continue
+
+            if (current_date - update_timestamp).days > 30 * 6:
+                pending_info_update.append((class_instance_id, update_timestamp))
+            if not shifts_update or (current_date - shifts_update).days > 30 * 6:
+                pending_shifts_update.append((class_instance_id, shifts_update))
+            if not enrollments_update or (current_date - enrollments_update).days > 30 * 6:
+                pending_enrollments_update.append((class_instance_id, enrollments_update))
+            if not grades_update or (current_date - grades_update).days > 30 * 6:
+                pending_grades_update.append((class_instance_id, grades_update))
+            if not files_update or (current_date - files_update).days > 30 * 6:
+                pending_files_update.append((class_instance_id, files_update))
+            if not events_update or (current_date - events_update).days > 30 * 6:
+                pending_events_update.append((class_instance_id, events_update))
+
+        def sort_by_timestamp(col):
+            a_long_time_ago = datetime.now(timezone.utc).replace(year=2000)
+            col.sort(key=lambda entry: (entry[1] if entry[1] else a_long_time_ago, -entry[0]))
+
+        sort_by_timestamp(pending_info_update)
+        sort_by_timestamp(pending_shifts_update)
+        sort_by_timestamp(pending_enrollments_update)
+        sort_by_timestamp(pending_grades_update)
+        sort_by_timestamp(pending_files_update)
+        sort_by_timestamp(pending_events_update)
+
+        for class_instance_id, _ in pending_info_update:
+            self.update_class_info(class_instance_id)
+
+        for class_instance_id, _ in pending_enrollments_update:
+            self.update_class_enrollments(class_instance_id)
+
+        for class_instance_id, _ in pending_shifts_update:
+            self.update_class_shifts(class_instance_id)
+
+        for class_instance_id, _ in pending_files_update:
+            self.update_class_files(class_instance_id)
+
+        for class_instance_id, _ in pending_grades_update:
+            self.update_class_grades(class_instance_id)
+
+        for class_instance_id, _ in pending_events_update:
+            self.update_class_events(class_instance_id)
 
     def _get_period(self, period_part, period_parts):
         if period_part is None or period_parts is None:
